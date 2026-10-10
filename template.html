@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
@@ -18,7 +18,9 @@ main{padding:16px;display:grid;gap:16px;max-width:1400px;margin:0 auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
 .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
 .controls label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
+.controls label.inline{flex-direction:row;align-items:center;gap:6px;padding-bottom:6px}
 input,select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
+input[type=checkbox]{width:auto}
 button{cursor:pointer}button:hover{border-color:var(--accent)}
 .grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:16px}
 @media(max-width:900px){.grid{grid-template-columns:1fr}}
@@ -29,30 +31,41 @@ th{position:sticky;top:0;background:var(--panel);color:var(--mute);cursor:pointe
 th:first-child,td:first-child{text-align:left}
 tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:var(--panel2)}
 .up{color:var(--up)}.down{color:var(--down)}.mute{color:var(--mute)}
+.star{cursor:pointer;color:var(--mute);margin-right:4px;user-select:none}.star.on{color:var(--warn)}
 .chip{display:inline-block;min-width:20px;text-align:center;border-radius:4px;padding:0 4px;font-size:11px;font-weight:700;margin-right:2px}
 .v1{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
 .v0{background:var(--panel2);color:var(--mute)}
 .vm{background:color-mix(in srgb,var(--down) 25%,transparent);color:var(--down)}
 .tag{font-weight:700}
 .persona{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;background:var(--panel2);border-radius:0 6px 6px 0}
-.persona.p1{border-color:var(--up)}.persona.pm{border-color:var(--down)}
+.persona.p1{border-color:var(--up)}.persona.pm{border-color:var(--down)}.persona.pi{border-color:var(--accent)}
 .persona b{display:block}
 .persona span{color:var(--mute);font-size:13px}
-canvas{width:100%;height:150px;display:block}
+canvas{width:100%;display:block}
 ul{margin:4px 0;padding-left:18px}
 .pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:2px;cursor:pointer;font-size:12px}
 .pill:hover{border-color:var(--accent)}
 .audit-ok{color:var(--up)}.audit-warn{color:var(--warn)}
 .note{font-size:12px;color:var(--mute)}
+details>summary{cursor:pointer;font-weight:600}
+.rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 16px;margin-top:10px}
+.rules fieldset{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.rules legend{font-size:12px;font-weight:700;padding:0 4px}
+.rules label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin:4px 0}
+.rules input{width:70px}
+.news li{margin:2px 0;font-size:13px}
+.bt{width:auto;font-size:12px}.bt td,.bt th{padding:3px 8px;cursor:default}
+@media(max-width:640px){.hide-sm{display:none}header{padding:12px}main{padding:10px}}
 </style>
 </head>
 <body>
 <header>
   <div><h1>🏛️ Sanal Trading Ofisi &amp; Yazılım Komitesi</h1>
-  <div class="sub">BIST · TradingView verisi (gecikmeli olabilir) · Veri: <span id="gen"></span></div></div>
-  <div style="display:flex;gap:8px;align-items:center">
+  <div class="sub">BIST · TradingView verisi (gecikmeli olabilir) · Veri: <span id="gen"></span> · Geçmiş: <span id="hgen">–</span></div></div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <span class="sub" id="status"></span>
     <button id="refresh">⟳ Yenile</button>
+    <button id="csv" title="Tablodaki hisseleri CSV olarak indir">⬇ CSV</button>
     <button id="theme">Tema</button>
   </div>
 </header>
@@ -65,8 +78,13 @@ ul{margin:4px 0;padding-left:18px}
       <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
       <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
       <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
+      <label class="inline"><input id="favonly" type="checkbox"> Sadece favoriler ★</label>
     </div>
     <p class="note">Efsaneler; kurallara dayalı, veri odaklı simülasyonlardır (yapay zekâ/API kullanılmaz). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+    <details><summary>⚙️ Efsane kurallarını ayarla</summary>
+      <div class="rules" id="rules"></div>
+      <p><button id="rulesReset">Varsayılana dön</button> <span class="note">Ayarlar bu tarayıcıda saklanır.</span></p>
+    </details>
   </section>
 
   <section class="card" id="audit"></section>
@@ -74,41 +92,79 @@ ul{margin:4px 0;padding-left:18px}
   <div class="grid">
     <section class="card">
       <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
-      <div class="sub" style="margin-bottom:6px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı</div>
+      <div class="sub" style="margin-bottom:6px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı · ★ favori</div>
       <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
     </section>
     <section class="card" id="detail"><h2>Detay</h2><p class="mute">Soldan bir hisse seçin.</p></section>
   </div>
 
   <section class="card" id="extra"></section>
+  <section class="card" id="backtest"></section>
 </main>
 
 <script>
-let DATA = {ts: 0, generated: "–", stocks: []};
+let DATA = {ts: 0, generated: "–", stocks: []}, HIST = null, NEWS = {};
 const $ = id => document.getElementById(id);
-const fmt = (v, d = 2) => v == null ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
+const fmt = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
 const sign = v => v == null ? "" : v >= 0 ? "up" : "down";
+const store = {
+  get(k, def) { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 
-/* ---------- türetilmiş alanlar ---------- */
+/* ---------- Efsane kuralları (ayarlanabilir) ---------- */
+const RULE_DEFS = [
+  ["Buffett", [["bPe", "Ucuz: F/K en çok", 15], ["bPb", "Ucuz: PD/DD en çok", 1.5], ["bPeHigh", "Pahalı: F/K en az", 25]]],
+  ["Simons", [["sRsi", "Aşırı satım RSI <", 35], ["sMinN", "Geri test min. sinyal", 5], ["sWin", "Min. kazanma % (10g)", 55], ["sEdge", "Taban üstü min. fark (puan)", 0.5]]],
+  ["Livermore", [["lTol", "Pivot bandı (SMA50 altı %)", 3]]],
+  ["Kellogg", [["kRvol", "Min. göreceli hacim", 1.5]]],
+  ["Şeytanın Avukatı", [["dAtr", "ATR % üst sınır", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dFlags", "Karşı çıkma için bayrak sayısı", 2]]],
+  ["Simülasyon", [["mDays", "Ufuk (iş günü)", 20], ["mStop", "Stop seviyesi %", 7]]],
+  ["Ek hisse arama", [["eBPe", "Buffett: F/K <", 10], ["eBPb", "Buffett: PD/DD <", 1.2], ["eKRvol", "Kellogg: rel. hacim ≥", 2.5], ["eKChg", "Kellogg: gün % ≥", 3]]],
+];
+const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
+let R = {...DEFAULTS, ...store.get("rules", {})};
+function buildRules() {
+  $("rules").innerHTML = RULE_DEFS.map(([g, f]) => `<fieldset><legend>${g}</legend>${f.map(([k, n]) =>
+    `<label>${n}<input type="number" step="any" data-r="${k}" value="${R[k]}"></label>`).join("")}</fieldset>`).join("");
+}
+$("rules").addEventListener("input", e => {
+  const k = e.target.dataset.r; if (!k) return;
+  const v = parseFloat(e.target.value);
+  if (Number.isFinite(v)) { R[k] = v; store.set("rules", R); mcCache = {}; render(); }
+});
+$("rulesReset").addEventListener("click", () => { R = {...DEFAULTS}; store.set("rules", R); mcCache = {}; buildRules(); render(); });
+
+/* ---------- Favoriler ---------- */
+let FAVS = new Set(store.get("favs", []));
+function toggleFav(n) { FAVS.has(n) ? FAVS.delete(n) : FAVS.add(n); store.set("favs", [...FAVS]); render(); }
+
+/* ---------- Türetilmiş alanlar ---------- */
 function enrich(s) {
-  const ok = s.close > 0 && s.bb_lower != null && s.bb_upper != null && s.sma50 != null;
-  s.ok = ok;
-  s.bbDist = ok ? (s.close / s.bb_lower - 1) * 100 : null;
-  s.smaDist = ok ? (s.close / s.sma50 - 1) * 100 : null;
+  s.ok = s.close > 0 && s.bb_lower != null && s.bb_upper != null && s.sma50 != null;
+  s.bbDist = s.ok ? (s.close / s.bb_lower - 1) * 100 : null;
+  s.smaDist = s.ok ? (s.close / s.sma50 - 1) * 100 : null;
   s.atrPct = s.atr != null && s.close > 0 ? s.atr / s.close * 100 : null;
   s.tl = s.close * s.volume / 1e6; // günlük işlem hacmi, milyon TL
   return s;
 }
 let UNIVERSE = [];
 
-/* ---------- Monte Carlo (GBM, drift=0, 20 gün, stop -%7) ---------- */
+/* ---------- Monte Carlo (GBM, drift=0). Oynaklık: gerçek geçmiş (sigma60) varsa o, yoksa 0.8×ATR% ---------- */
 let mcCache = {};
 function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function monteCarlo(s, days = 20, n = 2000, stop = 7) {
-  if (mcCache[s.name]) return mcCache[s.name];
-  if (s.atrPct == null) return null;
-  const sigma = Math.max(0.8 * s.atrPct / 100, 1e-4), r = rng(hash(s.name));
+function sigmaOf(s) {
+  const h = HIST && HIST.stocks[s.name];
+  if (h && h.sigma60 > 0) return {v: h.sigma60, src: "gerçek geçmiş (60 gün)"};
+  if (s.atrPct != null) return {v: 0.8 * s.atrPct / 100, src: "0,8×ATR% tahmini"};
+  return null;
+}
+function monteCarlo(s, n = 2000) {
+  const key = s.name; if (mcCache[key]) return mcCache[key];
+  const sg = sigmaOf(s); if (!sg) return null;
+  const days = Math.max(1, Math.round(R.mDays)), stop = R.mStop, sigma = Math.max(sg.v, 1e-4), r = rng(hash(s.name));
   const finals = new Float64Array(n); let stopHit = 0;
   for (let i = 0; i < n; i++) {
     let lp = 0, min = 0;
@@ -121,46 +177,72 @@ function monteCarlo(s, days = 20, n = 2000, stop = 7) {
     if (Math.exp(min) <= 1 - stop / 100) stopHit++;
   }
   const sorted = Array.from(finals).sort((a, b) => a - b), q = p => sorted[Math.floor(p * (n - 1))] * 100;
-  return { sigma: sigma * 100, p05: q(.05), p50: q(.5), p95: q(.95),
+  return mcCache[key] = { sigma: sigma * 100, src: sg.src, days, stop, p05: q(.05), p50: q(.5), p95: q(.95),
     probLoss: sorted.filter(x => x < 0).length / n * 100, probStop: stopHit / n * 100, finals: sorted };
 }
 
-/* ---------- Efsaneler: kural tabanlı görüşler. v: +1 olumlu, 0 nötr, -1 olumsuz ---------- */
+/* ---------- Geri test (history.json'dan) ---------- */
+function btFor(s) {
+  if (!HIST) return null;
+  const own = HIST.stocks[s.name] && HIST.stocks[s.name].bt, base = HIST.pooled.base, pooled = HIST.pooled.A;
+  const useOwn = own && own.n >= R.sMinN && own.h10;
+  const b = useOwn ? own : pooled;
+  if (!b || !b.h10 || !base || !base.h10) return null;
+  return { own: !!useOwn, n: b.n, win: b.h10.win, mean: b.h10.mean, med: b.h10.med, p10: b.h10.p10,
+    baseWin: base.h10.win, baseMean: base.h10.mean, edge: b.h10.mean - base.h10.mean };
+}
+
+/* ---------- Efsaneler: v = +1 olumlu, 0 nötr, -1 olumsuz ---------- */
 function buffett(s) {
   if (s.pe == null || s.pe <= 0) return { v: -1, t: "Şirket zarar ediyor ya da F/K hesaplanamıyor; kazancı olmayan işi anlayamam." };
-  if (s.pb != null && s.pb < 1.5 && s.pe < 15) return { v: 1, t: `F/K ${fmt(s.pe, 1)} ve PD/DD ${fmt(s.pb, 2)}: defter değerine göre ucuz. Rekabet avantajını ayrıca doğrulayın.` };
-  if (s.pe > 25) return { v: -1, t: `F/K ${fmt(s.pe, 1)} yüksek; güvenlik marjı görünmüyor.` };
+  if (s.pb != null && s.pb < R.bPb && s.pe < R.bPe) return { v: 1, t: `F/K ${fmt(s.pe, 1)} ve PD/DD ${fmt(s.pb, 2)}: defter değerine göre ucuz. Rekabet avantajını ayrıca doğrulayın.` };
+  if (s.pe > R.bPeHigh) return { v: -1, t: `F/K ${fmt(s.pe, 1)} yüksek; güvenlik marjı görünmüyor.` };
   return { v: 0, t: `F/K ${fmt(s.pe, 1)}${s.pb != null ? `, PD/DD ${fmt(s.pb, 2)}` : ""}: makul ama bariz bir iskonto yok.` };
 }
 function simons(s) {
-  const mc = monteCarlo(s);
+  const mc = monteCarlo(s), bt = btFor(s);
   if (!mc) return { v: 0, t: "Oynaklık verisi yok; istatistik yapamam." };
-  const base = `RSI ${fmt(s.rsi, 0)}, alt banda %${fmt(s.bbDist, 1)}. Simülasyonda 20 günde zarar olasılığı %${fmt(mc.probLoss, 0)}, %7 stop olasılığı %${fmt(mc.probStop, 0)}.`;
-  if (s.rsi < 35 && mc.probStop < 50) return { v: 1, t: base + " Aşırı satım + yönetilebilir oynaklık: ortalamaya dönüş denenebilir (drift=0 varsayımı; tarihsel başarı oranı bu veriyle ölçülemez)." };
-  if (mc.probStop >= 65) return { v: -1, t: base + " Oynaklık o kadar yüksek ki stop'a değme ihtimali yazı-turadan kötü." };
-  return { v: 0, t: base + " İstatistiksel bir kenar görmüyorum." };
+  const mcTxt = `Simülasyon (${mc.days} gün): zarar olasılığı %${fmt(mc.probLoss, 0)}, %${R.mStop} stop olasılığı %${fmt(mc.probStop, 0)}.`;
+  const head = `RSI ${fmt(s.rsi, 0)}, alt banda %${fmt(s.bbDist, 1)}.`;
+  if (bt) {
+    const btTxt = `Geçmişte ${bt.own ? "bu hissede" : "tüm hisselerde"} alt banda değdikten 10 gün sonra: kazanma %${fmt(bt.win, 0)} (her gün alsaydınız %${fmt(bt.baseWin, 0)}), ort. getiri %${fmt(bt.mean, 1)} (taban %${fmt(bt.baseMean, 1)}), n=${bt.n}.`;
+    let v = 0, tail = " Taban üstü anlamlı bir kenar yok.";
+    if (mc.probStop >= 65) { v = -1; tail = " Oynaklık o kadar yüksek ki stop'a değme ihtimali çok yüksek."; }
+    else if (bt.win >= R.sWin && bt.edge >= R.sEdge) { v = 1; tail = " Geçmiş, tabana göre pozitif bir kenar gösteriyor (maliyetsiz, hayatta kalan hisselerle; garanti değil)."; }
+    else if (bt.edge <= -R.sEdge) { v = -1; tail = " Geçmişte alt banda değmek tabandan DAHA KÖTÜ sonuç vermiş."; }
+    return { v, t: `${head} ${btTxt} ${mcTxt}${tail}` };
+  }
+  if (s.rsi < R.sRsi && mc.probStop < 50) return { v: 1, t: `${head} ${mcTxt} Aşırı satım + yönetilebilir oynaklık; geçmiş verisi yüklenmediği için başarı oranı ölçülemedi.` };
+  if (mc.probStop >= 65) return { v: -1, t: `${head} ${mcTxt} Stop'a değme ihtimali yazı-turadan kötü.` };
+  return { v: 0, t: `${head} ${mcTxt} Geçmiş verisi yok, istatistiksel kenar göremiyorum.` };
 }
 function livermore(s) {
-  if (s.smaDist > 0) return { v: 1, t: `Fiyat SMA50'nin %${fmt(s.smaDist, 1)} üstünde: trend yukarı, geri çekilme alım fırsatı olabilir.` };
-  if (s.smaDist > -3) return { v: 0, t: `SMA50'ye %${fmt(-s.smaDist, 1)} uzakta. Pivot noktası; SMA50 üstünde kapanış beklenmeli.` };
-  return { v: -1, t: `SMA50'nin %${fmt(-s.smaDist, 1)} altında. Düşen bıçak tutulmaz; trend dönmeden alınmaz.` };
+  let emp = "";
+  if (HIST && HIST.pooled.B && HIST.pooled.C && HIST.pooled.B.h10 && HIST.pooled.C.h10) {
+    const b = HIST.pooled.B, c = HIST.pooled.C;
+    emp = ` (Geçmiş: alt banda değip SMA50 altındayken 10g ort. %${fmt(b.h10.mean, 1)}, n=${b.n}; SMA50 üstündeyken %${fmt(c.h10.mean, 1)}, n=${c.n}.)`;
+  }
+  if (s.smaDist > 0) return { v: 1, t: `Fiyat SMA50'nin %${fmt(s.smaDist, 1)} üstünde: trend yukarı, geri çekilme alım fırsatı olabilir.${emp}` };
+  if (s.smaDist > -R.lTol) return { v: 0, t: `SMA50'ye %${fmt(-s.smaDist, 1)} uzakta. Pivot noktası; SMA50 üstünde kapanış beklenmeli.${emp}` };
+  return { v: -1, t: `SMA50'nin %${fmt(-s.smaDist, 1)} altında. Düşen bıçak tutulmaz; trend dönmeden alınmaz.${emp}` };
 }
 function kellogg(s) {
-  if (s.rvol != null && s.rvol >= 1.5 && s.change > 0) return { v: 1, t: `Göreceli hacim ${fmt(s.rvol, 1)}x ve gün içi %${fmt(s.change, 1)}: alıcılar devrede, momentum var.` };
-  if (s.rvol != null && s.rvol >= 1.5 && s.change < 0) return { v: -1, t: `Hacim ${fmt(s.rvol, 1)}x ama fiyat %${fmt(s.change, 1)} düşüyor: hacimli satış baskısı.` };
+  if (s.rvol != null && s.rvol >= R.kRvol && s.change > 0) return { v: 1, t: `Göreceli hacim ${fmt(s.rvol, 1)}x ve gün içi %${fmt(s.change, 1)}: alıcılar devrede, momentum var.` };
+  if (s.rvol != null && s.rvol >= R.kRvol && s.change < 0) return { v: -1, t: `Hacim ${fmt(s.rvol, 1)}x ama fiyat %${fmt(s.change, 1)} düşüyor: hacimli satış baskısı.` };
   return { v: 0, t: `Göreceli hacim ${fmt(s.rvol, 1)}x: kırılım yok, ilgi zayıf. Benim tarzım değil.` };
 }
 function devil(s, others) {
-  const mc = monteCarlo(s), flags = [];
-  if (mc && mc.probStop >= 50) flags.push(`%7 stop'a 20 günde değme olasılığı %${fmt(mc.probStop, 0)}`);
-  if (s.atrPct != null && s.atrPct > 4) flags.push(`ATR %${fmt(s.atrPct, 1)}: günlük dalgalanma çok yüksek`);
-  if (s.tl < 20) flags.push(`günlük işlem hacmi ~${fmt(s.tl, 1)} milyon TL: çıkış likiditesi zayıf`);
+  const mc = monteCarlo(s), flags = [], n = NEWS[s.name];
+  if (mc && mc.probStop >= R.dStop) flags.push(`%${R.mStop} stop'a ${mc.days} günde değme olasılığı %${fmt(mc.probStop, 0)}`);
+  const sg = mc ? mc.sigma : s.atrPct; if (sg != null && sg > R.dAtr) flags.push(`günlük oynaklık ~%${fmt(sg, 1)}: çok yüksek`);
+  if (s.tl < R.dTl) flags.push(`günlük işlem hacmi ~${fmt(s.tl, 1)} milyon TL: çıkış likiditesi zayıf`);
   if (s.smaDist < -5) flags.push("fiyat SMA50'nin belirgin altında");
   if (s.rsi > 70) flags.push("RSI aşırı alım bölgesinde");
   if (s.pe == null || s.pe <= 0) flags.push("kazanç yok/F/K belirsiz");
+  if (n && n.score <= -2) flags.push("son haber akışı olumsuz");
   const pos = others.filter(o => o.v > 0).length;
   const macro = "Makro şok (kur, faiz, jeopolitik) durumunda BIST'te toplu satış görülür; korelasyonlar 1'e gider.";
-  if (flags.length >= 2 || pos >= 3 && flags.length) return { v: -1, t: `Karşı çıkıyorum${pos >= 3 ? " (masa fazla iyimser)" : ""}: ${flags.join("; ")}. ${macro}` };
+  if (flags.length >= R.dFlags || pos >= 3 && flags.length) return { v: -1, t: `Karşı çıkıyorum${pos >= 3 ? " (masa fazla iyimser)" : ""}: ${flags.join("; ")}. ${macro}` };
   return { v: 0, t: (flags.length ? `Dikkat: ${flags.join("; ")}. ` : "Belirgin bir veri riski görmüyorum. ") + macro };
 }
 function committee(s) {
@@ -173,8 +255,34 @@ function committee(s) {
 const PERSONAS = [["buffett", "Warren Buffett", "B"], ["simons", "Jim Simons", "S"], ["livermore", "Jesse Livermore", "L"],
   ["kellogg", "Jack Kellogg", "K"], ["seytan", "Şeytanın Avukatı", "Ş"]];
 
+/* ---------- Bilgi verenler (oy kullanmaz): Teknik Analist, Temel & Haber Analisti ---------- */
+function bands(closes) {
+  const sma = (i, n) => i + 1 < n ? null : closes.slice(i + 1 - n, i + 1).reduce((a, b) => a + b, 0) / n;
+  return closes.map((_, i) => {
+    const m = sma(i, 20); if (m == null) return {m: null, u: null, l: null, s50: sma(i, 50)};
+    const sd = Math.sqrt(closes.slice(i - 19, i + 1).reduce((a, b) => a + (b - m) ** 2, 0) / 20);
+    return {m, u: m + 2 * sd, l: m - 2 * sd, s50: sma(i, 50)};
+  });
+}
+function technical(s) {
+  const h = HIST && HIST.stocks[s.name]; let txt = `Alt bant ${fmt(s.bb_lower)}, üst bant ${fmt(s.bb_upper)}, SMA50 ${fmt(s.sma50)}.`;
+  if (h) {
+    const c = h.closes.slice(-20), lo = Math.min(...c), hi = Math.max(...c);
+    txt += ` Son 20 günün kapanış desteği ~${fmt(lo)}, direnci ~${fmt(hi)}. Fiyat desteğe %${fmt((s.close / lo - 1) * 100, 1)}, dirence %${fmt((hi / s.close - 1) * 100, 1)} uzakta.`;
+  }
+  return txt;
+}
+function fundamentalNews(s) {
+  const n = NEWS[s.name];
+  let txt = `F/K ${fmt(s.pe, 1)}, PD/DD ${fmt(s.pb)}, piyasa değeri ${s.mcap ? fmt(s.mcap / 1e9, 1) + " milyar TL" : "–"}, sektör: ${esc(s.sector ?? "–")}. `;
+  if (!n || !n.ok) return {txt: txt + "Haber verisi yok.", news: null};
+  const lab = n.score >= 2 ? "olumlu" : n.score <= -2 ? "olumsuz" : "nötr";
+  return {txt: txt + `Son ${n.items.length} haber başlığının anahtar kelime skoru ${n.score > 0 ? "+" : ""}${n.score} (${lab}; basit bir yöntemdir, başlıkları okuyun).`, news: n};
+}
+
 /* ---------- Seçim, filtre ---------- */
 function candidates() {
+  if ($("favonly").checked) return UNIVERSE.filter(s => FAVS.has(s.name));
   const tol = +$("tol").value / 100, sma = $("sma").value, maxRsi = +$("rsi").value, minVol = +$("vol").value, top = +$("top").value;
   return UNIVERSE.filter(s => s.ok && s.rsi != null && s.close <= s.bb_lower * (1 + tol) && s.rsi <= maxRsi && s.tl >= minVol &&
     (sma === "any" || (sma === "above") === (s.smaDist > 0)))
@@ -183,8 +291,8 @@ function candidates() {
 function extras(cands) {
   const have = new Set(cands.map(c => c.name)), rest = UNIVERSE.filter(s => s.ok && !have.has(s.name) && s.tl >= 5);
   return [
-    ["Buffett", "Radarımda olan ama listede yok: ucuz ve kazançlı şirketler", rest.filter(s => s.pe > 0 && s.pe < 10 && s.pb != null && s.pb < 1.2).sort((a, b) => a.pe - b.pe).slice(0, 8)],
-    ["Kellogg", "Hacim patlaması + kırılım", rest.filter(s => s.rvol >= 2.5 && s.change >= 3).sort((a, b) => b.rvol - a.rvol).slice(0, 8)],
+    ["Buffett", "Radarımda olan ama listede yok: ucuz ve kazançlı şirketler", rest.filter(s => s.pe > 0 && s.pe < R.eBPe && s.pb != null && s.pb < R.eBPb).sort((a, b) => a.pe - b.pe).slice(0, 8)],
+    ["Kellogg", "Hacim patlaması + kırılım", rest.filter(s => s.rvol >= R.eKRvol && s.change >= R.eKChg).sort((a, b) => b.rvol - a.rvol).slice(0, 8)],
     ["Livermore", "Trend lideri: SMA50 üstünde, üst banda yakın", rest.filter(s => s.smaDist > 0 && s.close >= s.bb_upper * 0.98).sort((a, b) => b.tl - a.tl).slice(0, 8)],
   ];
 }
@@ -200,20 +308,30 @@ function auditor(cands, results) {
   if (bad) issues.push(`${bad} hisse eksik/hatalı veri nedeniyle tarama dışı bırakıldı (Bollinger/SMA50 yok).`);
   const noPe = cands.filter(c => c.pe == null || c.pe <= 0).length;
   if (noPe) issues.push(`${noPe} adayda F/K yok (zarar/veri eksik); Buffett değerlemesi bunlarda geçersiz.`);
+  if (!HIST) issues.push("Fiyat geçmişi yüklenmedi: Simons geri test yapamıyor, Monte Carlo ATR tahminiyle çalışıyor.");
+  else {
+    const hAge = (Date.now() - HIST.ts * 1000) / 864e5;
+    if (hAge > 4) issues.push(`Fiyat geçmişi ${fmt(hAge, 0)} gün önce güncellenmiş.`);
+    const nohist = cands.filter(c => !HIST.stocks[c.name]).length;
+    if (nohist) issues.push(`${nohist} adayın geçmişi yok (düşük hacimli); onlarda geri test ve gerçek oynaklık kullanılamıyor.`);
+    const small = cands.filter(c => HIST.stocks[c.name] && HIST.stocks[c.name].bt.n < R.sMinN).length;
+    if (small) issues.push(`${small} adayda geçmiş sinyal sayısı < ${R.sMinN}; Simons bunlarda tüm hisselerin ortalamasını kullandı.`);
+  }
+  if (!Object.keys(NEWS).length) issues.push("Haber verisi yüklenmedi: Temel & Haber Analisti haber yorumu yapamıyor.");
   results.forEach(([s, r]) => {
     const mc = monteCarlo(s);
     if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
+    const n = NEWS[s.name]; if (r.score >= 3 && n && n.score <= -2) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama haber akışı olumsuz.`);
   });
-  issues.push("Haber/KAP verisi yok: Temel & Haber Analisti bu sürümde sadece oran verisiyle çalışıyor.");
-  const hard = issues.filter(i => !i.startsWith("Haber"));
-  $("audit").innerHTML = `<h2>👑 Baş Denetçi: <span class="${hard.length ? "audit-warn" : "audit-ok"}">${hard.length ? "ŞARTLI ONAY" : "ONAY"}</span></h2>
-    <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul>`;
+  const info = ["Geri test işlem maliyeti içermez ve bugün listede olan hisselerle yapılır (hayatta kalma yanlılığı); Türkiye'de enflasyon nedeniyle nominal getiriler yukarı eğilimlidir, bu yüzden 'taban' ile karşılaştırılır."];
+  $("audit").innerHTML = `<h2>👑 Baş Denetçi: <span class="${issues.length ? "audit-warn" : "audit-ok"}">${issues.length ? "ŞARTLI ONAY" : "ONAY"}</span></h2>
+    <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul><p class="note">${info.join(" ")}</p>`;
 }
 
 /* ---------- Çizim ---------- */
-let sortKey = "bbDist", sortDir = 1, selected = null, current = [];
-const COLS = [["name", "Hisse"], ["close", "Fiyat"], ["bbDist", "Alt banda %"], ["smaDist", "SMA50 %"], ["rsi", "RSI"],
-  ["change", "Gün %"], ["rvol", "Rel. hacim"], ["pe", "F/K"], ["pb", "PD/DD"], ["score", "Komite"]];
+let sortKey = "bbDist", sortDir = 1, selected = null, current = [], lastResults = [];
+const COLS = [["name", "Hisse"], ["close", "Fiyat"], ["bbDist", "Alt banda %"], ["smaDist", "SMA50 %", "hide-sm"], ["rsi", "RSI"],
+  ["change", "Gün %", "hide-sm"], ["rvol", "Rel. hacim", "hide-sm"], ["pe", "F/K", "hide-sm"], ["pb", "PD/DD", "hide-sm"], ["score", "Komite"]];
 function render() {
   current = candidates();
   const results = current.map(s => [s, committee(s)]);
@@ -222,39 +340,70 @@ function render() {
     const x = a[0][sortKey], y = b[0][sortKey];
     return sortDir * (typeof x === "string" ? x.localeCompare(y) : (x ?? 1e9) - (y ?? 1e9));
   });
+  lastResults = results;
   $("count").textContent = `(${results.length} hisse, toplam evren ${UNIVERSE.length})`;
-  $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n]) => `<th data-k="${k}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
+  $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n, c]) => `<th data-k="${k}" class="${c ?? ""}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
   $("tbl").tBodies[0].innerHTML = results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
-    <td><b>${s.name}</b> ${PERSONAS.map(([k, , ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}">${ch}</span>`).join("")}</td>
-    <td>${fmt(s.close)}</td><td>${fmt(s.bbDist)}</td><td class="${sign(s.smaDist)}">${fmt(s.smaDist)}</td><td>${fmt(s.rsi, 0)}</td>
-    <td class="${sign(s.change)}">${fmt(s.change)}</td><td>${fmt(s.rvol, 1)}</td><td>${fmt(s.pe, 1)}</td><td>${fmt(s.pb)}</td>
+    <td><span class="star ${FAVS.has(s.name) ? "on" : ""}" data-fav="${s.name}" title="Favori">${FAVS.has(s.name) ? "★" : "☆"}</span><b>${s.name}</b> ${PERSONAS.map(([k, , ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}">${ch}</span>`).join("")}</td>
+    <td>${fmt(s.close)}</td><td>${fmt(s.bbDist)}</td><td class="hide-sm ${sign(s.smaDist)}">${fmt(s.smaDist)}</td><td>${fmt(s.rsi, 0)}</td>
+    <td class="hide-sm ${sign(s.change)}">${fmt(s.change)}</td><td class="hide-sm">${fmt(s.rvol, 1)}</td><td class="hide-sm">${fmt(s.pe, 1)}</td><td class="hide-sm">${fmt(s.pb)}</td>
     <td class="tag ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}" title="Skor ${r.score}">${r.label}</td></tr>`).join("");
   $("extra").innerHTML = "<h2>🪑 Efsaneler masaya ek hisse getiriyor</h2><div class='sub'>Listede olmayan ama kendi kriterlerine uyan hisseler. Tıklayarak inceleyin.</div>" +
     extras(current).map(([who, why, arr]) => `<p><b>${who}:</b> <span class="mute">${why}</span><br>${arr.length ?
       arr.map(s => `<span class="pill" data-x="${s.name}">${s.name}</span>`).join("") : "<span class='mute'>Şu an uygun hisse yok.</span>"}</p>`).join("");
+  renderBacktest();
   auditor(current, results);
   if (selected) detail(selected);
 }
+function renderBacktest() {
+  if (!HIST) { $("backtest").innerHTML = ""; return; }
+  const P = HIST.pooled, row = (n, o) => ["h5", "h10", "h20"].map(h => o[h] ? `<td>%${fmt(o[h].win, 0)} / ${fmt(o[h].mean, 1)}%</td>` : "<td>–</td>").join("");
+  $("backtest").innerHTML = `<h2>📊 Gerçek geri test özeti <span class="sub">(${Object.keys(HIST.stocks).length} likit hisse, ~${fmt(HIST.bars / 250, 1)} yıl günlük veri)</span></h2>
+    <table class="bt"><thead><tr><th>Sinyal</th><th>Adet</th><th>5 gün</th><th>10 gün</th><th>20 gün</th></tr></thead><tbody>
+    <tr><td>A: Alt banda değdi</td><td>${P.A.n}</td>${row("A", P.A)}</tr>
+    <tr><td>B: A + SMA50 altı (düşen bıçak)</td><td>${P.B.n}</td>${row("B", P.B)}</tr>
+    <tr><td>C: A + SMA50 üstü</td><td>${P.C.n}</td>${row("C", P.C)}</tr>
+    <tr><td>Taban: her gün alınsaydı</td><td>–</td>${row("base", P.base)}</tr></tbody></table>
+    <p class="note">Hücreler: kazanma oranı / ortalama getiri. Sinyaller 5 gün seyreltilmiştir. Maliyet ve kayma yoktur; geçmiş geleceği garanti etmez.</p>`;
+}
+let chartState = null;
 function detail(name) {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
   selected = name;
-  const r = committee(s), mc = monteCarlo(s);
-  $("detail").innerHTML = `<h2>${s.name} <span class="sub">${s.description ?? ""} · ${s.sector ?? ""}</span></h2>
-    <div>Fiyat <b>${fmt(s.close)}</b> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} ·
-    Hacim ~${fmt(s.tl, 0)} mn TL</div>
+  const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s);
+  const info = (t, b) => `<div class="persona pi"><b>${t}</b><span>${b}</span></div>`;
+  $("detail").innerHTML = `<h2><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(s.sector)}</span></h2>
+    <div>Fiyat <b>${fmt(s.close)}</b> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
+    ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: <span class="${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label} (${r.score > 0 ? "+" : ""}${r.score})</span></b></p>` +
-    PERSONAS.map(([k, n]) => `<div class="persona ${r.l[k].v > 0 ? "p1" : r.l[k].v < 0 ? "pm" : ""}"><b>${n}</b><span>${r.l[k].t}</span></div>`).join("") +
-    (mc ? `<h2 style="margin-top:12px">Monte Carlo · 20 gün · 2000 yol</h2><canvas id="cv" height="150"></canvas>
-    <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-7%) olasılığı %${fmt(mc.probStop, 0)}.
-    Günlük σ = 0,8×ATR% ≈ %${fmt(mc.sigma, 2)}; drift = 0 varsayımı.</div>` : "");
+    info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
+    PERSONAS.map(([k, n]) => `<div class="persona ${r.l[k].v > 0 ? "p1" : r.l[k].v < 0 ? "pm" : ""}"><b>${n}</b><span>${esc(r.l[k].t)}</span></div>`).join("") +
+    (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
+    <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
+    Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
+  if (h) priceChart(h);
   if (mc) hist(mc);
   document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === name));
 }
+function setupCanvas(cv, h) {
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); return {g, w};
+}
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n);
+function priceChart(h) {
+  const cv = $("pc"), H = 170, {g, w} = setupCanvas(cv, H), all = h.closes, b = bands(all), N = Math.min(120, all.length), off = all.length - N;
+  const pts = all.slice(off), bb = b.slice(off);
+  const vals = [...pts, ...bb.flatMap(x => [x.u, x.l, x.s50]).filter(v => v != null)];
+  const lo = Math.min(...vals), hi = Math.max(...vals), X = i => 4 + i / (N - 1) * (w - 8), Y = v => H - 14 - (v - lo) / (hi - lo) * (H - 22);
+  const line = (arr, color, dash) => { g.beginPath(); g.strokeStyle = color; g.setLineDash(dash || []); let on = false;
+    arr.forEach((v, i) => { if (v == null) return; on ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)); on = true; }); g.stroke(); g.setLineDash([]); };
+  g.lineWidth = 1; line(bb.map(x => x.u), css("--mute"), [4, 3]); line(bb.map(x => x.l), css("--mute"), [4, 3]);
+  line(bb.map(x => x.s50), css("--warn")); g.lineWidth = 1.6; line(pts, css("--accent"));
+  g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.fillText(fmt(hi), 4, 10); g.fillText(fmt(lo), 4, H - 3);
+}
 function hist(mc) {
-  const cv = $("cv"), dpr = devicePixelRatio || 1, w = cv.clientWidth, h = 150;
-  cv.width = w * dpr; cv.height = h * dpr;
-  const g = cv.getContext("2d"); g.scale(dpr, dpr);
-  const cs = getComputedStyle(document.documentElement), up = cs.getPropertyValue("--up"), down = cs.getPropertyValue("--down"), mute = cs.getPropertyValue("--mute");
+  const cv = $("cv"), h = 150, {g, w} = setupCanvas(cv, h), up = css("--up"), down = css("--down"), mute = css("--mute");
   const lo = mc.finals[Math.floor(.01 * mc.finals.length)] * 100, hi = mc.finals[Math.floor(.99 * mc.finals.length)] * 100, B = 40, bw = (hi - lo) / B;
   const bins = new Array(B).fill(0);
   mc.finals.forEach(f => { const i = Math.floor((f * 100 - lo) / bw); if (i >= 0 && i < B) bins[i]++; });
@@ -268,15 +417,32 @@ function hist(mc) {
   g.fillStyle = mute; g.font = "11px system-ui"; g.fillText(`${fmt(lo, 0)}%`, 2, h - 3); g.fillText("0%", zx - 6, h - 3); g.textAlign = "right"; g.fillText(`${fmt(hi, 0)}%`, w - 2, h - 3);
 }
 
-/* ---------- Olaylar ---------- */
-/* ---------- Veri: yerel sunucudan (server.py) ---------- */
+/* ---------- CSV ---------- */
+function downloadCsv() {
+  const cols = ["name", "close", "bb_lower", "bb_upper", "sma50", "bbDist", "smaDist", "rsi", "change", "rvol", "pe", "pb", "tl"];
+  const lines = [[...cols, "komite_skoru", "komite"].join(";")];
+  lastResults.forEach(([s, r]) => lines.push([...cols.map(c => s[c] == null ? "" : typeof s[c] === "number" ? String(Math.round(s[c] * 100) / 100).replace(".", ",") : s[c]), r.score, r.label].join(";")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], {type: "text/csv;charset=utf-8"}));
+  a.download = `borsa-komitesi-${DATA.generated.replace(/[: ]/g, "-")}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- Veri: yerelde server.py'den, yayında data.json/news.json/history.json'dan ---------- */
 function banner(msg) { const b = $("banner"); b.style.display = msg ? "" : "none"; b.textContent = msg || ""; }
 function applyData(d) {
-  if (!d.stocks || !d.stocks.length) { $("status").textContent = "İlk veri çekiliyor…"; setTimeout(() => loadData(false), 3000); return; }
+  if (!d.stocks || !d.stocks.length) { $("status").textContent = "İlk veri çekiliyor…"; setTimeout(() => loadData(false), 3000); return false; }
   const changed = d.ts !== DATA.ts;
-  DATA = d; UNIVERSE = d.stocks.map(enrich); mcCache = {};
+  DATA = d; UNIVERSE = d.stocks.map(enrich);
   $("gen").textContent = d.generated;
-  if (changed) render();
+  return changed;
+}
+async function getJson(url) { try { const r = await fetch(url, {cache: "no-store"}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+async function loadAux() {
+  const n = await getJson("news.json?t=" + Date.now()); if (n && n.news) NEWS = n.news;
+  if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
+    const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
+    if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); $("hgen").textContent = h.generated; mcCache = {}; }
+  }
 }
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 async function loadData(refresh) {
@@ -287,12 +453,12 @@ async function loadData(refresh) {
   const btn = $("refresh");
   if (refresh) { btn.disabled = true; btn.textContent = "⟳ Güncelleniyor…"; }
   try {
-    // Yerelde server.py'den, yayında (GitHub Pages) her 15 dk güncellenen data.json'dan okunur
     const res = LOCAL ? await fetch("/api/" + (refresh ? "refresh" : "data"), refresh ? {method: "POST"} : {})
                       : await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
     if (!res.ok) throw new Error(res.status);
     const d = await res.json();
-    applyData(d);
+    const changed = applyData(d);
+    if (changed || refresh || !HIST) { await loadAux(); mcCache = {}; render(); }
     banner(d.error ? "Son veri çekme denemesi başarısız (" + d.error + "). Önceki veri gösteriliyor." : "");
     $("status").textContent = "Veri 15 dk'da bir otomatik güncellenir";
   } catch (e) {
@@ -300,10 +466,17 @@ async function loadData(refresh) {
                  : "Veri dosyası yüklenemedi. Biraz sonra tekrar deneyin.");
   } finally { btn.disabled = false; btn.textContent = "⟳ Yenile"; }
 }
+
+/* ---------- Olaylar ---------- */
 $("refresh").addEventListener("click", () => loadData(true));
+$("csv").addEventListener("click", downloadCsv);
 setInterval(() => loadData(false), 60000);
-["tol", "sma", "rsi", "vol", "top"].forEach(id => $(id).addEventListener("input", render));
+["tol", "sma", "rsi", "vol", "top", "favonly"].forEach(id => $(id).addEventListener("input", render));
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-fav]"); if (f) { e.stopPropagation(); toggleFav(f.dataset.fav); return; }
+});
 $("tbl").addEventListener("click", e => {
+  if (e.target.closest("[data-fav]")) return;
   const th = e.target.closest("th"), tr = e.target.closest("tr[data-n]");
   if (th) { const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : 1; sortKey = k; render(); }
   else if (tr) detail(tr.dataset.n);
@@ -314,6 +487,7 @@ $("theme").addEventListener("click", () => {
   r.dataset.theme = light ? "light" : "dark"; if (selected) detail(selected);
 });
 if (matchMedia("(prefers-color-scheme: light)").matches) document.documentElement.dataset.theme = "light";
+buildRules();
 render();
 loadData(false);
 </script>

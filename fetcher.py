@@ -28,6 +28,12 @@ def clean(v):
     return round(v, 4) if isinstance(v, float) else v
 
 
+def liquid_names(stocks: list[dict], min_tl: float = 30, cap: int = 150) -> list[str]:
+    """Günlük işlem hacmi (milyon TL) yüksek hisselerin adları: geçmiş ve haber bunlar için çekilir."""
+    rows = [(s["close"] * s["volume"] / 1e6, s["name"]) for s in stocks if s.get("close") and s.get("volume")]
+    return [n for tl, n in sorted(rows, reverse=True) if tl >= min_tl][:cap]
+
+
 def fetch_snapshot() -> dict:
     """{ts, generated, stocks, error} döndürür. Hata olursa istisna fırlatır."""
     _, df = (

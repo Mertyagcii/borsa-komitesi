@@ -2,3 +2,4 @@
 numpy
 requests
 tradingview-screener
+tvdatafeed @ https://github.com/rongardF/tvdatafeed/archive/refs/heads/main.zip
