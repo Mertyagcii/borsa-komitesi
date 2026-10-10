@@ -1,106 +1,261 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sanal Trading Ofisi</title>
+<title>Borsa Komitesi</title>
 <style>
-:root{--bg:#0e1117;--panel:#161b22;--panel2:#1c232d;--line:#2a323d;--text:#e6edf3;--mute:#8b96a3;
---up:#3fb950;--down:#f85149;--warn:#d29922;--accent:#58a6ff;--r:10px}
-:root[data-theme=light]{--bg:#f6f8fa;--panel:#fff;--panel2:#f0f3f6;--line:#d0d7de;--text:#1f2328;--mute:#656d76;
---up:#1a7f37;--down:#cf222e;--warn:#9a6700;--accent:#0969da}
+:root{--bg:#0b0b0d;--shell:#151517;--side:#121214;--panel:#212125;--panel2:#2a2a30;--line:rgba(255,255,255,.07);
+--text:#f4f4f7;--mute:#9a9aa6;--accent:#7f6cf5;--accent2:#a89aff;--up:#44d17a;--down:#ff6464;--warn:#e8b95a;--r:18px;color-scheme:dark}
+:root[data-theme=light]{--bg:#dcdce4;--shell:#f4f4f9;--side:#ffffff;--panel:#ffffff;--panel2:#efeff5;--line:rgba(0,0,0,.08);
+--text:#1c1c24;--mute:#6b6b78;--accent:#6a58e6;--accent2:#8b7bf5;--up:#14934b;--down:#d43a3a;--warn:#a87414;color-scheme:light}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{padding:16px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
-h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 8px}
-.sub{color:var(--mute);font-size:12px}
-main{padding:16px;display:grid;gap:16px;max-width:1400px;margin:0 auto}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px}
+h1,h2,h3{margin:0}h2{font-size:16px;font-weight:600}
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1500px;margin:0 auto;background:var(--shell);border:1px solid var(--line);border-radius:28px;overflow:hidden;min-height:calc(100vh - 40px)}
+.side{background:var(--side);border-right:1px solid var(--line);padding:22px 16px;display:flex;flex-direction:column;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;font-size:15px;padding:0 6px 12px;border-bottom:1px solid var(--line)}
+.logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent2),var(--accent));display:grid;place-items:center;color:#fff}
+.store{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 12px;color:var(--mute);font-size:12px}
+nav{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;color:var(--mute);cursor:pointer;text-decoration:none;font-size:13.5px}
+.nav a:hover{color:var(--text);background:var(--panel2)}
+.nav a.active{color:#fff;background:linear-gradient(90deg,var(--accent2),var(--accent));box-shadow:0 6px 18px -6px var(--accent)}
+.side-bottom{margin-top:auto;display:flex;flex-direction:column;gap:4px}
+.side-bottom hr{border:0;border-top:1px solid var(--line);width:100%;margin:6px 0}
+.promo{margin-top:10px;border-radius:16px;padding:14px;background:linear-gradient(150deg,var(--accent2),var(--accent) 60%,#4a3fc4);color:#fff;font-size:12.5px}
+.promo b{display:block;font-size:14px;margin:4px 0 2px}
+.promo .big{font-size:18px;font-weight:700;letter-spacing:.3px}
+.content{padding:20px 24px;min-width:0}
+.topbar{display:flex;align-items:center;gap:12px;padding-bottom:16px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+.search{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:7px 12px;width:min(300px,100%);color:var(--mute)}
+.search input{background:none;border:0;outline:0;color:var(--text);width:100%;padding:0;font:inherit}
+.spacer{flex:1}
+.ibtn{display:inline-flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:7px 11px;cursor:pointer;font:inherit;font-size:12.5px}
+.ibtn:hover{border-color:var(--accent)}
+.ibtn.round{width:36px;height:36px;padding:0;justify-content:center;border-radius:50%}
+.user{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent2),var(--accent));display:grid;place-items:center;color:#fff;font-weight:700}
+.sub,.note{color:var(--mute);font-size:12px}
+.card{background:linear-gradient(160deg,var(--panel),color-mix(in srgb,var(--panel) 88%,#000));border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.row{display:grid;gap:16px;margin-bottom:16px}
+.r1{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,.9fr)}
+.r2{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.r3{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+.card-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.badge{width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent2);display:grid;place-items:center;flex:none}
+.card-h .more{margin-left:auto;color:var(--mute)}
+.kpi{font-size:30px;font-weight:700;letter-spacing:.3px;margin:6px 0 4px}
+.kpi-sub{font-size:12.5px;color:var(--mute)}
+.kpi-link{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);color:var(--text);font-size:13px;cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;width:100%;font:inherit;font-size:13px;padding-left:0;padding-right:0;border-radius:0}
+.kpi-link:hover{color:var(--accent2)}
+.list{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.li{display:flex;align-items:center;gap:10px;font-size:13px}
+.li .dot{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.li .v{margin-left:auto;font-weight:600}
+.stat-wrap{position:relative}
+canvas{width:100%;display:block}
+.donut-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.donut-row canvas{width:150px;height:150px;flex:none}
+.donut-row .list{flex:1;min-width:150px}
+.sbar{display:flex;height:12px;border-radius:99px;overflow:hidden;background:var(--panel2);flex:1}
+.sbar i{display:block;height:100%}
+.prow{display:flex;align-items:center;gap:10px;margin:9px 0;font-size:12.5px}
+.prow .nm{width:120px;color:var(--mute);flex:none}
+.prow .ct{width:70px;text-align:right;color:var(--mute);font-size:11.5px;flex:none}
+select,input,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:6px 9px;font:inherit}
+input[type=checkbox]{width:auto}
+button{cursor:pointer}button:hover{border-color:var(--accent)}
 .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
 .controls label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
 .controls label.inline{flex-direction:row;align-items:center;gap:6px;padding-bottom:6px}
-input,select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
-input[type=checkbox]{width:auto}
-button{cursor:pointer}button:hover{border-color:var(--accent)}
-.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:16px}
-@media(max-width:900px){.grid{grid-template-columns:1fr}}
-.tw{overflow:auto;max-height:560px}
+.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;margin-top:16px}
+@media(max-width:1500px){.hide-md{display:none}}
+.tw{overflow:auto;max-height:600px}
 table{border-collapse:collapse;width:100%;font-size:13px}
-th,td{padding:6px 5px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th,td{padding:7px 6px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
 th{position:sticky;top:0;background:var(--panel);color:var(--mute);cursor:pointer;font-weight:600}
 th:first-child,td:first-child{text-align:left}
 tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:var(--panel2)}
 .up{color:var(--up)}.down{color:var(--down)}.mute{color:var(--mute)}
 .star{cursor:pointer;color:var(--mute);margin-right:4px;user-select:none}.star.on{color:var(--warn)}
-.chip{display:inline-block;min-width:20px;text-align:center;border-radius:4px;padding:0 4px;font-size:11px;font-weight:700;margin-right:2px}
-.v1{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
+.chip{display:inline-block;min-width:20px;text-align:center;border-radius:5px;padding:0 4px;font-size:11px;font-weight:700;margin-right:2px}
+.v1{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
 .v0{background:var(--panel2);color:var(--mute)}
-.vm{background:color-mix(in srgb,var(--down) 25%,transparent);color:var(--down)}
+.vm{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}
 .tag{font-weight:700}
-.persona{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;background:var(--panel2);border-radius:0 6px 6px 0}
+.persona{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;background:var(--panel2);border-radius:0 10px 10px 0}
 .persona.p1{border-color:var(--up)}.persona.pm{border-color:var(--down)}.persona.pi{border-color:var(--accent)}
-.persona b{display:block}
-.persona span{color:var(--mute);font-size:13px}
-canvas{width:100%;display:block}
+.persona b{display:block}.persona span{color:var(--mute);font-size:13px}
 ul{margin:4px 0;padding-left:18px}
-.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:2px;cursor:pointer;font-size:12px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:2px;cursor:pointer;font-size:12px;background:var(--panel2)}
 .pill:hover{border-color:var(--accent)}
 .audit-ok{color:var(--up)}.audit-warn{color:var(--warn)}
-.note{font-size:12px;color:var(--mute)}
 details>summary{cursor:pointer;font-weight:600}
-.rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 16px;margin-top:10px}
-.rules fieldset{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px 16px;margin-top:10px}
+.rules fieldset{border:1px solid var(--line);border-radius:12px;padding:8px 12px}
 .rules legend{font-size:12px;font-weight:700;padding:0 4px}
-.rules label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin:4px 0}
+.rules label{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--mute);margin:5px 0}
 .rules input{width:70px}
 .news li{margin:2px 0;font-size:13px}
-.bt{width:auto;font-size:12px}.bt td,.bt th{padding:3px 8px;cursor:default}
-@media(max-width:640px){.hide-sm{display:none}header{padding:12px}main{padding:10px}}
+.bt{width:auto;font-size:12.5px}.bt td,.bt th{padding:4px 10px;cursor:default}
+.nlist{display:flex;flex-direction:column;gap:2px}
+.nitem{display:flex;gap:10px;align-items:baseline;padding:8px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.nitem .tk{flex:none}
+.view{display:none}.view.show{display:block}
+i[data-ico]{display:inline-grid;place-items:center}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:1100px){.r1{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.r1>.card:last-child{grid-column:1/-1}}
+@media(max-width:900px){
+  body{padding:0}.shell{grid-template-columns:minmax(0,1fr);border-radius:0;border:0}
+  .side{flex-direction:row;align-items:center;overflow-x:auto;padding:10px;gap:6px;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{border:0;padding:0 8px 0 0;white-space:nowrap}.store,.promo,.side-bottom hr{display:none}
+  nav{flex-direction:row;margin:0}.nav a{white-space:nowrap;padding:8px 10px}.side-bottom{margin:0;flex-direction:row}
+  .content{padding:14px}.r1,.r2,.r3,.grid{grid-template-columns:minmax(0,1fr)}
+  .topbar{flex-wrap:wrap}.hide-sm{display:none}.user span{display:none}
+}
+@media(max-width:640px){.kpi{font-size:26px}.prow .nm{width:90px}}
 </style>
 </head>
 <body>
-<header>
-  <div><h1>🏛️ Sanal Trading Ofisi &amp; Yazılım Komitesi</h1>
-  <div class="sub">BIST · TradingView verisi (gecikmeli olabilir) · Veri: <span id="gen"></span> · Geçmiş: <span id="hgen">–</span></div></div>
-  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <span class="sub" id="status"></span>
-    <button id="refresh">⟳ Yenile</button>
-    <button id="csv" title="Tablodaki hisseleri CSV olarak indir">⬇ CSV</button>
-    <button id="theme">Tema</button>
-  </div>
-</header>
-<div id="banner" class="card" style="display:none;margin:16px 16px 0;border-color:var(--warn)"></div>
-<main>
-  <section class="card">
-    <div class="controls">
-      <label>Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0" style="width:90px"></label>
-      <label>SMA50<select id="sma"><option value="any">Hepsi</option><option value="above">Üstünde</option><option value="below">Altında</option></select></label>
-      <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
-      <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
-      <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
-      <label class="inline"><input id="favonly" type="checkbox"> Sadece favoriler ★</label>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="logo"><i data-ico="trend"></i></span><b>Borsa Komitesi</b></div>
+    <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
+    <nav class="nav" id="nav">
+      <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
+      <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
+      <a data-view="favoriler"><i data-ico="star"></i>Favoriler</a>
+      <a data-view="haberler"><i data-ico="news"></i>Haberler</a>
+      <a data-view="geritest"><i data-ico="bars"></i>Geri Test</a>
+    </nav>
+    <div class="side-bottom nav">
+      <hr>
+      <a data-view="ayarlar"><i data-ico="sliders"></i>Efsane Kuralları</a>
+      <a data-view="yardim"><i data-ico="help"></i>Yardım</a>
+      <div class="promo" id="sideAudit"><i data-ico="shield"></i><b>Baş Denetçi</b><span class="big">…</span></div>
     </div>
-    <p class="note">Efsaneler; kurallara dayalı, veri odaklı simülasyonlardır (yapay zekâ/API kullanılmaz). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
-    <details><summary>⚙️ Efsane kurallarını ayarla</summary>
-      <div class="rules" id="rules"></div>
-      <p><button id="rulesReset">Varsayılana dön</button> <span class="note">Ayarlar bu tarayıcıda saklanır.</span></p>
-    </details>
+  </aside>
+
+  <section class="content">
+    <div class="topbar">
+      <label class="search"><i data-ico="search"></i><input id="gsearch" list="tickers" placeholder="Hisse ara (örn. THYAO)" autocomplete="off"></label>
+      <datalist id="tickers"></datalist>
+      <span class="spacer"></span>
+      <span class="sub hide-sm" id="status"></span>
+      <button class="ibtn hide-sm" id="csv"><i data-ico="download"></i>Raporu indir</button>
+      <button class="ibtn round" id="refresh" title="Veriyi yenile"><i data-ico="refresh"></i></button>
+      <button class="ibtn round" id="theme" title="Tema"><i data-ico="moon"></i></button>
+      <div class="user"><span class="avatar">M</span><span>Mert<br><span class="sub">Komite başkanı</span></span></div>
+    </div>
+    <div id="banner" class="card" style="display:none;margin-bottom:16px;border-color:var(--warn)"></div>
+
+    <!-- GENEL BAKIŞ -->
+    <div class="view" id="v-dashboard">
+      <div class="row r1">
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Taranan Hisse</h2></div>
+          <div class="kpi" id="k1">–</div>
+          <div class="kpi-sub" id="k1s"></div>
+          <button class="kpi-link" data-go="adaylar"><span>Hisseleri incele</span><i data-ico="arrow"></i></button>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="list"></i></span><h2>Aday Hisse</h2></div>
+          <div class="kpi" id="k2">–</div>
+          <div class="kpi-sub" id="k2s"></div>
+          <button class="kpi-link" data-go="adaylar"><span>Adayları gör</span><i data-ico="arrow"></i></button>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="grid"></i></span><h2>Aday Sektörler</h2></div>
+          <div class="list" id="sectors"></div>
+        </div>
+      </div>
+      <div class="row r2">
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Fiyat Grafiği</h2>
+            <select id="statSel" class="more"></select></div>
+          <div class="note" id="statNote"></div>
+          <div class="stat-wrap"><canvas id="statCv" style="height:250px"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="shield"></i></span><h2>Komite Dağılımı</h2></div>
+          <div class="donut-row"><canvas id="donut1"></canvas><div class="list" id="donutList"></div></div>
+          <div class="note" style="margin:14px 0 6px">En yüksek skorlu adaylar</div><div class="list" id="topPicks"></div>
+        </div>
+      </div>
+      <div class="row r3">
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="users"></i></span><h2>Efsane Görüşleri</h2></div>
+          <div class="note">Aday hisseler üzerinde: <span class="up">olumlu</span> · nötr · <span class="down">olumsuz</span></div>
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+            <div id="pbars" style="flex:1;min-width:240px"></div>
+            <div style="text-align:center"><canvas id="donut2" style="width:110px;height:110px"></canvas><div class="note">komite uzlaşısı</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h"><span class="badge"><i data-ico="shield"></i></span><h2>Denetçi Özeti</h2></div>
+          <div class="list" id="auditList"></div>
+        </div>
+      </div>
+      <section class="card" id="audit"></section>
+    </div>
+
+    <!-- ADAYLAR -->
+    <div class="view" id="v-adaylar">
+      <section class="card">
+        <div class="controls">
+          <label>Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0" style="width:90px"></label>
+          <label>SMA50<select id="sma"><option value="any">Hepsi</option><option value="above">Üstünde</option><option value="below">Altında</option></select></label>
+          <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
+          <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
+          <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
+          <label class="inline"><input id="favonly" type="checkbox"> Sadece favoriler ★</label>
+        </div>
+        <p class="note" style="margin-bottom:0">Efsaneler kurallara dayalı, veri odaklı simülasyonlardır (yapay zekâ/API yok). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+      </section>
+      <div class="grid">
+        <section class="card">
+          <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
+          <div class="sub" style="margin:4px 0 8px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı · ★ favori</div>
+          <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+        </section>
+        <section class="card" id="detail"><h2>Detay</h2><p class="mute">Soldan bir hisse seçin.</p></section>
+      </div>
+      <section class="card" id="extra" style="margin-top:16px"></section>
+    </div>
+
+    <!-- HABERLER -->
+    <div class="view" id="v-haberler"><section class="card" id="newsView"></section></div>
+
+    <!-- GERİ TEST -->
+    <div class="view" id="v-geritest"><section class="card" id="backtest"></section></div>
+
+    <!-- AYARLAR -->
+    <div class="view" id="v-ayarlar">
+      <section class="card">
+        <h2>Efsane kuralları</h2>
+        <p class="note">Eşikleri değiştirin; komite ve tablo anında güncellenir. Ayarlar bu tarayıcıda saklanır.</p>
+        <div class="rules" id="rules"></div>
+        <p><button id="rulesReset">Varsayılana dön</button></p>
+      </section>
+    </div>
+
+    <!-- YARDIM -->
+    <div class="view" id="v-yardim">
+      <section class="card">
+        <h2>Nasıl çalışır?</h2>
+        <ul>
+          <li><b>Veri:</b> BIST fiyatları TradingView'den, 15 dakikaya kadar gecikmeli gelir ve 15 dakikada bir yenilenir. Fiyat geçmişi günde bir kez güncellenir.</li>
+          <li><b>Efsaneler:</b> Buffett (değer), Simons (istatistik + geri test), Livermore (trend), Kellogg (momentum) ve Şeytanın Avukatı (risk) kurallara göre oy verir. Oylar toplanır: ≥3 GÜÇLÜ ADAY, ≥1 İZLE, 0 NÖTR, negatif UZAK DUR.</li>
+          <li><b>Baş Denetçi:</b> Veri eksiklerini, eski veriyi, küçük örneklemi ve komite içi çelişkileri kontrol eder.</li>
+          <li><b>Geri test:</b> Bollinger alt bandına değen hisselerin sonraki 5/10/20 gün getirisi, her gün alma tabanıyla karşılaştırılır. Maliyet içermez, geçmiş geleceği garanti etmez.</li>
+          <li><b>Haber skoru:</b> Başlıklardaki anahtar kelimelerle hesaplanan kaba bir göstergedir.</li>
+        </ul>
+        <p class="note">Bu uygulama eğitim ve araştırma amaçlıdır; yatırım tavsiyesi değildir.</p>
+      </section>
+    </div>
   </section>
-
-  <section class="card" id="audit"></section>
-
-  <div class="grid">
-    <section class="card">
-      <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
-      <div class="sub" style="margin-bottom:6px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı · ★ favori</div>
-      <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
-    </section>
-    <section class="card" id="detail"><h2>Detay</h2><p class="mute">Soldan bir hisse seçin.</p></section>
-  </div>
-
-  <section class="card" id="extra"></section>
-  <section class="card" id="backtest"></section>
-</main>
+</div>
 
 <script>
 let DATA = {ts: 0, generated: "–", stocks: []}, HIST = null, NEWS = {};
@@ -112,6 +267,36 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const SECTORS = {"Finance": "Finans", "Non-Energy Minerals": "Enerji Dışı Madenler", "Energy Minerals": "Enerji / Madenler", "Transportation": "Ulaştırma", "Retail Trade": "Perakende",
+  "Consumer Services": "Tüketici Hizmetleri", "Consumer Durables": "Dayanıklı Tüketim", "Consumer Non-Durables": "Dayanıksız Tüketim", "Electronic Technology": "Elektronik Teknoloji",
+  "Technology Services": "Teknoloji Hizmetleri", "Health Technology": "Sağlık Teknolojisi", "Health Services": "Sağlık Hizmetleri", "Industrial Services": "Endüstriyel Hizmetler",
+  "Process Industries": "Proses Sanayi", "Producer Manufacturing": "Üretici İmalat", "Distribution Services": "Dağıtım Hizmetleri", "Commercial Services": "Ticari Hizmetler",
+  "Communications": "İletişim", "Utilities": "Kamu Hizmetleri", "Miscellaneous": "Çeşitli", "Government": "Kamu"};
+const trSector = s => SECTORS[s] || s || "Diğer";
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ---------- İkonlar ---------- */
+const ICONS = {
+  trend: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
+  list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  news: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  bars: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  refresh: '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  sun: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  arrow: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
+  chev: '<polyline points="6 9 12 15 18 9"/>',
+};
+const ico = n => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
+function paintIcons(root = document) { root.querySelectorAll("i[data-ico]").forEach(el => { el.innerHTML = ico(el.dataset.ico); }); }
 
 /* ---------- Efsane kuralları (ayarlanabilir) ---------- */
 const RULE_DEFS = [
@@ -274,7 +459,7 @@ function technical(s) {
 }
 function fundamentalNews(s) {
   const n = NEWS[s.name];
-  let txt = `F/K ${fmt(s.pe, 1)}, PD/DD ${fmt(s.pb)}, piyasa değeri ${s.mcap ? fmt(s.mcap / 1e9, 1) + " milyar TL" : "–"}, sektör: ${esc(s.sector ?? "–")}. `;
+  let txt = `F/K ${fmt(s.pe, 1)}, PD/DD ${fmt(s.pb)}, piyasa değeri ${s.mcap ? fmt(s.mcap / 1e9, 1) + " milyar TL" : "–"}, sektör: ${esc(trSector(s.sector))}. `;
   if (!n || !n.ok) return {txt: txt + "Haber verisi yok.", news: null};
   const lab = n.score >= 2 ? "olumlu" : n.score <= -2 ? "olumsuz" : "nötr";
   return {txt: txt + `Son ${n.items.length} haber başlığının anahtar kelime skoru ${n.score > 0 ? "+" : ""}${n.score} (${lab}; basit bir yöntemdir, başlıkları okuyun).`, news: n};
@@ -298,9 +483,10 @@ function extras(cands) {
 }
 
 /* ---------- Baş Denetçi ---------- */
+let AUDIT = {issues: [], ok: true};
 function auditor(cands, results) {
   const issues = [];
-  if (!UNIVERSE.length) { $("audit").innerHTML = "<h2>👑 Baş Denetçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  if (!UNIVERSE.length) { AUDIT = {issues: [], ok: null}; return; }
   if (!cands.length) issues.push("Filtreye uyan hisse yok; kriterleri gevşetin.");
   const age = (Date.now() - DATA.ts * 1000) / 36e5;
   if (age > 24) issues.push(`Veri ${fmt(age, 0)} saat önce çekilmiş; Yenile düğmesine basın.`);
@@ -323,15 +509,22 @@ function auditor(cands, results) {
     if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
     const n = NEWS[s.name]; if (r.score >= 3 && n && n.score <= -2) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama haber akışı olumsuz.`);
   });
-  const info = ["Geri test işlem maliyeti içermez ve bugün listede olan hisselerle yapılır (hayatta kalma yanlılığı); Türkiye'de enflasyon nedeniyle nominal getiriler yukarı eğilimlidir, bu yüzden 'taban' ile karşılaştırılır."];
-  $("audit").innerHTML = `<h2>👑 Baş Denetçi: <span class="${issues.length ? "audit-warn" : "audit-ok"}">${issues.length ? "ŞARTLI ONAY" : "ONAY"}</span></h2>
-    <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul><p class="note">${info.join(" ")}</p>`;
+  AUDIT = {issues, ok: !issues.length};
+}
+function renderAudit() {
+  const {issues, ok} = AUDIT;
+  const label = ok == null ? "Bekleniyor" : ok ? "ONAY" : "ŞARTLI ONAY";
+  $("sideAudit").innerHTML = `${ico("shield")}<b>Baş Denetçi</b><span class="big">${label}</span><div style="opacity:.85;margin-top:2px">${ok == null ? "" : ok ? "Sorun bulunmadı" : issues.length + " uyarı"}</div>`;
+  if (ok == null) { $("audit").innerHTML = "<h2>Baş Denetçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  $("audit").innerHTML = `<h2>Baş Denetçi: <span class="${ok ? "audit-ok" : "audit-warn"}">${label}</span></h2>
+    <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul>
+    <p class="note">Geri test işlem maliyeti içermez ve bugün listede olan hisselerle yapılır (hayatta kalma yanlılığı); Türkiye'de enflasyon nedeniyle nominal getiriler yukarı eğilimlidir, bu yüzden "taban" ile karşılaştırılır.</p>`;
 }
 
-/* ---------- Çizim ---------- */
+/* ---------- Tablo ---------- */
 let sortKey = "bbDist", sortDir = 1, selected = null, current = [], lastResults = [];
 const COLS = [["name", "Hisse"], ["close", "Fiyat"], ["bbDist", "Alt banda %"], ["smaDist", "SMA50 %", "hide-sm"], ["rsi", "RSI"],
-  ["change", "Gün %", "hide-sm"], ["rvol", "Rel. hacim", "hide-sm"], ["pe", "F/K", "hide-sm"], ["pb", "PD/DD", "hide-sm"], ["score", "Komite"]];
+  ["change", "Gün %", "hide-sm"], ["rvol", "Rel. hacim", "hide-md hide-sm"], ["pe", "F/K", "hide-md hide-sm"], ["pb", "PD/DD", "hide-md hide-sm"], ["score", "Komite"]];
 function render() {
   current = candidates();
   const results = current.map(s => [s, committee(s)]);
@@ -341,40 +534,52 @@ function render() {
     return sortDir * (typeof x === "string" ? x.localeCompare(y) : (x ?? 1e9) - (y ?? 1e9));
   });
   lastResults = results;
+  if (!selected && results.length) selected = (results.find(([s]) => HIST && HIST.stocks[s.name]) || results[0])[0].name;
   $("count").textContent = `(${results.length} hisse, toplam evren ${UNIVERSE.length})`;
   $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n, c]) => `<th data-k="${k}" class="${c ?? ""}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
   $("tbl").tBodies[0].innerHTML = results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
     <td><span class="star ${FAVS.has(s.name) ? "on" : ""}" data-fav="${s.name}" title="Favori">${FAVS.has(s.name) ? "★" : "☆"}</span><b>${s.name}</b> ${PERSONAS.map(([k, , ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}">${ch}</span>`).join("")}</td>
     <td>${fmt(s.close)}</td><td>${fmt(s.bbDist)}</td><td class="hide-sm ${sign(s.smaDist)}">${fmt(s.smaDist)}</td><td>${fmt(s.rsi, 0)}</td>
-    <td class="hide-sm ${sign(s.change)}">${fmt(s.change)}</td><td class="hide-sm">${fmt(s.rvol, 1)}</td><td class="hide-sm">${fmt(s.pe, 1)}</td><td class="hide-sm">${fmt(s.pb)}</td>
+    <td class="hide-sm ${sign(s.change)}">${fmt(s.change)}</td><td class="hide-md hide-sm">${fmt(s.rvol, 1)}</td><td class="hide-md hide-sm">${fmt(s.pe, 1)}</td><td class="hide-md hide-sm">${fmt(s.pb)}</td>
     <td class="tag ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}" title="Skor ${r.score}">${r.label}</td></tr>`).join("");
   $("extra").innerHTML = "<h2>🪑 Efsaneler masaya ek hisse getiriyor</h2><div class='sub'>Listede olmayan ama kendi kriterlerine uyan hisseler. Tıklayarak inceleyin.</div>" +
     extras(current).map(([who, why, arr]) => `<p><b>${who}:</b> <span class="mute">${why}</span><br>${arr.length ?
       arr.map(s => `<span class="pill" data-x="${s.name}">${s.name}</span>`).join("") : "<span class='mute'>Şu an uygun hisse yok.</span>"}</p>`).join("");
-  renderBacktest();
+  $("tickers").innerHTML = UNIVERSE.map(s => `<option value="${s.name}">`).join("");
   auditor(current, results);
-  if (selected) detail(selected);
+  renderAudit();
+  refreshView();
 }
 function renderBacktest() {
-  if (!HIST) { $("backtest").innerHTML = ""; return; }
-  const P = HIST.pooled, row = (n, o) => ["h5", "h10", "h20"].map(h => o[h] ? `<td>%${fmt(o[h].win, 0)} / ${fmt(o[h].mean, 1)}%</td>` : "<td>–</td>").join("");
+  if (!HIST) { $("backtest").innerHTML = "<h2>Geri test</h2><p class='mute'>Fiyat geçmişi henüz yüklenmedi.</p>"; return; }
+  const P = HIST.pooled, row = o => ["h5", "h10", "h20"].map(h => o[h] ? `<td>%${fmt(o[h].win, 0)} / ${fmt(o[h].mean, 1)}%</td>` : "<td>–</td>").join("");
   $("backtest").innerHTML = `<h2>📊 Gerçek geri test özeti <span class="sub">(${Object.keys(HIST.stocks).length} likit hisse, ~${fmt(HIST.bars / 250, 1)} yıl günlük veri)</span></h2>
-    <table class="bt"><thead><tr><th>Sinyal</th><th>Adet</th><th>5 gün</th><th>10 gün</th><th>20 gün</th></tr></thead><tbody>
-    <tr><td>A: Alt banda değdi</td><td>${P.A.n}</td>${row("A", P.A)}</tr>
-    <tr><td>B: A + SMA50 altı (düşen bıçak)</td><td>${P.B.n}</td>${row("B", P.B)}</tr>
-    <tr><td>C: A + SMA50 üstü</td><td>${P.C.n}</td>${row("C", P.C)}</tr>
-    <tr><td>Taban: her gün alınsaydı</td><td>–</td>${row("base", P.base)}</tr></tbody></table>
+    <table class="bt" style="margin-top:8px"><thead><tr><th>Sinyal</th><th>Adet</th><th>5 gün</th><th>10 gün</th><th>20 gün</th></tr></thead><tbody>
+    <tr><td>A: Alt banda değdi</td><td>${P.A.n}</td>${row(P.A)}</tr>
+    <tr><td>B: A + SMA50 altı (düşen bıçak)</td><td>${P.B.n}</td>${row(P.B)}</tr>
+    <tr><td>C: A + SMA50 üstü</td><td>${P.C.n}</td>${row(P.C)}</tr>
+    <tr><td>Taban: her gün alınsaydı</td><td>–</td>${row(P.base)}</tr></tbody></table>
     <p class="note">Hücreler: kazanma oranı / ortalama getiri. Sinyaller 5 gün seyreltilmiştir. Maliyet ve kayma yoktur; geçmiş geleceği garanti etmez.</p>`;
 }
-let chartState = null;
+function renderNews() {
+  const items = [];
+  Object.entries(NEWS).forEach(([tk, n]) => (n.items || []).forEach(i => items.push({...i, tk})));
+  const seen = new Set(), list = items.sort((a, b) => b.ts - a.ts).filter(i => !seen.has(i.t) && seen.add(i.t)).slice(0, 60);
+  $("newsView").innerHTML = `<h2>Son haberler <span class="sub">(likit hisseler, TradingView/KAP akışı)</span></h2>` + (list.length ?
+    `<div class="nlist">${list.map(i => `<div class="nitem"><span class="pill tk" data-x="${esc(i.tk)}">${esc(i.tk)}</span>
+      <span class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)}</span><span class="mute" style="margin-left:auto;white-space:nowrap">${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></div>`).join("")}</div>`
+    : "<p class='mute'>Haber verisi yok.</p>");
+}
+
+/* ---------- Detay paneli ---------- */
 function detail(name) {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
   selected = name;
   const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s);
   const info = (t, b) => `<div class="persona pi"><b>${t}</b><span>${b}</span></div>`;
-  $("detail").innerHTML = `<h2><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(s.sector)}</span></h2>
+  $("detail").innerHTML = `<h2><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
     <div>Fiyat <b>${fmt(s.close)}</b> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
-    ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
+    ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: <span class="${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label} (${r.score > 0 ? "+" : ""}${r.score})</span></b></p>` +
     info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
@@ -382,15 +587,13 @@ function detail(name) {
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
-  if (h) priceChart(h);
-  if (mc) hist(mc);
+  if ($("v-adaylar").classList.contains("show")) { if (h) priceChart(h); if (mc) hist(mc); }
   document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === name));
 }
 function setupCanvas(cv, h) {
   const dpr = devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = h * dpr;
   const g = cv.getContext("2d"); g.scale(dpr, dpr); return {g, w};
 }
-const css = n => getComputedStyle(document.documentElement).getPropertyValue(n);
 function priceChart(h) {
   const cv = $("pc"), H = 170, {g, w} = setupCanvas(cv, H), all = h.closes, b = bands(all), N = Math.min(120, all.length), off = all.length - N;
   const pts = all.slice(off), bb = b.slice(off);
@@ -399,7 +602,7 @@ function priceChart(h) {
   const line = (arr, color, dash) => { g.beginPath(); g.strokeStyle = color; g.setLineDash(dash || []); let on = false;
     arr.forEach((v, i) => { if (v == null) return; on ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)); on = true; }); g.stroke(); g.setLineDash([]); };
   g.lineWidth = 1; line(bb.map(x => x.u), css("--mute"), [4, 3]); line(bb.map(x => x.l), css("--mute"), [4, 3]);
-  line(bb.map(x => x.s50), css("--warn")); g.lineWidth = 1.6; line(pts, css("--accent"));
+  line(bb.map(x => x.s50), css("--warn")); g.lineWidth = 1.6; line(pts, css("--accent2"));
   g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.fillText(fmt(hi), 4, 10); g.fillText(fmt(lo), 4, H - 3);
 }
 function hist(mc) {
@@ -417,6 +620,121 @@ function hist(mc) {
   g.fillStyle = mute; g.font = "11px system-ui"; g.fillText(`${fmt(lo, 0)}%`, 2, h - 3); g.fillText("0%", zx - 6, h - 3); g.textAlign = "right"; g.fillText(`${fmt(hi, 0)}%`, w - 2, h - 3);
 }
 
+/* ---------- Genel Bakış kartları ---------- */
+function donut(cv, segs, big, small) {
+  const S = cv.clientWidth || 150, {g} = setupCanvas(cv, S), c = S / 2, rad = S / 2 - 12, tot = segs.reduce((a, s) => a + s.v, 0);
+  g.lineWidth = 13; g.lineCap = "butt";
+  g.beginPath(); g.strokeStyle = css("--panel2"); g.arc(c, c, rad, 0, Math.PI * 2); g.stroke();
+  if (tot > 0) {
+    let a = -Math.PI / 2;
+    segs.forEach(s => { if (s.v <= 0) return; const sw = s.v / tot * Math.PI * 2, gap = segs.filter(x => x.v > 0).length > 1 ? 0.05 : 0;
+      g.beginPath(); g.strokeStyle = s.color; g.arc(c, c, rad, a + gap / 2, a + sw - gap / 2); g.stroke(); a += sw; });
+  }
+  g.fillStyle = css("--text"); g.textAlign = "center"; g.font = `700 ${S / 6}px system-ui`; g.fillText(big, c, c + S / 18);
+  g.fillStyle = css("--mute"); g.font = `${S / 13}px system-ui`; g.fillText(small, c, c + S / 6 + 4);
+}
+let statHover = null, statPts = null;
+function drawStat() {
+  const cv = $("statCv"); if (!cv || !cv.clientWidth) return;
+  const name = $("statSel").value, h = HIST && HIST.stocks[name], s = UNIVERSE.find(x => x.name === name), H = 250, {g, w} = setupCanvas(cv, H);
+  if (!h || !s) { g.fillStyle = css("--mute"); g.font = "13px system-ui"; g.fillText("Bu hisse için fiyat geçmişi yok.", 12, 30); statPts = null; return; }
+  const all = h.closes, b = bands(all), N = Math.min(120, all.length), off = all.length - N, pts = all.slice(off), bb = b.slice(off);
+  const vals = [...pts, ...bb.flatMap(x => [x.u, x.l]).filter(v => v != null)], lo = Math.min(...vals), hi = Math.max(...vals);
+  const L = 44, X = i => L + i / (N - 1) * (w - L - 10), Y = v => H - 22 - (v - lo) / (hi - lo) * (H - 40);
+  g.font = "11px system-ui"; g.fillStyle = css("--mute"); g.strokeStyle = css("--line"); g.lineWidth = 1; g.textAlign = "right";
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(w - 10, y); g.stroke(); g.fillText(fmt(v, v < 10 ? 2 : 0), L - 6, y + 4); }
+  g.beginPath(); bb.forEach((x, i) => { if (x.u == null) return; i === 0 || bb[i - 1].u == null ? g.moveTo(X(i), Y(x.u)) : g.lineTo(X(i), Y(x.u)); });
+  for (let i = N - 1; i >= 0; i--) if (bb[i].l != null) g.lineTo(X(i), Y(bb[i].l));
+  g.closePath(); g.fillStyle = "rgba(127,108,245,.09)"; g.fill();
+  g.beginPath(); bb.forEach((x, i) => { if (x.s50 == null) return; g[bb[i - 1] && bb[i - 1].s50 != null ? "lineTo" : "moveTo"](X(i), Y(x.s50)); });
+  g.strokeStyle = css("--warn"); g.setLineDash([5, 4]); g.lineWidth = 1.2; g.stroke(); g.setLineDash([]);
+  const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, "rgba(168,154,255,.35)"); grad.addColorStop(1, "rgba(168,154,255,0)");
+  g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.lineTo(X(N - 1), H - 22); g.lineTo(X(0), H - 22); g.closePath(); g.fillStyle = grad; g.fill();
+  g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.strokeStyle = css("--accent2"); g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
+  statPts = {N, L, w, X, Y, pts, last: h.last};
+  if (statHover != null) {
+    const i = Math.max(0, Math.min(N - 1, statHover)), x = X(i), y = Y(pts[i]);
+    g.strokeStyle = css("--mute"); g.lineWidth = 1; g.beginPath(); g.moveTo(x, 8); g.lineTo(x, H - 22); g.stroke();
+    g.fillStyle = css("--accent2"); g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.strokeStyle = css("--panel"); g.lineWidth = 2; g.stroke();
+    const ago = N - 1 - i, label = `${fmt(pts[i], pts[i] < 10 ? 3 : 2)}`, sub = ago === 0 ? `son kapanış (${h.last})` : `${ago} iş günü önce`;
+    const bw = 130, bx = Math.min(Math.max(x - bw / 2, L), w - bw - 4), by = Math.max(y - 56, 4);
+    g.fillStyle = css("--panel2"); g.strokeStyle = css("--line"); g.beginPath(); g.roundRect(bx, by, bw, 42, 8); g.fill(); g.stroke();
+    g.textAlign = "left"; g.fillStyle = css("--text"); g.font = "700 14px system-ui"; g.fillText(label, bx + 10, by + 18);
+    g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.fillText(sub, bx + 10, by + 34);
+  }
+  g.textAlign = "left"; g.fillStyle = css("--mute"); g.fillText("120 iş günü", L, H - 6);
+}
+function renderDashboard() {
+  if (!UNIVERSE.length) return;
+  const up = UNIVERSE.filter(s => s.change > 0).length, dn = UNIVERSE.filter(s => s.change < 0).length;
+  $("k1").textContent = fmt(UNIVERSE.length, 0);
+  $("k1s").innerHTML = `<span class="up">↗ ${up} yükselen</span> · <span class="down">↘ ${dn} düşen</span>`;
+  const sc = lastResults.map(([, r]) => r.score), strong = sc.filter(x => x >= 3).length, watch = sc.filter(x => x >= 1 && x < 3).length;
+  $("k2").textContent = fmt(lastResults.length, 0);
+  $("k2s").innerHTML = `<span class="up">${strong} güçlü aday</span> · ${watch} izle · alt banda %${$("tol").value} yakın`;
+  const cnt = {}; lastResults.forEach(([s]) => { const k = trSector(s.sector); cnt[k] = (cnt[k] || 0) + 1; });
+  const sec = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 4), cols = ["var(--accent2)", "var(--up)", "var(--warn)", "var(--down)"];
+  $("sectors").innerHTML = sec.length ? sec.map(([n, c], i) => `<div class="li"><span class="dot" style="background:color-mix(in srgb,${cols[i]} 22%,transparent);color:${cols[i]}">${c}</span>${esc(n)}<span class="v">${fmt(c / lastResults.length * 100, 0)}%</span></div>`).join("") : "<span class='mute'>Aday yok.</span>";
+  const sel = $("statSel"), names = lastResults.map(([s]) => s.name), want = selected && names.includes(selected) ? selected : names[0];
+  sel.innerHTML = names.map(n => `<option ${n === want ? "selected" : ""}>${n}</option>`).join("");
+  const s0 = UNIVERSE.find(x => x.name === want);
+  $("statNote").textContent = s0 ? `${s0.description ?? ""} · Fiyat ${fmt(s0.close)} · alt bant ${fmt(s0.bb_lower)} · SMA50 ${fmt(s0.sma50)} (kesikli) · gölge: Bollinger bandı` : "";
+  drawStat();
+  const lab = [["GÜÇLÜ ADAY", "var(--up)", x => x >= 3], ["İZLE", "var(--accent2)", x => x >= 1 && x < 3], ["NÖTR", "var(--mute)", x => x === 0], ["UZAK DUR", "var(--down)", x => x < 0]];
+  const segs = lab.map(([n, c, f]) => ({n, c, v: sc.filter(f).length}));
+  donut($("donut1"), segs.map(s => ({v: s.v, color: css(s.c.slice(4, -1))})), String(lastResults.length), "aday");
+  $("donutList").innerHTML = segs.map(s => `<div class="li"><span class="dot" style="background:color-mix(in srgb,${s.c} 22%,transparent);color:${s.c}">●</span>${s.n}<span class="v">${s.v}</span></div>`).join("");
+  const picks = [...lastResults].sort((a, b) => b[1].score - a[1].score).slice(0, 4);
+  $("topPicks").innerHTML = picks.map(([s, r]) => `<div class="li" style="cursor:pointer" data-x="${esc(s.name)}"><b>${esc(s.name)}</b><span class="mute">${fmt(s.close)}</span><span class="v ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label}</span></div>`).join("") || "<span class='mute'>Aday yok.</span>";
+  $("pbars").innerHTML = PERSONAS.map(([k, n]) => {
+    const p = lastResults.filter(([, r]) => r.l[k].v > 0).length, m = lastResults.filter(([, r]) => r.l[k].v < 0).length, z = lastResults.length - p - m, t = lastResults.length || 1;
+    return `<div class="prow"><span class="nm">${n}</span><div class="sbar"><i style="width:${p / t * 100}%;background:var(--up)"></i><i style="width:${z / t * 100}%;background:var(--panel2)"></i><i style="width:${m / t * 100}%;background:var(--down)"></i></div><span class="ct">${p} / ${z} / ${m}</span></div>`;
+  }).join("");
+  const pos = lastResults.length ? Math.round(sc.filter(x => x > 0).length / lastResults.length * 100) : 0;
+  donut($("donut2"), [{v: pos, color: css("--accent2")}, {v: 100 - pos, color: "transparent"}], pos + "%", "olumlu");
+  const mins = Math.round((Date.now() - DATA.ts * 1000) / 60000), A = HIST && HIST.pooled.A, B0 = HIST && HIST.pooled.base;
+  const rows = [
+    ["refresh", "Veri yaşı", mins < 1 ? "şimdi" : mins < 90 ? mins + " dk" : fmt(mins / 60, 0) + " saat"],
+    ["bars", "Fiyat geçmişi", HIST ? Object.keys(HIST.stocks).length + " hisse" : "yok"],
+    ["news", "Haber kapsamı", Object.keys(NEWS).length + " hisse"],
+    ["trend", "Alt banda değince 10g kazanma", A && A.h10 && B0 ? `%${fmt(A.h10.win, 0)} (taban %${fmt(B0.h10.win, 0)})` : "–"],
+    ["shield", "Denetçi uyarıları", AUDIT.ok == null ? "–" : String(AUDIT.issues.length)],
+  ];
+  $("auditList").innerHTML = rows.map(([i, n, v]) => `<div class="li"><span class="dot" style="background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent2)">${ico(i)}</span>${n}<span class="v">${v}</span></div>`).join("");
+}
+$("statSel").addEventListener("change", e => { selected = e.target.value; statHover = null; drawStat(); });
+$("statCv").addEventListener("mousemove", e => {
+  if (!statPts) return; const r = $("statCv").getBoundingClientRect(), x = e.clientX - r.left;
+  statHover = Math.round((x - statPts.L) / (statPts.w - statPts.L - 10) * (statPts.N - 1)); drawStat();
+});
+$("statCv").addEventListener("mouseleave", () => { statHover = null; drawStat(); });
+
+/* ---------- Sayfalar (sol menü) ---------- */
+let view = "dashboard";
+function refreshView() {
+  if (view === "dashboard") renderDashboard();
+  else if (view === "adaylar" || view === "favoriler") { if (selected) detail(selected); }
+  else if (view === "haberler") renderNews();
+  else if (view === "geritest") renderBacktest();
+}
+function show(v) {
+  if (v === "favoriler") { $("favonly").checked = true; v = "adaylar"; $("nav").dataset.fav = "1"; }
+  else if (v === "adaylar") { $("favonly").checked = false; $("nav").dataset.fav = ""; }
+  view = v;
+  document.querySelectorAll(".view").forEach(el => el.classList.toggle("show", el.id === "v-" + v));
+  const activeKey = v === "adaylar" && $("favonly").checked ? "favoriler" : v;
+  document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.view === activeKey));
+  if (v === "adaylar") render(); else refreshView();
+  if (location.hash.slice(1) !== activeKey) history.replaceState(null, "", "#" + activeKey);
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => show(a.dataset.view)));
+document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
+$("gsearch").addEventListener("change", e => {
+  const n = e.target.value.trim().toUpperCase(); if (!UNIVERSE.some(s => s.name === n)) return;
+  show("adaylar"); detail(n); e.target.value = ""; $("detail").scrollIntoView({behavior: "smooth"});
+});
+
 /* ---------- CSV ---------- */
 function downloadCsv() {
   const cols = ["name", "close", "bb_lower", "bb_upper", "sma50", "bbDist", "smaDist", "rsi", "change", "rvol", "pe", "pb", "tl"];
@@ -433,7 +751,6 @@ function applyData(d) {
   if (!d.stocks || !d.stocks.length) { $("status").textContent = "İlk veri çekiliyor…"; setTimeout(() => loadData(false), 3000); return false; }
   const changed = d.ts !== DATA.ts;
   DATA = d; UNIVERSE = d.stocks.map(enrich);
-  $("gen").textContent = d.generated;
   return changed;
 }
 async function getJson(url) { try { const r = await fetch(url, {cache: "no-store"}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
@@ -441,7 +758,7 @@ async function loadAux() {
   const n = await getJson("news.json?t=" + Date.now()); if (n && n.news) NEWS = n.news;
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
-    if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); $("hgen").textContent = h.generated; mcCache = {}; }
+    if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
   }
 }
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
@@ -451,7 +768,7 @@ async function loadData(refresh) {
     return;
   }
   const btn = $("refresh");
-  if (refresh) { btn.disabled = true; btn.textContent = "⟳ Güncelleniyor…"; }
+  if (refresh) { btn.disabled = true; btn.style.opacity = .5; }
   try {
     const res = LOCAL ? await fetch("/api/" + (refresh ? "refresh" : "data"), refresh ? {method: "POST"} : {})
                       : await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
@@ -460,11 +777,11 @@ async function loadData(refresh) {
     const changed = applyData(d);
     if (changed || refresh || !HIST) { await loadAux(); mcCache = {}; render(); }
     banner(d.error ? "Son veri çekme denemesi başarısız (" + d.error + "). Önceki veri gösteriliyor." : "");
-    $("status").textContent = "Veri 15 dk'da bir otomatik güncellenir";
+    $("status").textContent = `Veri: ${d.generated} · 15 dk'da bir yenilenir`;
   } catch (e) {
     banner(LOCAL ? "Yerel sunucuya ulaşılamıyor. server.py çalışıyor mu? (Görev Zamanlayıcı'daki 'TradingOfis' görevini başlatın)"
                  : "Veri dosyası yüklenemedi. Biraz sonra tekrar deneyin.");
-  } finally { btn.disabled = false; btn.textContent = "⟳ Yenile"; }
+  } finally { btn.disabled = false; btn.style.opacity = 1; }
 }
 
 /* ---------- Olaylar ---------- */
@@ -474,6 +791,7 @@ setInterval(() => loadData(false), 60000);
 ["tol", "sma", "rsi", "vol", "top", "favonly"].forEach(id => $(id).addEventListener("input", render));
 document.addEventListener("click", e => {
   const f = e.target.closest("[data-fav]"); if (f) { e.stopPropagation(); toggleFav(f.dataset.fav); return; }
+  const x = e.target.closest("[data-x]"); if (x) { show("adaylar"); detail(x.dataset.x); $("detail").scrollIntoView({behavior: "smooth"}); }
 });
 $("tbl").addEventListener("click", e => {
   if (e.target.closest("[data-fav]")) return;
@@ -481,14 +799,18 @@ $("tbl").addEventListener("click", e => {
   if (th) { const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : 1; sortKey = k; render(); }
   else if (tr) detail(tr.dataset.n);
 });
-$("extra").addEventListener("click", e => { const p = e.target.closest("[data-x]"); if (p) { detail(p.dataset.x); $("detail").scrollIntoView({behavior: "smooth"}); } });
-$("theme").addEventListener("click", () => {
-  const r = document.documentElement, light = r.dataset.theme !== "light";
-  r.dataset.theme = light ? "light" : "dark"; if (selected) detail(selected);
-});
-if (matchMedia("(prefers-color-scheme: light)").matches) document.documentElement.dataset.theme = "light";
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t; store.set("theme", t);
+  $("theme").innerHTML = ico(t === "light" ? "sun" : "moon");
+  if (UNIVERSE.length) render();
+}
+$("theme").addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light"));
+window.addEventListener("resize", () => { if (view === "dashboard") renderDashboard(); else if (view === "adaylar") refreshView(); });
+paintIcons();
 buildRules();
-render();
+applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+const first = location.hash.slice(1);
+show(["dashboard", "adaylar", "favoriler", "haberler", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 </script>
 </body>
