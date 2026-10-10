@@ -1,10 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Borsa Komitesi</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2312b886'/%3E%3Ccircle cx='12' cy='12' r='4.2' fill='none' stroke='white' stroke-width='1.6'/%3E%3Cg fill='white'%3E%3Ccircle cx='12' cy='3.8' r='1.9'/%3E%3Ccircle cx='20' cy='9.5' r='1.9'/%3E%3Ccircle cx='16.9' cy='18.8' r='1.9'/%3E%3Ccircle cx='7.1' cy='18.8' r='1.9'/%3E%3Ccircle cx='4' cy='9.5' r='1.9'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2312b886'/%3E%3Cg fill='white'%3E%3Cellipse cx='11' cy='12' rx='7.6' ry='4.1'/%3E%3Crect x='5.3' y='3' width='4.6' height='2.7' rx='1.35'/%3E%3Crect x='12.3' y='3' width='4.6' height='2.7' rx='1.35'/%3E%3Crect x='5.3' y='18.3' width='4.6' height='2.7' rx='1.35'/%3E%3Crect x='12.3' y='18.3' width='4.6' height='2.7' rx='1.35'/%3E%3Crect x='19.6' y='9.6' width='2.7' height='4.8' rx='1.35'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root{--bg:#0b0b0d;--shell:#151517;--side:#121214;--panel:#212125;--panel2:#2a2a30;--line:rgba(255,255,255,.07);
 --text:#f4f4f7;--mute:#9a9aa6;--accent:#12b886;--accent2:#3fd9a8;--up:#a3e635;--down:#ff6b6b;--warn:#f0b43c;--r:18px;color-scheme:dark}
@@ -156,12 +156,21 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .pbtn{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff;border:0}
 @media(max-width:1100px){.hero{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:640px){.picks{grid-template-columns:minmax(0,1fr)}}
+.chk{list-style:none;margin:6px 0;padding:0}
+.chk li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:6px;align-items:baseline;font-size:12.5px;padding:2px 0;color:var(--text)}
+.chk li i{font-style:normal;font-weight:700}
+.chk li em{font-style:normal;color:var(--mute);font-size:12px;text-align:right;max-width:150px}
+.chk .cok i{color:var(--up)}.chk .cbad i{color:var(--down)}.chk .cna{color:var(--mute)}
+.persona details summary{font-size:12px;color:var(--mute);font-weight:500;margin-top:6px}
+.persona .plan{margin-top:6px;font-size:12.5px;padding-top:6px;border-top:1px dashed var(--line)}
+.persona .vt{font-size:11px;font-weight:700;margin-left:6px}
+.srcs{font-size:12.5px;color:var(--mute)}.srcs a{color:var(--accent2)}
 </style>
 </head>
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="4.2" fill="none" stroke="#fff" stroke-width="1.6"/><g fill="#fff"><circle cx="12" cy="3.6" r="1.9"/><circle cx="20" cy="9.4" r="1.9"/><circle cx="16.9" cy="18.8" r="1.9"/><circle cx="7.1" cy="18.8" r="1.9"/><circle cx="4" cy="9.4" r="1.9"/></g></svg></span><div><b>Borsa Komitesi</b><div class="sub" style="line-height:1.1">BIST Trading Ofisi</div></div></div>
+    <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="26" height="26"><g fill="#fff"><ellipse cx="11" cy="12" rx="7.6" ry="4.1"/></g><g fill="#fff" fill-opacity=".92"><rect x="5.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="5.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="19.6" y="9.6" width="2.7" height="4.8" rx="1.35"/></g></svg></span><div><b>Borsa Komitesi</b><div class="sub" style="line-height:1.1">BIST Trading Ofisi</div></div></div>
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
@@ -295,6 +304,22 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
           <li><b>Geri test:</b> Bollinger alt bandına değen hisselerin sonraki 5/10/20 gün getirisi, her gün alma tabanıyla karşılaştırılır. Maliyet içermez, geçmiş geleceği garanti etmez.</li>
           <li><b>Haber skoru:</b> Başlıklardaki anahtar kelimelerle hesaplanan kaba bir göstergedir.</li>
         </ul>
+        <h2 style="margin-top:18px">Efsaneler gerçekte nasıl düşünür? (araştırma özeti)</h2>
+        <ul>
+          <li><b>Warren Buffett:</b> Dört ilke grubu: iş, yönetim, finansal ve değer (Hagstrom). Finansal ilkeler: yüksek ve tutarlı ROE (genelde %15 üstü), düşük borç, yüksek kâr marjı, "owner earnings" (net kâr + amortisman − gerekli yatırım). Değer ilkesi: iş değerinin altında fiyat, yani güvenlik marjı (Graham'dan gelen ~%25+ iskonto fikri). Moat ve yönetim kalitesi rakamla ölçülemez; uygulama bunları "doğrulanamaz" diye işaretler. Stop kullanmaz, uzun vadeli tutar.</li>
+          <li><b>Jim Simons / Renaissance:</b> Sezgi yok, kısa vadeli istatistiksel örüntüler ve ortalamaya dönüş; binlerce küçük avantaj. Ekipten Mercer'in "işlemlerin ~%50,75'inde haklıyız" sözü bilinir. Berlekamp dönemi pozisyon boyutlamada Kelly kriterini kullandı. Uygulama bunu z-skoru, gerçek geri test (tabana göre), otokorelasyon ve Kelly oranı ile yorumlar. Medallion'ın gerçek sinyalleri gizlidir.</li>
+          <li><b>Jesse Livermore:</b> Trend takibi; "pivot noktaları" (önceki zirve/dip ve yuvarlak seviyeler) kırılınca hacimle girer. Teyit bekler, kazanan pozisyona ekler (piramit), zarardakine asla; stop'u girişten önce bilir. Net fırsat yoksa işlem yapmaz.</li>
+          <li><b>Jack Kellogg:</b> Küçük/hızlı hisselerde momentum ve kırılım; olağandışı hacim, hızlı kâr/kayıp yönetimi, zararı hızla kesme, kazananlara ekleme, kademeli kâr alma. Kesin kural seti kamuya açık değildir; ölçüt eşikleri yorumdur.</li>
+          <li><b>Şeytanın Avukatı:</b> Risk yönetimi: işlem başına sermayenin ~%1'i, ATR tabanlı stop, pozisyonu stop mesafesinden boyutlama, drawdown ve likidite kontrolü, pre-mortem ("bu işlem batarsa neden?").</li>
+        </ul>
+        <p class="srcs">Kaynaklar (ikincil özetler): <a href="https://www.valueresearchonline.com/stories/51124/buffett-s-financial-tenets/" target="_blank" rel="noopener">Buffett'ın finansal ilkeleri</a> ·
+          <a href="https://www.shortform.com/blog/warren-buffett-roe/" target="_blank" rel="noopener">ROE, owner earnings</a> ·
+          <a href="https://quartr.com/insights/company-research/renaissance-technologies-and-the-medallion-fund" target="_blank" rel="noopener">Renaissance/Medallion</a> ·
+          <a href="https://ritholtz.com/2009/11/livermores-seven-trading-lessons" target="_blank" rel="noopener">Livermore'un dersleri</a> ·
+          <a href="https://rivkin.com.au/analysis-education/worlds-greatest-investor-series-part-5-jesse-livermore/" target="_blank" rel="noopener">Livermore (Rivkin)</a> ·
+          <a href="https://timothysykes.com/blog/jack-kellogg/" target="_blank" rel="noopener">Jack Kellogg</a> ·
+          <a href="https://tradezella.com/blog/risk-management-trading" target="_blank" rel="noopener">Risk yönetimi</a>.
+          Bunlar birincil kaynak değildir; eşikler yorumdur ve ayarlanabilir.</p>
         <p><button id="tourBtn">▶ Tanıtım turunu yeniden başlat</button></p>
         <p class="note">Bu uygulama eğitim ve araştırma amaçlıdır; yatırım tavsiyesi değildir.</p>
       </section>
@@ -350,13 +375,12 @@ function paintIcons(root = document) { root.querySelectorAll("i[data-ico]").forE
 
 /* ---------- Efsane kuralları (ayarlanabilir) ---------- */
 const RULE_DEFS = [
-  ["Buffett", [["bPe", "Ucuz: F/K en çok", 15], ["bPb", "Ucuz: PD/DD en çok", 1.5], ["bPeHigh", "Pahalı: F/K en az", 25]]],
-  ["Simons", [["sRsi", "Aşırı satım RSI <", 35], ["sMinN", "Geri test min. sinyal", 5], ["sWin", "Min. kazanma % (10g)", 55], ["sEdge", "Taban üstü min. fark (puan)", 0.5]]],
-  ["Livermore", [["lTol", "Pivot bandı (SMA50 altı %)", 3]]],
-  ["Kellogg", [["kRvol", "Min. göreceli hacim", 1.5]]],
-  ["Şeytanın Avukatı", [["dAtr", "ATR % üst sınır", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dFlags", "Karşı çıkma için bayrak sayısı", 2]]],
+  ["Buffett (Hagstrom'un finansal ve değer ilkeleri)", [["bRoe", "ROE en az %", 15], ["bDe", "Borç/Özsermaye en çok", 0.5], ["bNm", "Net kâr marjı en az %", 10], ["bPe", "F/K en çok", 15], ["bPb", "PD/DD en çok", 1.5], ["bMos", "Güvenlik marjı en az %", 25]]],
+  ["Simons (istatistik)", [["sZ", "Sapma (z) en az", 1.8], ["sMinN", "Geri test min. sinyal", 5], ["sWin", "Min. kazanma % (10g)", 55], ["sEdge", "Taban üstü min. fark (puan)", 0.5]]],
+  ["Livermore (trend & pivot)", [["lPiv", "Pivota yakınlık %", 1], ["lVol", "Min. göreceli hacim", 1.2]]],
+  ["Kellogg (momentum)", [["kRvol", "Min. göreceli hacim", 2], ["kChg", "Gün içi hareket en az %", 3], ["kAtr", "Min. ATR %", 3]]],
+  ["Şeytanın Avukatı (risk)", [["dAtr", "Günlük oynaklık üst sınır %", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dMaxDd", "Son 1 yıl maks. düşüş % (üst sınır)", 35], ["dSector", "Aynı sektörden en fazla aday", 3], ["dFlags", "Karşı çıkma için bayrak sayısı", 2]]],
   ["Simülasyon", [["mDays", "Ufuk (iş günü)", 20], ["mStop", "Stop seviyesi %", 7]]],
-  ["Ek hisse arama", [["eBPe", "Buffett: F/K <", 10], ["eBPb", "Buffett: PD/DD <", 1.2], ["eKRvol", "Kellogg: rel. hacim ≥", 2.5], ["eKChg", "Kellogg: gün % ≥", 3]]],
 ];
 const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
 let R = {...DEFAULTS, ...store.get("rules", {})};
@@ -423,62 +447,136 @@ function btFor(s) {
   const useOwn = own && own.n >= R.sMinN && own.h10;
   const b = useOwn ? own : pooled;
   if (!b || !b.h10 || !base || !base.h10) return null;
-  return { own: !!useOwn, n: b.n, win: b.h10.win, mean: b.h10.mean, med: b.h10.med, p10: b.h10.p10,
+  return { own: !!useOwn, n: b.n, win: b.h10.win, mean: b.h10.mean, med: b.h10.med, p10: b.h10.p10, aw: b.h10.aw, al: b.h10.al,
     baseWin: base.h10.win, baseMean: base.h10.mean, edge: b.h10.mean - base.h10.mean };
 }
 
-/* ---------- Efsaneler: v = +1 olumlu, 0 nötr, -1 olumsuz ---------- */
+/* ---------- Efsaneler: her biri gerçek yatırım felsefesinin kontrol listesiyle çalışır ----------
+   Kaynaklar (ikincil): Hagstrom "The Warren Buffett Way", Zuckerman "The Man Who Solved the Market", Livermore "Reminiscences of a Stock Operator"
+   özetleri, Kellogg röportaj/özetleri. Kesin kural setleri kamuya açık değildir; burada yorumlanmış, ölçülebilir karşılıkları kullanılır. */
+const OK = 1, BAD = -1, NA = 0;
+const chk = (c, t, val) => ({s: c == null ? NA : c ? OK : BAD, t, val: val ?? ""});
+const pc = v => v == null || Number.isNaN(v) ? "–" : "%" + fmt(v, 1);
+function tally(checks) {
+  const ok = checks.filter(c => c.s === OK).length, bad = checks.filter(c => c.s === BAD).length, n = ok + bad;
+  return {ok, bad, n, score: n ? Math.round(ok / n * 100) : null};
+}
+const isFin = s => s.sector === "Finance";
+const graham = s => s.eps > 0 && s.bvps > 0 ? Math.sqrt(22.5 * s.eps * s.bvps) : null;
+
 function buffett(s) {
-  if (s.pe == null || s.pe <= 0) return { v: -1, t: "Şirket zarar ediyor ya da F/K hesaplanamıyor; kazancı olmayan işi anlayamam." };
-  if (s.pb != null && s.pb < R.bPb && s.pe < R.bPe) return { v: 1, t: `F/K ${fmt(s.pe, 1)} ve PD/DD ${fmt(s.pb, 2)}: defter değerine göre ucuz. Rekabet avantajını ayrıca doğrulayın.` };
-  if (s.pe > R.bPeHigh) return { v: -1, t: `F/K ${fmt(s.pe, 1)} yüksek; güvenlik marjı görünmüyor.` };
-  return { v: 0, t: `F/K ${fmt(s.pe, 1)}${s.pb != null ? `, PD/DD ${fmt(s.pb, 2)}` : ""}: makul ama bariz bir iskonto yok.` };
+  const fin = isFin(s), gn = graham(s), mos = gn ? (gn - s.close) / gn * 100 : null;
+  const checks = [
+    chk(s.roe == null ? null : s.roe >= R.bRoe, `Özsermaye getirisi (ROE) ≥ %${R.bRoe}`, pc(s.roe)),
+    chk(fin || s.de == null ? null : s.de <= R.bDe, `Borç/Özsermaye ≤ ${R.bDe}`, fin ? "banka/finans: geçerli değil" : fmt(s.de)),
+    chk(s.nm == null ? null : s.nm >= R.bNm, `Net kâr marjı ≥ %${R.bNm}`, pc(s.nm)),
+    chk(fin || s.fcf == null ? null : s.fcf > 0, "Serbest nakit akışı pozitif (owner earnings vekili)", fin ? "banka/finans: geçerli değil" : s.fcf == null ? "–" : s.fcf > 0 ? "pozitif" : "negatif"),
+    chk(s.epsg == null ? null : s.epsg > 0, "Hisse başı kazanç büyüyor (nominal)", pc(s.epsg)),
+    chk(s.pe == null ? null : s.pe > 0 && s.pe <= R.bPe, `F/K ≤ ${R.bPe}`, fmt(s.pe, 1)),
+    chk(s.pb == null ? null : s.pb <= R.bPb, `PD/DD ≤ ${R.bPb}`, fmt(s.pb)),
+    chk(mos == null ? null : mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos} (Graham sayısı ${gn ? fmt(gn) + " TL" : "–"})`, pc(mos)),
+    chk(null, "Rekabet avantajı (moat), basit iş modeli, uzun vadeli beklenti", "veriyle ölçülemez: kendiniz doğrulayın"),
+    chk(null, "Dürüst ve yetenekli yönetim", "veriyle ölçülemez"),
+  ];
+  const k = tally(checks);
+  const v = k.n >= 5 && k.score >= 70 ? 1 : k.n >= 4 && k.score < 40 ? -1 : 0;
+  const t = v > 0 ? `Rakamlar kaliteli ve makul fiyatlı bir işletmeye benziyor (${k.ok}/${k.n} ölçülebilir ilke geçti).`
+    : v < 0 ? `Ölçülebilir ilkelerin çoğu başarısız (${k.ok}/${k.n} geçti): ya iş zayıf ya da fiyat pahalı. "Harika bir işletmeyi makul fiyata" arıyorum; bu o değil.`
+    : `Karışık tablo (${k.ok}/${k.n} geçti). Bariz bir iskonto ya da bariz bir kusur yok; acele etmem.`;
+  const cap = gn ? gn * (1 - R.bMos / 100) : null;
+  const plan = cap ? `${fmt(cap)} TL altını makul alım sayardı (Graham sayısı ${fmt(gn)} TL − %${R.bMos} güvenlik marjı). Stop kullanmaz; fiyat düşerse işletmenin değerini yeniden sorgular, uzun vadeli tutar.`
+    : "Güvenlik marjı hesaplanamadı (EPS/defter değeri eksik). Stop kullanmaz; işletmeyi uzun vadeli sahiplik gözüyle değerlendirir.";
+  return {v, score: k.score, checks, t, plan};
 }
+
 function simons(s) {
-  const mc = monteCarlo(s), bt = btFor(s);
-  if (!mc) return { v: 0, t: "Oynaklık verisi yok; istatistik yapamam." };
-  const mcTxt = `Simülasyon (${mc.days} gün): zarar olasılığı %${fmt(mc.probLoss, 0)}, %${R.mStop} stop olasılığı %${fmt(mc.probStop, 0)}.`;
-  const head = `RSI ${fmt(s.rsi, 0)}, alt banda %${fmt(s.bbDist, 1)}.`;
-  if (bt) {
-    const btTxt = `Geçmişte ${bt.own ? "bu hissede" : "tüm hisselerde"} alt banda değdikten 10 gün sonra: kazanma %${fmt(bt.win, 0)} (her gün alsaydınız %${fmt(bt.baseWin, 0)}), ort. getiri %${fmt(bt.mean, 1)} (taban %${fmt(bt.baseMean, 1)}), n=${bt.n}.`;
-    let v = 0, tail = " Taban üstü anlamlı bir kenar yok.";
-    if (mc.probStop >= 65) { v = -1; tail = " Oynaklık o kadar yüksek ki stop'a değme ihtimali çok yüksek."; }
-    else if (bt.win >= R.sWin && bt.edge >= R.sEdge) { v = 1; tail = " Geçmiş, tabana göre pozitif bir kenar gösteriyor (maliyetsiz, hayatta kalan hisselerle; garanti değil)."; }
-    else if (bt.edge <= -R.sEdge) { v = -1; tail = " Geçmişte alt banda değmek tabandan DAHA KÖTÜ sonuç vermiş."; }
-    return { v, t: `${head} ${btTxt} ${mcTxt}${tail}` };
-  }
-  if (s.rsi < R.sRsi && mc.probStop < 50) return { v: 1, t: `${head} ${mcTxt} Aşırı satım + yönetilebilir oynaklık; geçmiş verisi yüklenmediği için başarı oranı ölçülemedi.` };
-  if (mc.probStop >= 65) return { v: -1, t: `${head} ${mcTxt} Stop'a değme ihtimali yazı-turadan kötü.` };
-  return { v: 0, t: `${head} ${mcTxt} Geçmiş verisi yok, istatistiksel kenar göremiyorum.` };
+  const mc = monteCarlo(s), bt = btFor(s), h = HIST && HIST.stocks[s.name];
+  const sd = (s.bb_upper - s.bb_lower) / 4, z = sd > 0 ? (s.close - (s.bb_upper + s.bb_lower) / 2) / sd : null;
+  const checks = [
+    chk(z == null ? null : z <= -R.sZ, `Fiyat 20 günlük ortalamadan ≥ ${R.sZ} standart sapma aşağıda (z-skoru)`, z == null ? "–" : fmt(z, 2)),
+    chk(bt ? bt.n >= R.sMinN : null, `Geçmişte yeterli örnek (≥ ${R.sMinN} sinyal)`, bt ? `${bt.n} sinyal (${bt.own ? "bu hisse" : "tüm hisseler"})` : "geçmiş yok"),
+    chk(bt ? bt.win >= R.sWin : null, `10 gün sonra kazanma oranı ≥ %${R.sWin}`, bt ? `${pc(bt.win)} (taban ${pc(bt.baseWin)})` : "–"),
+    chk(bt ? bt.edge >= R.sEdge : null, `Ort. getiri tabanın ≥ ${R.sEdge} puan üstünde`, bt ? `${pc(bt.mean)} / taban ${pc(bt.baseMean)}` : "–"),
+    chk(h && h.ac1 != null ? (h.ac1 <= -0.03 ? true : h.ac1 >= 0.08 ? false : null) : null, "Ortalamaya dönüş rejimi: günlük getirilerin otokorelasyonu negatif", h && h.ac1 != null ? fmt(h.ac1, 2) : "–"),
+    chk(h ? h.sigma60 <= 1.5 * h.sigma250 : null, "Oynaklık rejimi sakin (60g σ ≤ 1,5 × 250g σ)", h ? `${pc(h.sigma60 * 100)} / ${pc(h.sigma250 * 100)}` : "–"),
+    chk(mc ? mc.probStop < R.dStop : null, `Simülasyonda stop olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
+  ];
+  const k = tally(checks);
+  let kelly = null; if (bt && bt.aw > 0 && bt.al < 0) { const p = bt.win / 100, b = bt.aw / -bt.al; kelly = p - (1 - p) / b; }
+  let v = 0;
+  if ((mc && mc.probStop >= 65) || (bt && bt.edge <= -R.sEdge)) v = -1;
+  else if (bt && bt.edge >= R.sEdge && bt.win >= R.sWin && z != null && z <= -R.sZ && k.score >= 60) v = 1;
+  const t = v > 0 ? "Duygu yok, sadece sayı: sapma aşırı, geçmişte bu sinyal tabana göre pozitif sonuç vermiş. Yine de bu tek bir küçük avantaj; tek hisseye bahis değil, çok sayıda küçük avantajın toplamı kazandırır."
+    : v < 0 ? "Sayılar aleyhine: ya geçmişte sinyal tabandan kötü sonuç vermiş ya da oynaklık stop'a değme ihtimalini çok yükseltiyor."
+    : "Matematiksel olarak ayırt edilebilir bir avantaj göremiyorum. Avantaj yoksa işlem yok.";
+  const plan = kelly == null ? "Geçmiş verisi (kazanç/kayıp oranı) yok; Kelly pozisyon büyüklüğü hesaplanamadı."
+    : bt && bt.edge < R.sEdge ? `Tabana göre avantaj yok: pozisyon önerilmez. (Mutlak Kelly %${fmt(kelly * 100, 1)} görünse de bu, piyasanın nominal yükseliş eğiliminden gelir, sinyalden değil.)`
+    : kelly > 0 ? `Kelly oranı %${fmt(kelly * 100, 1)}, yarı-Kelly %${fmt(kelly * 50, 1)}: pozisyon bu orandan büyük olmamalı (ekip Kelly'yi pozisyon boyutlamada kullanmıştır). Sinyal ufku ~10 iş günü.`
+    : "Kelly ≤ 0: geçmiş veriye göre matematiksel avantaj yok, pozisyon önerilmez.";
+  return {v, score: k.score, checks, t, plan};
 }
+
 function livermore(s) {
-  let emp = "";
-  if (HIST && HIST.pooled.B && HIST.pooled.C && HIST.pooled.B.h10 && HIST.pooled.C.h10) {
-    const b = HIST.pooled.B, c = HIST.pooled.C;
-    emp = ` (Geçmiş: alt banda değip SMA50 altındayken 10g ort. %${fmt(b.h10.mean, 1)}, n=${b.n}; SMA50 üstündeyken %${fmt(c.h10.mean, 1)}, n=${c.n}.)`;
-  }
-  if (s.smaDist > 0) return { v: 1, t: `Fiyat SMA50'nin %${fmt(s.smaDist, 1)} üstünde: trend yukarı, geri çekilme alım fırsatı olabilir.${emp}` };
-  if (s.smaDist > -R.lTol) return { v: 0, t: `SMA50'ye %${fmt(-s.smaDist, 1)} uzakta. Pivot noktası; SMA50 üstünde kapanış beklenmeli.${emp}` };
-  return { v: -1, t: `SMA50'nin %${fmt(-s.smaDist, 1)} altında. Düşen bıçak tutulmaz; trend dönmeden alınmaz.${emp}` };
+  const trend = s.sma200 == null ? null : s.close > s.sma50 && s.sma50 > s.sma200, pivot = s.h1m, np = pivot ? s.close / pivot : null;
+  const checks = [
+    chk(trend, "Ana trend yukarı: fiyat > SMA50 > SMA200", `${fmt(s.close)} / ${fmt(s.sma50)} / ${s.sma200 ? fmt(s.sma200) : "–"}`),
+    chk(np == null ? null : np >= 1 - R.lPiv / 100 ? true : np < 0.95 ? false : null, `Pivot noktası (1 aylık zirve ${pivot ? fmt(pivot) : "–"}) kırılıyor ya da üstünde`, np == null ? "–" : `zirvenin ${pc(np * 100 - 100)}`),
+    chk(s.rvol == null ? null : s.rvol >= R.lVol ? s.change > 0 : null, `Kırılım hacimle teyitli (göreceli hacim ≥ ${R.lVol}x ve fiyat artıyor)`, `${fmt(s.rvol, 1)}x, ${pc(s.change)}`),
+    chk(s.close >= s.sma50 ? true : s.sma20 != null && s.close < s.sma20 ? false : null, "Düşen bıçak değil (SMA50 üstünde ya da toparlanıyor)", `SMA50'ye ${pc(s.smaDist)}`),
+    chk(s.h52 ? s.close >= 0.85 * s.h52 : null, "Zirveye yakın: 52 hafta zirvesinin %85'i üstünde", s.h52 ? pc((s.close / s.h52 - 1) * 100) : "–"),
+    chk(s.p3m == null ? null : s.p3m > 0, "Son 3 ayda fiyat artmış (en az direnç çizgisi yukarı)", pc(s.p3m)),
+  ];
+  const k = tally(checks);
+  const v = k.n >= 4 && k.score >= 70 && trend !== false ? 1 : k.n >= 4 && k.score < 35 ? -1 : 0;
+  const t = v > 0 ? "Trend dostum: fiyat en az direnç çizgisinde, pivot üstünde ve hacim eşlik ediyor. Beklenti değil teyit arıyorum, burada teyit var."
+    : v < 0 ? "Düşen bıçak tutulmaz. Trend aşağı ya da pivot çok uzakta; bu hisseye şimdi girmek umut ticaretidir."
+    : "Net bir fırsat yok. Açık bir kırılım olmadan işlem yapmam; beklemek de bir pozisyondur.";
+  const plan = pivot && np >= 0.95 ? `Pivot ${fmt(pivot)} TL üstünde hacimli kapanışta ilk küçük alım. Pozisyon kâra geçtikçe eklenir (piramit), zarardakine asla eklenmez. Yanılma noktası (stop): pivotun %3 altı ≈ ${fmt(pivot * 0.97)} TL; stop alım öncesinde belirlenir.`
+    : "Şu an pivotun belirgin altında: işlem yok. Pivotu hacimle aşan bir kapanış beklenir; stop ancak alımdan önce belirlenirse anlamlıdır.";
+  return {v, score: k.score, checks, t, plan};
 }
+
 function kellogg(s) {
-  if (s.rvol != null && s.rvol >= R.kRvol && s.change > 0) return { v: 1, t: `Göreceli hacim ${fmt(s.rvol, 1)}x ve gün içi %${fmt(s.change, 1)}: alıcılar devrede, momentum var.` };
-  if (s.rvol != null && s.rvol >= R.kRvol && s.change < 0) return { v: -1, t: `Hacim ${fmt(s.rvol, 1)}x ama fiyat %${fmt(s.change, 1)} düşüyor: hacimli satış baskısı.` };
-  return { v: 0, t: `Göreceli hacim ${fmt(s.rvol, 1)}x: kırılım yok, ilgi zayıf. Benim tarzım değil.` };
+  const rv = s.rvol, brk = s.h1m ? s.close >= s.h1m * 0.98 : null;
+  const checks = [
+    chk(rv == null ? null : rv >= R.kRvol, `Olağandışı hacim: göreceli hacim ≥ ${R.kRvol}x`, `${fmt(rv, 1)}x`),
+    chk(s.change == null ? null : s.change >= R.kChg ? true : s.change <= -R.kChg ? false : null, `Güçlü hareket: gün içi ≥ %${R.kChg}`, pc(s.change)),
+    chk(brk, "Kırılım: 1 aylık zirvenin %2 yakınında ya da üstünde", s.h1m ? pc((s.close / s.h1m - 1) * 100) : "–"),
+    chk(s.pw == null ? null : s.pw > 0, "Haftalık momentum pozitif", pc(s.pw)),
+    chk(s.atrPct == null ? null : s.atrPct >= R.kAtr, `Hareket kapasitesi: ATR ≥ %${R.kAtr}`, pc(s.atrPct)),
+    chk(s.tl >= R.dTl, `Likidite/spread: günlük hacim ≥ ${R.dTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
+  ];
+  const k = tally(checks), big = rv != null && rv >= R.kRvol;
+  const v = big && s.change > 0 && k.score >= 60 ? 1 : big && s.change < 0 ? -1 : 0;
+  const t = v > 0 ? "Hacim patladı, fiyat kırılıyor: momentum teyitli. Hızlı hareket eden hisse, kısa vadeli fırsat."
+    : v < 0 ? "Hacim yüksek ama fiyat düşüyor: bu dağıtım, alıcı değil satıcı baskın."
+    : "Hacim ve kırılım yok; ilgi görmeyen hissede vakit kaybetmem.";
+  const plan = s.lo ? `Stop: gün içi dip ${fmt(s.lo)} TL (fiyatın ${pc((s.lo / s.close - 1) * 100)} altı). Birkaç gün–hafta tutulur; kâr kademeli satılır (scale out), kayıp hızla kesilir, zarardaki pozisyona ekleme yapılmaz.` : "Stop için gün içi dip verisi yok.";
+  return {v, score: k.score, checks, t, plan};
 }
+
 function devil(s, others) {
-  const mc = monteCarlo(s), flags = [], n = NEWS[s.name];
-  if (mc && mc.probStop >= R.dStop) flags.push(`%${R.mStop} stop'a ${mc.days} günde değme olasılığı %${fmt(mc.probStop, 0)}`);
-  const sg = mc ? mc.sigma : s.atrPct; if (sg != null && sg > R.dAtr) flags.push(`günlük oynaklık ~%${fmt(sg, 1)}: çok yüksek`);
-  if (s.tl < R.dTl) flags.push(`günlük işlem hacmi ~${fmt(s.tl, 1)} milyon TL: çıkış likiditesi zayıf`);
-  if (s.smaDist < -5) flags.push("fiyat SMA50'nin belirgin altında");
-  if (s.rsi > 70) flags.push("RSI aşırı alım bölgesinde");
-  if (s.pe == null || s.pe <= 0) flags.push("kazanç yok/F/K belirsiz");
-  if (n && n.score <= -2) flags.push("son haber akışı olumsuz");
-  const pos = others.filter(o => o.v > 0).length;
-  const macro = "Makro şok (kur, faiz, jeopolitik) durumunda BIST'te toplu satış görülür; korelasyonlar 1'e gider.";
-  if (flags.length >= R.dFlags || pos >= 3 && flags.length) return { v: -1, t: `Karşı çıkıyorum${pos >= 3 ? " (masa fazla iyimser)" : ""}: ${flags.join("; ")}. ${macro}` };
-  return { v: 0, t: (flags.length ? `Dikkat: ${flags.join("; ")}. ` : "Belirgin bir veri riski görmüyorum. ") + macro };
+  const mc = monteCarlo(s), n = NEWS[s.name], h = HIST && HIST.stocks[s.name], sg = mc ? mc.sigma : s.atrPct;
+  const secN = current.filter(x => x.sector === s.sector).length;
+  const stopPct = s.atrPct != null ? 2 * s.atrPct : null, maxPos = stopPct ? Math.min(100, 100 / stopPct) : null;
+  const checks = [
+    chk(mc ? mc.probStop < R.dStop : null, `${mc ? mc.days : R.mDays} günde %${R.mStop} stop'a değme olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
+    chk(sg == null ? null : sg <= R.dAtr, `Günlük oynaklık ≤ %${R.dAtr}`, pc(sg)),
+    chk(s.tl >= R.dTl, `Likidite: günlük hacim ≥ ${R.dTl} mn TL (çıkış kolay)`, `${fmt(s.tl, 0)} mn TL`),
+    chk(s.smaDist >= -5, "Fiyat SMA50'nin %5'ten fazla altında değil", pc(s.smaDist)),
+    chk(s.l52 ? s.close >= 1.1 * s.l52 : null, "52 hafta dibine %10'dan fazla uzak (dipte değil)", s.l52 ? pc((s.close / s.l52 - 1) * 100) : "–"),
+    chk(h && h.dd250 != null ? h.dd250 >= -R.dMaxDd : null, `Son 1 yılda maks. düşüş ≤ %${R.dMaxDd}`, h && h.dd250 != null ? pc(h.dd250) : "–"),
+    chk(s.pe == null ? null : s.pe > 0, "Şirket kâr ediyor (F/K tanımlı)", fmt(s.pe, 1)),
+    chk(n && n.ok ? n.score > -2 : null, "Haber akışı olumsuz değil", n && n.ok ? `skor ${n.score}` : "haber yok"),
+    chk(secN <= R.dSector, `Sektör yoğunlaşması: aynı sektörden ≤ ${R.dSector} aday`, `${secN} aday`),
+    chk(s.rsi == null ? null : s.rsi <= 70, "RSI aşırı alımda değil", fmt(s.rsi, 0)),
+  ];
+  const k = tally(checks), bads = checks.filter(c => c.s === BAD);
+  const v = bads.length >= R.dFlags ? -1 : 0;
+  const t = bads.length ? `Pre-mortem: bu işlem batarsa nedenleri şunlar olur → ${bads.slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "")).join("; ")}.${v < 0 ? " Karşı çıkıyorum." : " Henüz itiraz sınırında değil."}`
+    : "Pre-mortem'de belirgin bir başarısızlık nedeni bulamadım; ama makro şokta (kur, faiz, jeopolitik) BIST'te korelasyonlar 1'e gider.";
+  const plan = stopPct ? `Stres testi: ATR stopu (2×ATR) ≈ %${fmt(stopPct, 1)}. Portföyün %1'ini riske atma kuralıyla azami pozisyon ≈ portföyün %${fmt(maxPos, 1)}. Hisse −%10 gap açarsa zarar portföyün ≈ %${fmt(maxPos * 0.1, 2)}'i olur.` : "ATR verisi yok; stres testi yapılamadı.";
+  return {v, score: k.score, checks, t, plan};
 }
 function committee(s) {
   const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
@@ -487,6 +585,10 @@ function committee(s) {
   const label = score >= 3 ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
   return { l, score, label };
 }
+const personaCard = (n, p) => `<div class="persona ${p.v > 0 ? "p1" : p.v < 0 ? "pm" : ""}"><b>${n} <span class="vt ${p.v > 0 ? "up" : p.v < 0 ? "down" : "mute"}">${p.v > 0 ? "Olumlu" : p.v < 0 ? "Olumsuz" : "Nötr"}</span>${p.score != null ? ` <span class="mute">· ${p.score}/100</span>` : ""}</b>
+  <span>${esc(p.t)}</span>
+  <details open><summary>Kontrol listesi</summary><ul class="chk">${p.checks.map(c => `<li class="c${c.s > 0 ? "ok" : c.s < 0 ? "bad" : "na"}"><i>${c.s > 0 ? "✓" : c.s < 0 ? "✗" : "–"}</i><span>${esc(c.t)}</span><em>${esc(c.val)}</em></li>`).join("")}</ul></details>
+  <div class="plan"><b>Plan:</b> ${esc(p.plan)}</div></div>`;
 const PERSONAS = [["buffett", "Warren Buffett", "B"], ["simons", "Jim Simons", "S"], ["livermore", "Jesse Livermore", "L"],
   ["kellogg", "Jack Kellogg", "K"], ["seytan", "Şeytanın Avukatı", "Ş"]];
 
@@ -525,10 +627,11 @@ function candidates() {
 }
 function extras(cands) {
   const have = new Set(cands.map(c => c.name)), rest = UNIVERSE.filter(s => s.ok && !have.has(s.name) && s.tl >= 5);
+  const top = (fn, tie) => rest.map(s => [s, fn(s)]).filter(([, p]) => p.v > 0).sort((a, b) => (b[1].score - a[1].score) || tie(a[0], b[0])).slice(0, 8).map(([s]) => s);
   return [
-    ["Buffett", "Radarımda olan ama listede yok: ucuz ve kazançlı şirketler", rest.filter(s => s.pe > 0 && s.pe < R.eBPe && s.pb != null && s.pb < R.eBPb).sort((a, b) => a.pe - b.pe).slice(0, 8)],
-    ["Kellogg", "Hacim patlaması + kırılım", rest.filter(s => s.rvol >= R.eKRvol && s.change >= R.eKChg).sort((a, b) => b.rvol - a.rvol).slice(0, 8)],
-    ["Livermore", "Trend lideri: SMA50 üstünde, üst banda yakın", rest.filter(s => s.smaDist > 0 && s.close >= s.bb_upper * 0.98).sort((a, b) => b.tl - a.tl).slice(0, 8)],
+    ["Buffett", "Kalite + güvenlik marjı: ROE, borç, marj, F/K, PD/DD, Graham sayısı kontrol listesini geçenler", top(buffett, (a, b) => b.tl - a.tl)],
+    ["Livermore", "Trend lideri: SMA50 > SMA200, pivot kırılımı, hacim teyidi", top(livermore, (a, b) => b.tl - a.tl)],
+    ["Kellogg", "Hacim patlaması + kırılım + güçlü hareket", top(kellogg, (a, b) => (b.rvol ?? 0) - (a.rvol ?? 0))],
   ];
 }
 
@@ -649,7 +752,7 @@ function detail(name) {
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
     info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
-    PERSONAS.map(([k, n]) => `<div class="persona ${r.l[k].v > 0 ? "p1" : r.l[k].v < 0 ? "pm" : ""}"><b>${n}</b><span>${esc(r.l[k].t)}</span></div>`).join("") +
+    PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");

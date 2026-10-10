@@ -1,4 +1,4 @@
-"""TradingView'den günlük fiyat geçmişi çeker (tvdatafeed) ve gerçek geri test istatistikleri üretir.
+﻿"""TradingView'den günlük fiyat geçmişi çeker (tvdatafeed) ve gerçek geri test istatistikleri üretir.
 
 Sinyaller (Bollinger 20,2 alt bandı):
   A = kapanış alt banda değdi/altına indi
@@ -65,8 +65,10 @@ def summarize(rets: dict[int, list[float]], n_signals: int) -> dict:
     for h, r in rets.items():
         if r:
             a = np.array(r) * 100
+            w, l = a[a > 0], a[a <= 0]
             out[f"h{h}"] = {"win": round(float((a > 0).mean() * 100), 1), "mean": round(float(a.mean()), 2),
-                            "med": round(float(np.median(a)), 2), "p10": round(float(np.percentile(a, 10)), 2), "n": len(a)}
+                            "med": round(float(np.median(a)), 2), "p10": round(float(np.percentile(a, 10)), 2), "n": len(a),
+                            "aw": round(float(w.mean()), 2) if len(w) else 0.0, "al": round(float(l.mean()), 2) if len(l) else 0.0}
     return out
 
 
@@ -90,6 +92,8 @@ def build(names: list[str], log=print) -> dict:
         stocks[name] = {
             "sigma60": round(float(lr.tail(60).std()), 5),
             "sigma250": round(float(lr.tail(250).std()), 5),
+            "ac1": round(float(lr.tail(250).autocorr(lag=1)), 3),
+            "dd250": round(float((close.tail(250) / close.tail(250).cummax() - 1).min() * 100), 1),
             "last": str(df.index[-1])[:10],
             "closes": [round(float(x), 3) for x in close.tail(KEEP_CLOSES)],
             "bt": summarize(rets_a, len(sig["A"])),

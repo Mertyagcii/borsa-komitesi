@@ -1,4 +1,4 @@
-"""TradingView'den BIST verisini çeker (yerel sunucu ve GitHub Actions ortak kullanır)."""
+﻿"""TradingView'den BIST verisini çeker (yerel sunucu ve GitHub Actions ortak kullanır)."""
 import math
 import time
 from datetime import datetime
@@ -15,10 +15,22 @@ RENAME = {
     "BB.lower": "bb_lower", "BB.upper": "bb_upper", "SMA50": "sma50", "RSI": "rsi",
     "relative_volume_10d_calc": "rvol", "price_earnings_ttm": "pe", "price_book_fq": "pb",
     "market_cap_basic": "mcap", "ATR": "atr",
+    "return_on_equity": "roe", "return_on_assets": "roa", "debt_to_equity": "de", "free_cash_flow_ttm": "fcf",
+    "current_ratio": "cr", "net_margin_ttm": "nm", "operating_margin_ttm": "om", "total_revenue_yoy_growth_ttm": "revg",
+    "earnings_per_share_diluted_yoy_growth_ttm": "epsg", "earnings_per_share_diluted_ttm": "eps",
+    "book_value_per_share_fq": "bvps", "dividends_yield_current": "dy", "VWAP": "vwap", "High.1M": "h1m",
+    "Low.1M": "l1m", "High.3M": "h3m", "price_52_week_high": "h52", "price_52_week_low": "l52", "Perf.W": "pw",
+    "Perf.1M": "p1m", "Perf.3M": "p3m", "Perf.6M": "p6m", "SMA20": "sma20", "SMA200": "sma200", "high": "hi",
+    "low": "lo", "ADX": "adx", "beta_1_year": "beta", "enterprise_value_ebitda_ttm": "evebitda",
 }
 COLUMNS = [
     "name", "description", "sector", "close", "volume", "change", "SMA50", "BB.lower", "BB.upper",
     "RSI", "relative_volume_10d_calc", "ATR", "price_earnings_ttm", "price_book_fq", "market_cap_basic",
+    "return_on_equity", "return_on_assets", "debt_to_equity", "free_cash_flow_ttm", "current_ratio", "net_margin_ttm",
+    "operating_margin_ttm", "total_revenue_yoy_growth_ttm", "earnings_per_share_diluted_yoy_growth_ttm",
+    "earnings_per_share_diluted_ttm", "book_value_per_share_fq", "dividends_yield_current", "VWAP", "High.1M",
+    "Low.1M", "High.3M", "price_52_week_high", "price_52_week_low", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M",
+    "SMA20", "SMA200", "high", "low", "ADX", "beta_1_year", "enterprise_value_ebitda_ttm",
 ]
 
 
