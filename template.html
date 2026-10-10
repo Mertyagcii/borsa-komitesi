@@ -1,14 +1,15 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Borsa Komitesi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%2312b886'/%3E%3Ccircle cx='12' cy='12' r='4.2' fill='none' stroke='white' stroke-width='1.6'/%3E%3Cg fill='white'%3E%3Ccircle cx='12' cy='3.8' r='1.9'/%3E%3Ccircle cx='20' cy='9.5' r='1.9'/%3E%3Ccircle cx='16.9' cy='18.8' r='1.9'/%3E%3Ccircle cx='7.1' cy='18.8' r='1.9'/%3E%3Ccircle cx='4' cy='9.5' r='1.9'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 :root{--bg:#0b0b0d;--shell:#151517;--side:#121214;--panel:#212125;--panel2:#2a2a30;--line:rgba(255,255,255,.07);
---text:#f4f4f7;--mute:#9a9aa6;--accent:#7f6cf5;--accent2:#a89aff;--up:#44d17a;--down:#ff6464;--warn:#e8b95a;--r:18px;color-scheme:dark}
+--text:#f4f4f7;--mute:#9a9aa6;--accent:#12b886;--accent2:#3fd9a8;--up:#a3e635;--down:#ff6b6b;--warn:#f0b43c;--r:18px;color-scheme:dark}
 :root[data-theme=light]{--bg:#dcdce4;--shell:#f4f4f9;--side:#ffffff;--panel:#ffffff;--panel2:#efeff5;--line:rgba(0,0,0,.08);
---text:#1c1c24;--mute:#6b6b78;--accent:#6a58e6;--accent2:#8b7bf5;--up:#14934b;--down:#d43a3a;--warn:#a87414;color-scheme:light}
+--text:#1c1c24;--mute:#6b6b78;--accent:#0a8f68;--accent2:#12b886;--up:#4d8c12;--down:#d43a3a;--warn:#a87414;color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px}
 h1,h2,h3{margin:0}h2{font-size:16px;font-weight:600}
@@ -23,7 +24,7 @@ nav{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .nav a.active{color:#fff;background:linear-gradient(90deg,var(--accent2),var(--accent));box-shadow:0 6px 18px -6px var(--accent)}
 .side-bottom{margin-top:auto;display:flex;flex-direction:column;gap:4px}
 .side-bottom hr{border:0;border-top:1px solid var(--line);width:100%;margin:6px 0}
-.promo{margin-top:10px;border-radius:16px;padding:14px;background:linear-gradient(150deg,var(--accent2),var(--accent) 60%,#4a3fc4);color:#fff;font-size:12.5px}
+.promo{margin-top:10px;border-radius:16px;padding:14px;background:linear-gradient(150deg,var(--accent2),var(--accent) 55%,#0a6b50);color:#fff;font-size:12.5px}
 .promo b{display:block;font-size:14px;margin:4px 0 2px}
 .promo .big{font-size:18px;font-weight:700;letter-spacing:.3px}
 .content{padding:20px 24px;min-width:0}
@@ -44,7 +45,7 @@ nav{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .r3{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
 .card-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .badge{width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent2);display:grid;place-items:center;flex:none}
-.card-h .more{margin-left:auto;color:var(--mute)}
+.card-h .more{margin-left:auto;color:var(--mute)}.card-h .more+button{margin-left:0}
 .kpi{font-size:30px;font-weight:700;letter-spacing:.3px;margin:6px 0 4px}
 .kpi-sub{font-size:12.5px;color:var(--mute)}
 .kpi-link{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);color:var(--text);font-size:13px;cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;width:100%;font:inherit;font-size:13px;padding-left:0;padding-right:0;border-radius:0}
@@ -115,12 +116,52 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
   .topbar{flex-wrap:wrap}.hide-sm{display:none}.user span{display:none}
 }
 @media(max-width:640px){.kpi{font-size:26px}.prow .nm{width:90px}}
+
+.hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.7fr) minmax(0,1.1fr);gap:22px;margin-bottom:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--panel)),var(--panel) 60%)}
+.hero h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);font-weight:600;margin-bottom:8px}
+.hero p{margin:6px 0;font-size:13.5px}
+.mkt{display:inline-flex;align-items:center;gap:6px;font-size:12px;border:1px solid var(--line);border-radius:99px;padding:2px 10px;color:var(--mute)}
+.mkt i{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
+.mkt.on i{background:var(--up)}
+.picks{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pick{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px;cursor:pointer}
+.pick:hover{border-color:var(--accent)}
+.pick .t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.warns{margin:0;padding-left:16px;font-size:12.5px}.warns li{margin:3px 0}
+.bl{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;white-space:nowrap}
+.bl-strong{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
+.bl-watch{background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent2)}
+.bl-neutral{background:var(--panel2);color:var(--mute)}
+.bl-avoid{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}
+.filterbar{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:end}
+.filterbar label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
+.filterbar label.inline{flex-direction:row;align-items:center;gap:6px;padding-bottom:6px}
+.filterbar input[type=number]{width:90px}
+.adv{margin-left:auto;font-size:12.5px}
+.advbox{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;padding:10px;background:var(--panel2);border-radius:12px}
+.advbox label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
+td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:hidden;text-overflow:ellipsis;font-weight:400}
+.li[data-sector],.li[data-lab]{cursor:pointer}.li[data-sector]:hover,.li[data-lab]:hover{color:var(--accent2)}
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.2s;z-index:40}
+#scrim.open{opacity:1;pointer-events:auto}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(500px,100vw);background:var(--shell);border-left:1px solid var(--line);transform:translateX(105%);transition:transform .25s;z-index:50;overflow-y:auto;padding:18px;box-shadow:-20px 0 50px rgba(0,0,0,.35)}
+#drawer.open{transform:none}
+#dClose{position:sticky;top:0;float:right;z-index:2;margin-left:8px}
+.tour{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:100;padding:16px}
+.tour.open{display:grid}
+.tbox{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;max-width:440px;width:100%}
+.tbox h2{font-size:19px;margin-bottom:8px}.tbox p{color:var(--mute);margin:6px 0 16px}
+.tdots{display:flex;gap:6px;margin-bottom:14px}.tdots i{width:22px;height:4px;border-radius:9px;background:var(--panel2)}.tdots i.on{background:var(--accent)}
+.tbtn{display:flex;gap:8px;justify-content:flex-end}
+.pbtn{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff;border:0}
+@media(max-width:1100px){.hero{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:640px){.picks{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="brand"><span class="logo"><i data-ico="trend"></i></span><b>Borsa Komitesi</b></div>
+    <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="4.2" fill="none" stroke="#fff" stroke-width="1.6"/><g fill="#fff"><circle cx="12" cy="3.6" r="1.9"/><circle cx="20" cy="9.4" r="1.9"/><circle cx="16.9" cy="18.8" r="1.9"/><circle cx="7.1" cy="18.8" r="1.9"/><circle cx="4" cy="9.4" r="1.9"/></g></svg></span><div><b>Borsa Komitesi</b><div class="sub" style="line-height:1.1">BIST Trading Ofisi</div></div></div>
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
@@ -152,6 +193,7 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
 
     <!-- GENEL BAKIŞ -->
     <div class="view" id="v-dashboard">
+      <section class="card hero" id="hero"></section>
       <div class="row r1">
         <div class="card">
           <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Taranan Hisse</h2></div>
@@ -173,7 +215,7 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
       <div class="row r2">
         <div class="card">
           <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Fiyat Grafiği</h2>
-            <select id="statSel" class="more"></select></div>
+            <select id="statSel" class="more"></select><button id="statOpen" class="ibtn" title="Seçili hissenin tüm detayını aç">Detay</button></div>
           <div class="note" id="statNote"></div>
           <div class="stat-wrap"><canvas id="statCv" style="height:250px"></canvas></div>
         </div>
@@ -203,24 +245,26 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
     <!-- ADAYLAR -->
     <div class="view" id="v-adaylar">
       <section class="card">
-        <div class="controls">
-          <label>Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0" style="width:90px"></label>
+        <div class="filterbar">
+          <label>Sektör<select id="sec"><option value="">Hepsi</option></select></label>
+          <label>Komite kararı<select id="lab"><option value="">Hepsi</option><option value="strong">Güçlü aday</option><option value="watch">İzle</option><option value="neutral">Nötr</option><option value="avoid">Uzak dur</option></select></label>
+          <label>Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0"></label>
           <label>SMA50<select id="sma"><option value="any">Hepsi</option><option value="above">Üstünde</option><option value="below">Altında</option></select></label>
-          <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
-          <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
-          <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
           <label class="inline"><input id="favonly" type="checkbox"> Sadece favoriler ★</label>
+          <details class="adv"><summary>Gelişmiş filtreler</summary>
+            <div class="advbox">
+              <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
+              <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
+              <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
+            </div>
+          </details>
         </div>
-        <p class="note" style="margin-bottom:0">Efsaneler kurallara dayalı, veri odaklı simülasyonlardır (yapay zekâ/API yok). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
       </section>
-      <div class="grid">
-        <section class="card">
-          <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
-          <div class="sub" style="margin:4px 0 8px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı · ★ favori</div>
-          <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
-        </section>
-        <section class="card" id="detail"><h2>Detay</h2><p class="mute">Soldan bir hisse seçin.</p></section>
-      </div>
+      <section class="card" style="margin-top:16px">
+        <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
+        <div class="sub" style="margin:4px 0 8px">Bir hisseye tıklayın: sağdan detay paneli açılır. Efsaneler: B Buffett · S Simons · L Livermore · K Kellogg · Ş Şeytanın Avukatı. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</div>
+        <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+      </section>
       <section class="card" id="extra" style="margin-top:16px"></section>
     </div>
 
@@ -251,11 +295,16 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
           <li><b>Geri test:</b> Bollinger alt bandına değen hisselerin sonraki 5/10/20 gün getirisi, her gün alma tabanıyla karşılaştırılır. Maliyet içermez, geçmiş geleceği garanti etmez.</li>
           <li><b>Haber skoru:</b> Başlıklardaki anahtar kelimelerle hesaplanan kaba bir göstergedir.</li>
         </ul>
+        <p><button id="tourBtn">▶ Tanıtım turunu yeniden başlat</button></p>
         <p class="note">Bu uygulama eğitim ve araştırma amaçlıdır; yatırım tavsiyesi değildir.</p>
       </section>
     </div>
   </section>
 </div>
+
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Hisse detayı"><button id="dClose" class="ibtn round" title="Kapat (Esc)">✕</button><div id="detail"></div></aside>
+<div class="tour" id="tour"></div>
 
 <script>
 let DATA = {ts: 0, generated: "–", stocks: []}, HIST = null, NEWS = {};
@@ -274,6 +323,7 @@ const SECTORS = {"Finance": "Finans", "Non-Energy Minerals": "Enerji Dışı Mad
   "Communications": "İletişim", "Utilities": "Kamu Hizmetleri", "Miscellaneous": "Çeşitli", "Government": "Kamu"};
 const trSector = s => SECTORS[s] || s || "Diğer";
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const alpha = (v, a) => { const n = parseInt(css(v).replace('#', ''), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
 
 /* ---------- İkonlar ---------- */
 const ICONS = {
@@ -522,31 +572,48 @@ function renderAudit() {
 }
 
 /* ---------- Tablo ---------- */
-let sortKey = "bbDist", sortDir = 1, selected = null, current = [], lastResults = [];
-const COLS = [["name", "Hisse"], ["close", "Fiyat"], ["bbDist", "Alt banda %"], ["smaDist", "SMA50 %", "hide-sm"], ["rsi", "RSI"],
-  ["change", "Gün %", "hide-sm"], ["rvol", "Rel. hacim", "hide-md hide-sm"], ["pe", "F/K", "hide-md hide-sm"], ["pb", "PD/DD", "hide-md hide-sm"], ["score", "Komite"]];
+let sortKey = "bbDist", sortDir = 1, selected = null, chartName = null, current = [], lastResults = [], baseResults = [];
+const COLS = [
+  ["name", "Hisse", "", "Hisse kodu. ★ ile favoriye ekleyin."],
+  ["close", "Fiyat", "", "Son fiyat (TL)"],
+  ["change", "Gün %", "", "Bugünkü değişim"],
+  ["bbDist", "Alt banda %", "", "Fiyatın Bollinger alt bandına uzaklığı. 0'a yakın ya da negatif: bandın dibinde."],
+  ["rsi", "RSI", "hide-sm", "14 günlük RSI: 30 altı aşırı satım, 70 üstü aşırı alım."],
+  ["chips", "Efsaneler", "hide-sm", "B Buffett · S Simons · L Livermore · K Kellogg · Ş Şeytanın Avukatı. Yeşil olumlu, gri nötr, kırmızı olumsuz."],
+  ["score", "Komite", "", "Efsanelerin toplam oyu: ≥3 güçlü aday, ≥1 izle, 0 nötr, negatif uzak dur."],
+];
+const LABELS = {strong: "GÜÇLÜ ADAY", watch: "İZLE", neutral: "NÖTR", avoid: "UZAK DUR"};
+const labKey = sc => sc >= 3 ? "strong" : sc >= 1 ? "watch" : sc === 0 ? "neutral" : "avoid";
+const badge = sc => `<span class="bl bl-${labKey(sc)}">${LABELS[labKey(sc)]}</span>`;
+const chipsOf = r => PERSONAS.map(([k, n, ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}" title="${n}">${ch}</span>`).join("");
+function fillSectors() {
+  const sel = $("sec"), cur = sel.value, names = [...new Set(UNIVERSE.map(s => trSector(s.sector)))].sort((a, b) => a.localeCompare(b, "tr"));
+  sel.innerHTML = '<option value="">Hepsi</option>' + names.map(n => `<option ${n === cur ? "selected" : ""}>${esc(n)}</option>`).join("");
+}
 function render() {
   current = candidates();
-  const results = current.map(s => [s, committee(s)]);
-  results.forEach(([s, r]) => { s.score = r.score; });
-  results.sort((a, b) => {
+  if (UNIVERSE.length && $("sec").options.length <= 1) fillSectors();
+  baseResults = current.map(s => [s, committee(s)]);
+  baseResults.forEach(([s, r]) => { s.score = r.score; });
+  const sec = $("sec").value, lab = $("lab").value;
+  let results = baseResults.filter(([s, r]) => (!sec || trSector(s.sector) === sec) && (!lab || labKey(r.score) === lab));
+  results = [...results].sort((a, b) => {
     const x = a[0][sortKey], y = b[0][sortKey];
     return sortDir * (typeof x === "string" ? x.localeCompare(y) : (x ?? 1e9) - (y ?? 1e9));
   });
   lastResults = results;
-  if (!selected && results.length) selected = (results.find(([s]) => HIST && HIST.stocks[s.name]) || results[0])[0].name;
-  $("count").textContent = `(${results.length} hisse, toplam evren ${UNIVERSE.length})`;
-  $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n, c]) => `<th data-k="${k}" class="${c ?? ""}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
-  $("tbl").tBodies[0].innerHTML = results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
-    <td><span class="star ${FAVS.has(s.name) ? "on" : ""}" data-fav="${s.name}" title="Favori">${FAVS.has(s.name) ? "★" : "☆"}</span><b>${s.name}</b> ${PERSONAS.map(([k, , ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}">${ch}</span>`).join("")}</td>
-    <td>${fmt(s.close)}</td><td>${fmt(s.bbDist)}</td><td class="hide-sm ${sign(s.smaDist)}">${fmt(s.smaDist)}</td><td>${fmt(s.rsi, 0)}</td>
-    <td class="hide-sm ${sign(s.change)}">${fmt(s.change)}</td><td class="hide-md hide-sm">${fmt(s.rvol, 1)}</td><td class="hide-md hide-sm">${fmt(s.pe, 1)}</td><td class="hide-md hide-sm">${fmt(s.pb)}</td>
-    <td class="tag ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}" title="Skor ${r.score}">${r.label}</td></tr>`).join("");
+  $("count").textContent = `(${results.length} hisse${sec || lab ? ", filtreli" : ""} · evren ${UNIVERSE.length})`;
+  $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n, c, tip]) => `<th ${k === "chips" ? "" : `data-k="${k}"`} class="${c}" title="${esc(tip)}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
+  $("tbl").tBodies[0].innerHTML = results.length ? results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
+    <td><span class="star ${FAVS.has(s.name) ? "on" : ""}" data-fav="${s.name}" title="Favori">${FAVS.has(s.name) ? "★" : "☆"}</span><b>${s.name}</b><span class="nm">${esc(s.description)}</span></td>
+    <td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td><td>${fmt(s.bbDist)}</td><td class="hide-sm">${fmt(s.rsi, 0)}</td>
+    <td class="hide-sm" style="text-align:right">${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`).join("")
+    : `<tr><td colspan="7" class="mute" style="text-align:center;padding:24px">Kriterlere uyan hisse yok. Filtreleri gevşetmeyi deneyin.</td></tr>`;
   $("extra").innerHTML = "<h2>🪑 Efsaneler masaya ek hisse getiriyor</h2><div class='sub'>Listede olmayan ama kendi kriterlerine uyan hisseler. Tıklayarak inceleyin.</div>" +
     extras(current).map(([who, why, arr]) => `<p><b>${who}:</b> <span class="mute">${why}</span><br>${arr.length ?
       arr.map(s => `<span class="pill" data-x="${s.name}">${s.name}</span>`).join("") : "<span class='mute'>Şu an uygun hisse yok.</span>"}</p>`).join("");
   $("tickers").innerHTML = UNIVERSE.map(s => `<option value="${s.name}">`).join("");
-  auditor(current, results);
+  auditor(current, baseResults);
   renderAudit();
   refreshView();
 }
@@ -571,24 +638,23 @@ function renderNews() {
     : "<p class='mute'>Haber verisi yok.</p>");
 }
 
-/* ---------- Detay paneli ---------- */
+/* ---------- Detay paneli (sağdan açılan çekmece) ---------- */
 function detail(name) {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
-  selected = name;
   const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s);
   const info = (t, b) => `<div class="persona pi"><b>${t}</b><span>${b}</span></div>`;
-  $("detail").innerHTML = `<h2><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
-    <div>Fiyat <b>${fmt(s.close)}</b> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
+  $("detail").innerHTML = `<h2 style="padding-right:8px"><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}" title="Favori">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
+    <div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
-    <p><b>Komite: <span class="${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label} (${r.score > 0 ? "+" : ""}${r.score})</span></b></p>` +
+    <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
     info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => `<div class="persona ${r.l[k].v > 0 ? "p1" : r.l[k].v < 0 ? "pm" : ""}"><b>${n}</b><span>${esc(r.l[k].t)}</span></div>`).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
-  if ($("v-adaylar").classList.contains("show")) { if (h) priceChart(h); if (mc) hist(mc); }
-  document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === name));
+  if (h) priceChart(h);
+  if (mc) hist(mc);
 }
 function setupCanvas(cv, h) {
   const dpr = devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = h * dpr;
@@ -645,10 +711,10 @@ function drawStat() {
   for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(w - 10, y); g.stroke(); g.fillText(fmt(v, v < 10 ? 2 : 0), L - 6, y + 4); }
   g.beginPath(); bb.forEach((x, i) => { if (x.u == null) return; i === 0 || bb[i - 1].u == null ? g.moveTo(X(i), Y(x.u)) : g.lineTo(X(i), Y(x.u)); });
   for (let i = N - 1; i >= 0; i--) if (bb[i].l != null) g.lineTo(X(i), Y(bb[i].l));
-  g.closePath(); g.fillStyle = "rgba(127,108,245,.09)"; g.fill();
+  g.closePath(); g.fillStyle = alpha("--accent", .12); g.fill();
   g.beginPath(); bb.forEach((x, i) => { if (x.s50 == null) return; g[bb[i - 1] && bb[i - 1].s50 != null ? "lineTo" : "moveTo"](X(i), Y(x.s50)); });
   g.strokeStyle = css("--warn"); g.setLineDash([5, 4]); g.lineWidth = 1.2; g.stroke(); g.setLineDash([]);
-  const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, "rgba(168,154,255,.35)"); grad.addColorStop(1, "rgba(168,154,255,0)");
+  const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, alpha("--accent2", .32)); grad.addColorStop(1, alpha("--accent2", 0));
   g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.lineTo(X(N - 1), H - 22); g.lineTo(X(0), H - 22); g.closePath(); g.fillStyle = grad; g.fill();
   g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.strokeStyle = css("--accent2"); g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
   statPts = {N, L, w, X, Y, pts, last: h.last};
@@ -664,33 +730,67 @@ function drawStat() {
   }
   g.textAlign = "left"; g.fillStyle = css("--mute"); g.fillText("120 iş günü", L, H - 6);
 }
+function istanbulNow() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Istanbul", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return {wd: p.weekday, min: (+p.hour % 24) * 60 + +p.minute};
+}
+function marketOpen() { const t = istanbulNow(); return !["Sat", "Sun"].includes(t.wd) && t.min >= 580 && t.min < 1080; }
+function renderHero(res, up, dn) {
+  const n = res.length, strong = res.filter(([, r]) => r.score >= 3).length, watch = res.filter(([, r]) => r.score >= 1 && r.score < 3).length, open = marketOpen();
+  const A = HIST && HIST.pooled.A, B0 = HIST && HIST.pooled.base;
+  const noEdge = A && A.h10 && B0 && B0.h10 && A.h10.win <= B0.h10.win + 1;
+  const picks = [...res].sort((a, b) => b[1].score - a[1].score || a[0].bbDist - b[0].bbDist).slice(0, 3);
+  const warns = AUDIT.issues.slice(0, 3);
+  $("hero").innerHTML = `<div>
+      <h3>Bugünün özeti</h3>
+      <span class="mkt ${open ? "on" : ""}"><i></i>${open ? "Seans saatleri içinde" : "Seans dışında · son kapanış verisi"}</span>
+      <p><b>${n}</b> hisse Bollinger alt bandına %${$("tol").value} yakın.</p>
+      <p>Komite <b class="up">${strong}</b> hisseyi güçlü aday, <b>${watch}</b> hisseyi izlemeye değer buluyor.</p>
+      <p class="mute">Piyasa genişliği: ${up} yükselen / ${dn} düşen.${noEdge ? " Geçmişte alt banda değmek tek başına avantaj vermediği için komite temkinli." : ""}</p>
+    </div>
+    <div>
+      <h3>Komitenin öne çıkardıkları</h3>
+      ${picks.length ? `<div class="picks">${picks.map(([s, r]) => `<div class="pick" data-x="${esc(s.name)}"><div class="t"><b>${esc(s.name)}</b><span class="${sign(s.change)}">${fmt(s.change)}%</span></div>
+        <div class="mute" style="font-size:12px;margin-bottom:6px">${fmt(s.close)} TL · alt banda %${fmt(s.bbDist, 1)}</div>${badge(r.score)}<div style="margin-top:6px">${chipsOf(r)}</div></div>`).join("")}</div>`
+        : "<p class='mute'>Kriterlere uyan aday yok. Aday Hisseler sayfasından filtreleri gevşetin.</p>"}
+    </div>
+    <div>
+      <h3>Dikkat edilecekler</h3>
+      ${warns.length ? `<ul class="warns">${warns.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : "<p class='up'>Baş Denetçi sorun bulmadı.</p>"}
+      <p class="note" style="margin-top:8px"><a href="#" data-scroll="audit" style="color:var(--accent2)">Tüm denetçi notları ↓</a></p>
+    </div>`;
+}
 function renderDashboard() {
   if (!UNIVERSE.length) return;
+  const R0 = baseResults;
   const up = UNIVERSE.filter(s => s.change > 0).length, dn = UNIVERSE.filter(s => s.change < 0).length;
+  renderHero(R0, up, dn);
   $("k1").textContent = fmt(UNIVERSE.length, 0);
   $("k1s").innerHTML = `<span class="up">↗ ${up} yükselen</span> · <span class="down">↘ ${dn} düşen</span>`;
-  const sc = lastResults.map(([, r]) => r.score), strong = sc.filter(x => x >= 3).length, watch = sc.filter(x => x >= 1 && x < 3).length;
-  $("k2").textContent = fmt(lastResults.length, 0);
+  const sc = R0.map(([, r]) => r.score), strong = sc.filter(x => x >= 3).length, watch = sc.filter(x => x >= 1 && x < 3).length;
+  $("k2").textContent = fmt(R0.length, 0);
   $("k2s").innerHTML = `<span class="up">${strong} güçlü aday</span> · ${watch} izle · alt banda %${$("tol").value} yakın`;
-  const cnt = {}; lastResults.forEach(([s]) => { const k = trSector(s.sector); cnt[k] = (cnt[k] || 0) + 1; });
+  const cnt = {}; R0.forEach(([s]) => { const k = trSector(s.sector); cnt[k] = (cnt[k] || 0) + 1; });
   const sec = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 4), cols = ["var(--accent2)", "var(--up)", "var(--warn)", "var(--down)"];
-  $("sectors").innerHTML = sec.length ? sec.map(([n, c], i) => `<div class="li"><span class="dot" style="background:color-mix(in srgb,${cols[i]} 22%,transparent);color:${cols[i]}">${c}</span>${esc(n)}<span class="v">${fmt(c / lastResults.length * 100, 0)}%</span></div>`).join("") : "<span class='mute'>Aday yok.</span>";
-  const sel = $("statSel"), names = lastResults.map(([s]) => s.name), want = selected && names.includes(selected) ? selected : names[0];
+  $("sectors").innerHTML = sec.length ? sec.map(([n, c], i) => `<div class="li" data-sector="${esc(n)}" title="Bu sektörün adaylarını listele"><span class="dot" style="background:color-mix(in srgb,${cols[i]} 22%,transparent);color:${cols[i]}">${c}</span>${esc(n)}<span class="v">${fmt(c / R0.length * 100, 0)}%</span></div>`).join("") : "<span class='mute'>Aday yok.</span>";
+  const sel = $("statSel"), names = R0.map(([s]) => s.name);
+  if (chartName && !names.includes(chartName)) names.unshift(chartName);
+  const want = chartName || (R0.find(([s]) => HIST && HIST.stocks[s.name]) || R0[0] || [{}])[0].name;
   sel.innerHTML = names.map(n => `<option ${n === want ? "selected" : ""}>${n}</option>`).join("");
   const s0 = UNIVERSE.find(x => x.name === want);
   $("statNote").textContent = s0 ? `${s0.description ?? ""} · Fiyat ${fmt(s0.close)} · alt bant ${fmt(s0.bb_lower)} · SMA50 ${fmt(s0.sma50)} (kesikli) · gölge: Bollinger bandı` : "";
   drawStat();
-  const lab = [["GÜÇLÜ ADAY", "var(--up)", x => x >= 3], ["İZLE", "var(--accent2)", x => x >= 1 && x < 3], ["NÖTR", "var(--mute)", x => x === 0], ["UZAK DUR", "var(--down)", x => x < 0]];
-  const segs = lab.map(([n, c, f]) => ({n, c, v: sc.filter(f).length}));
-  donut($("donut1"), segs.map(s => ({v: s.v, color: css(s.c.slice(4, -1))})), String(lastResults.length), "aday");
-  $("donutList").innerHTML = segs.map(s => `<div class="li"><span class="dot" style="background:color-mix(in srgb,${s.c} 22%,transparent);color:${s.c}">●</span>${s.n}<span class="v">${s.v}</span></div>`).join("");
-  const picks = [...lastResults].sort((a, b) => b[1].score - a[1].score).slice(0, 4);
-  $("topPicks").innerHTML = picks.map(([s, r]) => `<div class="li" style="cursor:pointer" data-x="${esc(s.name)}"><b>${esc(s.name)}</b><span class="mute">${fmt(s.close)}</span><span class="v ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label}</span></div>`).join("") || "<span class='mute'>Aday yok.</span>";
+  const lab = [["strong", "var(--up)"], ["watch", "var(--accent2)"], ["neutral", "var(--mute)"], ["avoid", "var(--down)"]];
+  const segs = lab.map(([k, c]) => ({k, c, n: LABELS[k], v: sc.filter(x => labKey(x) === k).length}));
+  donut($("donut1"), segs.map(s => ({v: s.v, color: css(s.c.slice(4, -1))})), String(R0.length), "aday");
+  $("donutList").innerHTML = segs.map(s => `<div class="li" data-lab="${s.k}" title="Bu kararı alan hisseleri listele"><span class="dot" style="background:color-mix(in srgb,${s.c} 22%,transparent);color:${s.c}">●</span>${s.n}<span class="v">${s.v}</span></div>`).join("");
+  const picks = [...R0].sort((a, b) => b[1].score - a[1].score).slice(0, 4);
+  $("topPicks").innerHTML = picks.map(([s, r]) => `<div class="li" style="cursor:pointer" data-x="${esc(s.name)}"><b>${esc(s.name)}</b><span class="mute">${fmt(s.close)}</span><span class="v">${badge(r.score)}</span></div>`).join("") || "<span class='mute'>Aday yok.</span>";
   $("pbars").innerHTML = PERSONAS.map(([k, n]) => {
-    const p = lastResults.filter(([, r]) => r.l[k].v > 0).length, m = lastResults.filter(([, r]) => r.l[k].v < 0).length, z = lastResults.length - p - m, t = lastResults.length || 1;
+    const p = R0.filter(([, r]) => r.l[k].v > 0).length, m = R0.filter(([, r]) => r.l[k].v < 0).length, z = R0.length - p - m, t = R0.length || 1;
     return `<div class="prow"><span class="nm">${n}</span><div class="sbar"><i style="width:${p / t * 100}%;background:var(--up)"></i><i style="width:${z / t * 100}%;background:var(--panel2)"></i><i style="width:${m / t * 100}%;background:var(--down)"></i></div><span class="ct">${p} / ${z} / ${m}</span></div>`;
   }).join("");
-  const pos = lastResults.length ? Math.round(sc.filter(x => x > 0).length / lastResults.length * 100) : 0;
+  const pos = R0.length ? Math.round(sc.filter(x => x > 0).length / R0.length * 100) : 0;
   donut($("donut2"), [{v: pos, color: css("--accent2")}, {v: 100 - pos, color: "transparent"}], pos + "%", "olumlu");
   const mins = Math.round((Date.now() - DATA.ts * 1000) / 60000), A = HIST && HIST.pooled.A, B0 = HIST && HIST.pooled.base;
   const rows = [
@@ -702,38 +802,71 @@ function renderDashboard() {
   ];
   $("auditList").innerHTML = rows.map(([i, n, v]) => `<div class="li"><span class="dot" style="background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent2)">${ico(i)}</span>${n}<span class="v">${v}</span></div>`).join("");
 }
-$("statSel").addEventListener("change", e => { selected = e.target.value; statHover = null; drawStat(); });
+$("statSel").addEventListener("change", e => { chartName = e.target.value; statHover = null; drawStat(); });
 $("statCv").addEventListener("mousemove", e => {
   if (!statPts) return; const r = $("statCv").getBoundingClientRect(), x = e.clientX - r.left;
   statHover = Math.round((x - statPts.L) / (statPts.w - statPts.L - 10) * (statPts.N - 1)); drawStat();
 });
 $("statCv").addEventListener("mouseleave", () => { statHover = null; drawStat(); });
+$("statOpen").addEventListener("click", () => { const n = $("statSel").value; if (n) openDetail(n); });
 
-/* ---------- Sayfalar (sol menü) ---------- */
+/* ---------- Sayfalar (sol menü) ve detay çekmecesi ---------- */
 let view = "dashboard";
+const drawerOpen = () => $("drawer").classList.contains("open");
 function refreshView() {
   if (view === "dashboard") renderDashboard();
-  else if (view === "adaylar" || view === "favoriler") { if (selected) detail(selected); }
   else if (view === "haberler") renderNews();
   else if (view === "geritest") renderBacktest();
+  if (selected && drawerOpen()) detail(selected);
 }
+function markRows() { document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === selected)); }
+function openDetail(name) {
+  if (!UNIVERSE.some(s => s.name === name)) return;
+  selected = name; chartName = name;
+  $("drawer").classList.add("open"); $("scrim").classList.add("open");
+  detail(name); markRows();
+  if (view === "dashboard") renderDashboard();
+}
+function closeDetail() { selected = null; $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); markRows(); }
 function show(v) {
-  if (v === "favoriler") { $("favonly").checked = true; v = "adaylar"; $("nav").dataset.fav = "1"; }
-  else if (v === "adaylar") { $("favonly").checked = false; $("nav").dataset.fav = ""; }
+  $("favonly").checked = v === "favoriler";
+  if (v === "favoriler") v = "adaylar";
   view = v;
   document.querySelectorAll(".view").forEach(el => el.classList.toggle("show", el.id === "v-" + v));
   const activeKey = v === "adaylar" && $("favonly").checked ? "favoriler" : v;
   document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.view === activeKey));
-  if (v === "adaylar") render(); else refreshView();
+  render();
   if (location.hash.slice(1) !== activeKey) history.replaceState(null, "", "#" + activeKey);
   window.scrollTo(0, 0);
 }
-document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => show(a.dataset.view)));
+document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => { closeDetail(); show(a.dataset.view); }));
 document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
 $("gsearch").addEventListener("change", e => {
-  const n = e.target.value.trim().toUpperCase(); if (!UNIVERSE.some(s => s.name === n)) return;
-  show("adaylar"); detail(n); e.target.value = ""; $("detail").scrollIntoView({behavior: "smooth"});
+  const n = e.target.value.trim().toUpperCase(); e.target.value = "";
+  if (UNIVERSE.some(s => s.name === n)) openDetail(n);
 });
+
+/* ---------- İlk açılış turu ---------- */
+const TOUR = [
+  ["Hoş geldiniz 👋", "Burası BIST için çalışan sanal bir trading ofisi. Veriler TradingView'den her 15 dakikada taranır; 5 \"efsane yatırımcı\" hisseleri kendi kurallarıyla yorumlar."],
+  ["Genel Bakış", "Üstteki özet bugünün resmini verir: kaç hisse alt banda yakın, komite kimi öne çıkarıyor, Baş Denetçi nelere dikkat çekiyor. Kartlara tıklayarak ilgili listeye geçebilirsiniz."],
+  ["Oyları okumak", "Her hissenin yanında B S L K Ş harfleri var: Buffett, Simons, Livermore, Kellogg ve Şeytanın Avukatı. Yeşil = olumlu, gri = nötr, kırmızı = olumsuz. Toplam oy 'Komite' sütunundadır."],
+  ["Detay ve favori", "Bir hisseye tıklayınca sağdan detay paneli açılır: grafik, haberler, her efsanenin gerekçesi, Monte Carlo. ★ ile favoriye ekleyin. Eşikleri 'Efsane Kuralları' sayfasından değiştirebilirsiniz. Eğitim amaçlıdır, yatırım tavsiyesi değildir."],
+];
+let tourI = 0;
+function renderTour() {
+  const [h, p] = TOUR[tourI], last = tourI === TOUR.length - 1;
+  $("tour").innerHTML = `<div class="tbox"><div class="tdots">${TOUR.map((_, i) => `<i class="${i <= tourI ? "on" : ""}"></i>`).join("")}</div>
+    <h2>${h}</h2><p>${p}</p><div class="tbtn">${tourI ? '<button id="tBack">Geri</button>' : ""}<button id="tSkip">${last ? "" : "Atla"}</button>
+    <button class="pbtn" id="tNext">${last ? "Başla" : "İleri"}</button></div></div>`;
+  if (last) $("tSkip").remove();
+  $("tNext").onclick = () => last ? endTour() : (tourI++, renderTour());
+  if ($("tBack")) $("tBack").onclick = () => { tourI--; renderTour(); };
+  if ($("tSkip")) $("tSkip").onclick = endTour;
+}
+function startTour() { tourI = 0; $("tour").classList.add("open"); renderTour(); }
+function endTour() { $("tour").classList.remove("open"); store.set("tourDone", true); }
+function startTourIfFirst() { if (!store.get("tourDone", false)) startTour(); }
 
 /* ---------- CSV ---------- */
 function downloadCsv() {
@@ -788,17 +921,24 @@ async function loadData(refresh) {
 $("refresh").addEventListener("click", () => loadData(true));
 $("csv").addEventListener("click", downloadCsv);
 setInterval(() => loadData(false), 60000);
-["tol", "sma", "rsi", "vol", "top", "favonly"].forEach(id => $(id).addEventListener("input", render));
+["tol", "sma", "rsi", "vol", "top", "favonly", "sec", "lab"].forEach(id => $(id).addEventListener("input", render));
 document.addEventListener("click", e => {
   const f = e.target.closest("[data-fav]"); if (f) { e.stopPropagation(); toggleFav(f.dataset.fav); return; }
-  const x = e.target.closest("[data-x]"); if (x) { show("adaylar"); detail(x.dataset.x); $("detail").scrollIntoView({behavior: "smooth"}); }
+  const x = e.target.closest("[data-x]"); if (x) { openDetail(x.dataset.x); return; }
+  const sc = e.target.closest("[data-sector]"); if (sc) { $("lab").value = ""; fillSectors(); $("sec").value = sc.dataset.sector; show("adaylar"); return; }
+  const lb = e.target.closest("[data-lab]"); if (lb) { $("sec").value = ""; $("lab").value = lb.dataset.lab; show("adaylar"); return; }
+  const sr = e.target.closest("[data-scroll]"); if (sr) { e.preventDefault(); $(sr.dataset.scroll).scrollIntoView({behavior: "smooth"}); }
 });
 $("tbl").addEventListener("click", e => {
   if (e.target.closest("[data-fav]")) return;
-  const th = e.target.closest("th"), tr = e.target.closest("tr[data-n]");
+  const th = e.target.closest("th[data-k]"), tr = e.target.closest("tr[data-n]");
   if (th) { const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : 1; sortKey = k; render(); }
-  else if (tr) detail(tr.dataset.n);
+  else if (tr) openDetail(tr.dataset.n);
 });
+$("scrim").addEventListener("click", closeDetail);
+$("dClose").addEventListener("click", closeDetail);
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeDetail(); if ($("tour").classList.contains("open")) endTour(); } });
+$("tourBtn").addEventListener("click", startTour);
 function applyTheme(t) {
   document.documentElement.dataset.theme = t; store.set("theme", t);
   $("theme").innerHTML = ico(t === "light" ? "sun" : "moon");
@@ -812,6 +952,7 @@ applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matche
 const first = location.hash.slice(1);
 show(["dashboard", "adaylar", "favoriler", "haberler", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
+startTourIfFirst();
 </script>
 </body>
 </html>
