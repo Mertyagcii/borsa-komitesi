@@ -1,0 +1,321 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanal Trading Ofisi</title>
+<style>
+:root{--bg:#0e1117;--panel:#161b22;--panel2:#1c232d;--line:#2a323d;--text:#e6edf3;--mute:#8b96a3;
+--up:#3fb950;--down:#f85149;--warn:#d29922;--accent:#58a6ff;--r:10px}
+:root[data-theme=light]{--bg:#f6f8fa;--panel:#fff;--panel2:#f0f3f6;--line:#d0d7de;--text:#1f2328;--mute:#656d76;
+--up:#1a7f37;--down:#cf222e;--warn:#9a6700;--accent:#0969da}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:16px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+h1{font-size:18px;margin:0}h2{font-size:15px;margin:0 0 8px}
+.sub{color:var(--mute);font-size:12px}
+main{padding:16px;display:grid;gap:16px;max-width:1400px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.controls label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:4px}
+input,select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
+button{cursor:pointer}button:hover{border-color:var(--accent)}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,4fr);gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.tw{overflow:auto;max-height:560px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 5px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--panel);color:var(--mute);cursor:pointer;font-weight:600}
+th:first-child,td:first-child{text-align:left}
+tbody tr{cursor:pointer}tbody tr:hover,tbody tr.sel{background:var(--panel2)}
+.up{color:var(--up)}.down{color:var(--down)}.mute{color:var(--mute)}
+.chip{display:inline-block;min-width:20px;text-align:center;border-radius:4px;padding:0 4px;font-size:11px;font-weight:700;margin-right:2px}
+.v1{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
+.v0{background:var(--panel2);color:var(--mute)}
+.vm{background:color-mix(in srgb,var(--down) 25%,transparent);color:var(--down)}
+.tag{font-weight:700}
+.persona{border-left:3px solid var(--line);padding:6px 10px;margin:8px 0;background:var(--panel2);border-radius:0 6px 6px 0}
+.persona.p1{border-color:var(--up)}.persona.pm{border-color:var(--down)}
+.persona b{display:block}
+.persona span{color:var(--mute);font-size:13px}
+canvas{width:100%;height:150px;display:block}
+ul{margin:4px 0;padding-left:18px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;margin:2px;cursor:pointer;font-size:12px}
+.pill:hover{border-color:var(--accent)}
+.audit-ok{color:var(--up)}.audit-warn{color:var(--warn)}
+.note{font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>🏛️ Sanal Trading Ofisi &amp; Yazılım Komitesi</h1>
+  <div class="sub">BIST · TradingView verisi (gecikmeli olabilir) · Veri: <span id="gen"></span></div></div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="sub" id="status"></span>
+    <button id="refresh">⟳ Yenile</button>
+    <button id="theme">Tema</button>
+  </div>
+</header>
+<div id="banner" class="card" style="display:none;margin:16px 16px 0;border-color:var(--warn)"></div>
+<main>
+  <section class="card">
+    <div class="controls">
+      <label>Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0" style="width:90px"></label>
+      <label>SMA50<select id="sma"><option value="any">Hepsi</option><option value="above">Üstünde</option><option value="below">Altında</option></select></label>
+      <label>Maks RSI<input id="rsi" type="number" value="100" style="width:80px"></label>
+      <label>Min günlük hacim (milyon TL)<input id="vol" type="number" value="5" step="1" min="0" style="width:110px"></label>
+      <label>Liste boyutu<input id="top" type="number" value="25" min="1" max="100" style="width:80px"></label>
+    </div>
+    <p class="note">Efsaneler; kurallara dayalı, veri odaklı simülasyonlardır (yapay zekâ/API kullanılmaz). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+  </section>
+
+  <section class="card" id="audit"></section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Aday Hisseler <span class="sub" id="count"></span></h2>
+      <div class="sub" style="margin-bottom:6px">B=Buffett · S=Simons · L=Livermore · K=Kellogg · Ş=Şeytanın Avukatı</div>
+      <div class="tw"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    </section>
+    <section class="card" id="detail"><h2>Detay</h2><p class="mute">Soldan bir hisse seçin.</p></section>
+  </div>
+
+  <section class="card" id="extra"></section>
+</main>
+
+<script>
+let DATA = {ts: 0, generated: "–", stocks: []};
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 2) => v == null ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
+const sign = v => v == null ? "" : v >= 0 ? "up" : "down";
+
+/* ---------- türetilmiş alanlar ---------- */
+function enrich(s) {
+  const ok = s.close > 0 && s.bb_lower != null && s.bb_upper != null && s.sma50 != null;
+  s.ok = ok;
+  s.bbDist = ok ? (s.close / s.bb_lower - 1) * 100 : null;
+  s.smaDist = ok ? (s.close / s.sma50 - 1) * 100 : null;
+  s.atrPct = s.atr != null && s.close > 0 ? s.atr / s.close * 100 : null;
+  s.tl = s.close * s.volume / 1e6; // günlük işlem hacmi, milyon TL
+  return s;
+}
+let UNIVERSE = [];
+
+/* ---------- Monte Carlo (GBM, drift=0, 20 gün, stop -%7) ---------- */
+let mcCache = {};
+function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function monteCarlo(s, days = 20, n = 2000, stop = 7) {
+  if (mcCache[s.name]) return mcCache[s.name];
+  if (s.atrPct == null) return null;
+  const sigma = Math.max(0.8 * s.atrPct / 100, 1e-4), r = rng(hash(s.name));
+  const finals = new Float64Array(n); let stopHit = 0;
+  for (let i = 0; i < n; i++) {
+    let lp = 0, min = 0;
+    for (let d = 0; d < days; d++) {
+      const z = Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+      lp += -0.5 * sigma * sigma + sigma * z;
+      if (lp < min) min = lp;
+    }
+    finals[i] = Math.exp(lp) - 1;
+    if (Math.exp(min) <= 1 - stop / 100) stopHit++;
+  }
+  const sorted = Array.from(finals).sort((a, b) => a - b), q = p => sorted[Math.floor(p * (n - 1))] * 100;
+  return { sigma: sigma * 100, p05: q(.05), p50: q(.5), p95: q(.95),
+    probLoss: sorted.filter(x => x < 0).length / n * 100, probStop: stopHit / n * 100, finals: sorted };
+}
+
+/* ---------- Efsaneler: kural tabanlı görüşler. v: +1 olumlu, 0 nötr, -1 olumsuz ---------- */
+function buffett(s) {
+  if (s.pe == null || s.pe <= 0) return { v: -1, t: "Şirket zarar ediyor ya da F/K hesaplanamıyor; kazancı olmayan işi anlayamam." };
+  if (s.pb != null && s.pb < 1.5 && s.pe < 15) return { v: 1, t: `F/K ${fmt(s.pe, 1)} ve PD/DD ${fmt(s.pb, 2)}: defter değerine göre ucuz. Rekabet avantajını ayrıca doğrulayın.` };
+  if (s.pe > 25) return { v: -1, t: `F/K ${fmt(s.pe, 1)} yüksek; güvenlik marjı görünmüyor.` };
+  return { v: 0, t: `F/K ${fmt(s.pe, 1)}${s.pb != null ? `, PD/DD ${fmt(s.pb, 2)}` : ""}: makul ama bariz bir iskonto yok.` };
+}
+function simons(s) {
+  const mc = monteCarlo(s);
+  if (!mc) return { v: 0, t: "Oynaklık verisi yok; istatistik yapamam." };
+  const base = `RSI ${fmt(s.rsi, 0)}, alt banda %${fmt(s.bbDist, 1)}. Simülasyonda 20 günde zarar olasılığı %${fmt(mc.probLoss, 0)}, %7 stop olasılığı %${fmt(mc.probStop, 0)}.`;
+  if (s.rsi < 35 && mc.probStop < 50) return { v: 1, t: base + " Aşırı satım + yönetilebilir oynaklık: ortalamaya dönüş denenebilir (drift=0 varsayımı; tarihsel başarı oranı bu veriyle ölçülemez)." };
+  if (mc.probStop >= 65) return { v: -1, t: base + " Oynaklık o kadar yüksek ki stop'a değme ihtimali yazı-turadan kötü." };
+  return { v: 0, t: base + " İstatistiksel bir kenar görmüyorum." };
+}
+function livermore(s) {
+  if (s.smaDist > 0) return { v: 1, t: `Fiyat SMA50'nin %${fmt(s.smaDist, 1)} üstünde: trend yukarı, geri çekilme alım fırsatı olabilir.` };
+  if (s.smaDist > -3) return { v: 0, t: `SMA50'ye %${fmt(-s.smaDist, 1)} uzakta. Pivot noktası; SMA50 üstünde kapanış beklenmeli.` };
+  return { v: -1, t: `SMA50'nin %${fmt(-s.smaDist, 1)} altında. Düşen bıçak tutulmaz; trend dönmeden alınmaz.` };
+}
+function kellogg(s) {
+  if (s.rvol != null && s.rvol >= 1.5 && s.change > 0) return { v: 1, t: `Göreceli hacim ${fmt(s.rvol, 1)}x ve gün içi %${fmt(s.change, 1)}: alıcılar devrede, momentum var.` };
+  if (s.rvol != null && s.rvol >= 1.5 && s.change < 0) return { v: -1, t: `Hacim ${fmt(s.rvol, 1)}x ama fiyat %${fmt(s.change, 1)} düşüyor: hacimli satış baskısı.` };
+  return { v: 0, t: `Göreceli hacim ${fmt(s.rvol, 1)}x: kırılım yok, ilgi zayıf. Benim tarzım değil.` };
+}
+function devil(s, others) {
+  const mc = monteCarlo(s), flags = [];
+  if (mc && mc.probStop >= 50) flags.push(`%7 stop'a 20 günde değme olasılığı %${fmt(mc.probStop, 0)}`);
+  if (s.atrPct != null && s.atrPct > 4) flags.push(`ATR %${fmt(s.atrPct, 1)}: günlük dalgalanma çok yüksek`);
+  if (s.tl < 20) flags.push(`günlük işlem hacmi ~${fmt(s.tl, 1)} milyon TL: çıkış likiditesi zayıf`);
+  if (s.smaDist < -5) flags.push("fiyat SMA50'nin belirgin altında");
+  if (s.rsi > 70) flags.push("RSI aşırı alım bölgesinde");
+  if (s.pe == null || s.pe <= 0) flags.push("kazanç yok/F/K belirsiz");
+  const pos = others.filter(o => o.v > 0).length;
+  const macro = "Makro şok (kur, faiz, jeopolitik) durumunda BIST'te toplu satış görülür; korelasyonlar 1'e gider.";
+  if (flags.length >= 2 || pos >= 3 && flags.length) return { v: -1, t: `Karşı çıkıyorum${pos >= 3 ? " (masa fazla iyimser)" : ""}: ${flags.join("; ")}. ${macro}` };
+  return { v: 0, t: (flags.length ? `Dikkat: ${flags.join("; ")}. ` : "Belirgin bir veri riski görmüyorum. ") + macro };
+}
+function committee(s) {
+  const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
+  l.seytan = devil(s, Object.values(l));
+  const score = Object.values(l).reduce((a, x) => a + x.v, 0);
+  const label = score >= 3 ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
+  return { l, score, label };
+}
+const PERSONAS = [["buffett", "Warren Buffett", "B"], ["simons", "Jim Simons", "S"], ["livermore", "Jesse Livermore", "L"],
+  ["kellogg", "Jack Kellogg", "K"], ["seytan", "Şeytanın Avukatı", "Ş"]];
+
+/* ---------- Seçim, filtre ---------- */
+function candidates() {
+  const tol = +$("tol").value / 100, sma = $("sma").value, maxRsi = +$("rsi").value, minVol = +$("vol").value, top = +$("top").value;
+  return UNIVERSE.filter(s => s.ok && s.rsi != null && s.close <= s.bb_lower * (1 + tol) && s.rsi <= maxRsi && s.tl >= minVol &&
+    (sma === "any" || (sma === "above") === (s.smaDist > 0)))
+    .sort((a, b) => a.bbDist - b.bbDist).slice(0, top);
+}
+function extras(cands) {
+  const have = new Set(cands.map(c => c.name)), rest = UNIVERSE.filter(s => s.ok && !have.has(s.name) && s.tl >= 5);
+  return [
+    ["Buffett", "Radarımda olan ama listede yok: ucuz ve kazançlı şirketler", rest.filter(s => s.pe > 0 && s.pe < 10 && s.pb != null && s.pb < 1.2).sort((a, b) => a.pe - b.pe).slice(0, 8)],
+    ["Kellogg", "Hacim patlaması + kırılım", rest.filter(s => s.rvol >= 2.5 && s.change >= 3).sort((a, b) => b.rvol - a.rvol).slice(0, 8)],
+    ["Livermore", "Trend lideri: SMA50 üstünde, üst banda yakın", rest.filter(s => s.smaDist > 0 && s.close >= s.bb_upper * 0.98).sort((a, b) => b.tl - a.tl).slice(0, 8)],
+  ];
+}
+
+/* ---------- Baş Denetçi ---------- */
+function auditor(cands, results) {
+  const issues = [];
+  if (!UNIVERSE.length) { $("audit").innerHTML = "<h2>👑 Baş Denetçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  if (!cands.length) issues.push("Filtreye uyan hisse yok; kriterleri gevşetin.");
+  const age = (Date.now() - DATA.ts * 1000) / 36e5;
+  if (age > 24) issues.push(`Veri ${fmt(age, 0)} saat önce çekilmiş; Yenile düğmesine basın.`);
+  const bad = UNIVERSE.filter(s => !s.ok).length;
+  if (bad) issues.push(`${bad} hisse eksik/hatalı veri nedeniyle tarama dışı bırakıldı (Bollinger/SMA50 yok).`);
+  const noPe = cands.filter(c => c.pe == null || c.pe <= 0).length;
+  if (noPe) issues.push(`${noPe} adayda F/K yok (zarar/veri eksik); Buffett değerlemesi bunlarda geçersiz.`);
+  results.forEach(([s, r]) => {
+    const mc = monteCarlo(s);
+    if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
+  });
+  issues.push("Haber/KAP verisi yok: Temel & Haber Analisti bu sürümde sadece oran verisiyle çalışıyor.");
+  const hard = issues.filter(i => !i.startsWith("Haber"));
+  $("audit").innerHTML = `<h2>👑 Baş Denetçi: <span class="${hard.length ? "audit-warn" : "audit-ok"}">${hard.length ? "ŞARTLI ONAY" : "ONAY"}</span></h2>
+    <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul>`;
+}
+
+/* ---------- Çizim ---------- */
+let sortKey = "bbDist", sortDir = 1, selected = null, current = [];
+const COLS = [["name", "Hisse"], ["close", "Fiyat"], ["bbDist", "Alt banda %"], ["smaDist", "SMA50 %"], ["rsi", "RSI"],
+  ["change", "Gün %"], ["rvol", "Rel. hacim"], ["pe", "F/K"], ["pb", "PD/DD"], ["score", "Komite"]];
+function render() {
+  current = candidates();
+  const results = current.map(s => [s, committee(s)]);
+  results.forEach(([s, r]) => { s.score = r.score; });
+  results.sort((a, b) => {
+    const x = a[0][sortKey], y = b[0][sortKey];
+    return sortDir * (typeof x === "string" ? x.localeCompare(y) : (x ?? 1e9) - (y ?? 1e9));
+  });
+  $("count").textContent = `(${results.length} hisse, toplam evren ${UNIVERSE.length})`;
+  $("tbl").tHead.innerHTML = "<tr>" + COLS.map(([k, n]) => `<th data-k="${k}">${n}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
+  $("tbl").tBodies[0].innerHTML = results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
+    <td><b>${s.name}</b> ${PERSONAS.map(([k, , ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}">${ch}</span>`).join("")}</td>
+    <td>${fmt(s.close)}</td><td>${fmt(s.bbDist)}</td><td class="${sign(s.smaDist)}">${fmt(s.smaDist)}</td><td>${fmt(s.rsi, 0)}</td>
+    <td class="${sign(s.change)}">${fmt(s.change)}</td><td>${fmt(s.rvol, 1)}</td><td>${fmt(s.pe, 1)}</td><td>${fmt(s.pb)}</td>
+    <td class="tag ${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}" title="Skor ${r.score}">${r.label}</td></tr>`).join("");
+  $("extra").innerHTML = "<h2>🪑 Efsaneler masaya ek hisse getiriyor</h2><div class='sub'>Listede olmayan ama kendi kriterlerine uyan hisseler. Tıklayarak inceleyin.</div>" +
+    extras(current).map(([who, why, arr]) => `<p><b>${who}:</b> <span class="mute">${why}</span><br>${arr.length ?
+      arr.map(s => `<span class="pill" data-x="${s.name}">${s.name}</span>`).join("") : "<span class='mute'>Şu an uygun hisse yok.</span>"}</p>`).join("");
+  auditor(current, results);
+  if (selected) detail(selected);
+}
+function detail(name) {
+  const s = UNIVERSE.find(x => x.name === name); if (!s) return;
+  selected = name;
+  const r = committee(s), mc = monteCarlo(s);
+  $("detail").innerHTML = `<h2>${s.name} <span class="sub">${s.description ?? ""} · ${s.sector ?? ""}</span></h2>
+    <div>Fiyat <b>${fmt(s.close)}</b> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} ·
+    Hacim ~${fmt(s.tl, 0)} mn TL</div>
+    <p><b>Komite: <span class="${r.score > 0 ? "up" : r.score < 0 ? "down" : "mute"}">${r.label} (${r.score > 0 ? "+" : ""}${r.score})</span></b></p>` +
+    PERSONAS.map(([k, n]) => `<div class="persona ${r.l[k].v > 0 ? "p1" : r.l[k].v < 0 ? "pm" : ""}"><b>${n}</b><span>${r.l[k].t}</span></div>`).join("") +
+    (mc ? `<h2 style="margin-top:12px">Monte Carlo · 20 gün · 2000 yol</h2><canvas id="cv" height="150"></canvas>
+    <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-7%) olasılığı %${fmt(mc.probStop, 0)}.
+    Günlük σ = 0,8×ATR% ≈ %${fmt(mc.sigma, 2)}; drift = 0 varsayımı.</div>` : "");
+  if (mc) hist(mc);
+  document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === name));
+}
+function hist(mc) {
+  const cv = $("cv"), dpr = devicePixelRatio || 1, w = cv.clientWidth, h = 150;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr);
+  const cs = getComputedStyle(document.documentElement), up = cs.getPropertyValue("--up"), down = cs.getPropertyValue("--down"), mute = cs.getPropertyValue("--mute");
+  const lo = mc.finals[Math.floor(.01 * mc.finals.length)] * 100, hi = mc.finals[Math.floor(.99 * mc.finals.length)] * 100, B = 40, bw = (hi - lo) / B;
+  const bins = new Array(B).fill(0);
+  mc.finals.forEach(f => { const i = Math.floor((f * 100 - lo) / bw); if (i >= 0 && i < B) bins[i]++; });
+  const m = Math.max(...bins);
+  bins.forEach((c, i) => {
+    const mid = lo + (i + .5) * bw; g.fillStyle = mid < 0 ? down : up;
+    g.fillRect(i * w / B + 1, h - 16 - c / m * (h - 30), w / B - 2, c / m * (h - 30));
+  });
+  const zx = (0 - lo) / (hi - lo) * w;
+  g.strokeStyle = mute; g.beginPath(); g.moveTo(zx, 0); g.lineTo(zx, h - 16); g.stroke();
+  g.fillStyle = mute; g.font = "11px system-ui"; g.fillText(`${fmt(lo, 0)}%`, 2, h - 3); g.fillText("0%", zx - 6, h - 3); g.textAlign = "right"; g.fillText(`${fmt(hi, 0)}%`, w - 2, h - 3);
+}
+
+/* ---------- Olaylar ---------- */
+/* ---------- Veri: yerel sunucudan (server.py) ---------- */
+function banner(msg) { const b = $("banner"); b.style.display = msg ? "" : "none"; b.textContent = msg || ""; }
+function applyData(d) {
+  if (!d.stocks || !d.stocks.length) { $("status").textContent = "İlk veri çekiliyor…"; setTimeout(() => loadData(false), 3000); return; }
+  const changed = d.ts !== DATA.ts;
+  DATA = d; UNIVERSE = d.stocks.map(enrich); mcCache = {};
+  $("gen").textContent = d.generated;
+  if (changed) render();
+}
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+async function loadData(refresh) {
+  if (location.protocol === "file:") {
+    banner("Bu sayfa doğrudan dosya olarak açılmış. Verinin otomatik yönetilmesi için http://localhost:8765 adresini açın (sunucu Windows açılışında kendiliğinden başlar).");
+    return;
+  }
+  const btn = $("refresh");
+  if (refresh) { btn.disabled = true; btn.textContent = "⟳ Güncelleniyor…"; }
+  try {
+    // Yerelde server.py'den, yayında (GitHub Pages) her 15 dk güncellenen data.json'dan okunur
+    const res = LOCAL ? await fetch("/api/" + (refresh ? "refresh" : "data"), refresh ? {method: "POST"} : {})
+                      : await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
+    applyData(d);
+    banner(d.error ? "Son veri çekme denemesi başarısız (" + d.error + "). Önceki veri gösteriliyor." : "");
+    $("status").textContent = "Veri 15 dk'da bir otomatik güncellenir";
+  } catch (e) {
+    banner(LOCAL ? "Yerel sunucuya ulaşılamıyor. server.py çalışıyor mu? (Görev Zamanlayıcı'daki 'TradingOfis' görevini başlatın)"
+                 : "Veri dosyası yüklenemedi. Biraz sonra tekrar deneyin.");
+  } finally { btn.disabled = false; btn.textContent = "⟳ Yenile"; }
+}
+$("refresh").addEventListener("click", () => loadData(true));
+setInterval(() => loadData(false), 60000);
+["tol", "sma", "rsi", "vol", "top"].forEach(id => $(id).addEventListener("input", render));
+$("tbl").addEventListener("click", e => {
+  const th = e.target.closest("th"), tr = e.target.closest("tr[data-n]");
+  if (th) { const k = th.dataset.k; sortDir = k === sortKey ? -sortDir : 1; sortKey = k; render(); }
+  else if (tr) detail(tr.dataset.n);
+});
+$("extra").addEventListener("click", e => { const p = e.target.closest("[data-x]"); if (p) { detail(p.dataset.x); $("detail").scrollIntoView({behavior: "smooth"}); } });
+$("theme").addEventListener("click", () => {
+  const r = document.documentElement, light = r.dataset.theme !== "light";
+  r.dataset.theme = light ? "light" : "dark"; if (selected) detail(selected);
+});
+if (matchMedia("(prefers-color-scheme: light)").matches) document.documentElement.dataset.theme = "light";
+render();
+loadData(false);
+</script>
+</body>
+</html>
