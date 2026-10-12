@@ -140,7 +140,7 @@ function computeSectorStats(uni) {
   const g = {};
   uni.filter(s => s.ok && s.rs != null && s.tl >= 10).forEach(s => { (g[s.sector || "Diğer"] = g[s.sector || "Diğer"] || []).push(s); });
   const med = a => { const b = a.filter(x => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
-  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length, rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100}));
+  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length, rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
   rows.sort((x, y) => y.rs - x.rs); rows.forEach((r, i) => { r.rank = i + 1; });
   SECTOR_STATS = Object.fromEntries(rows.map(r => [r.name, {...r, total: rows.length}]));
   return rows;
@@ -399,4 +399,21 @@ function riskRadar(uni, n) {
 /* Güç listesi: araştırmanın en güçlü bulgusu (RS lideri + yükselen trend). Aday Hisseler sayfasının varsayılan kaynağı. */
 function strengthList(uni, n, minTl) {
   return uni.filter(s => s.ok && s.rs != null && s.tl >= (minTl ?? 5) && trendUp(s)).sort((a, b) => b.rs - a.rs).slice(0, n);
+}
+
+/* ---------- Değer tablosu: defter değeri, şu anki değer, olması gereken değer ----------
+   Beş yöntem (varsa): kazanç değeri, nakit akışı değeri, Graham sayısı, sektör medyan F/K ve PD/DD çarpanları.
+   "Olması gereken değer" = yöntemlerin medyanı; aralık = en düşük–en yüksek. Yöntemler birbirinden çok farklıysa güven düşüktür. */
+function valuation(s) {
+  const iv = intrinsic(s), gn = graham(s), st = SECTOR_STATS[s.sector || "Diğer"], book = s.bvps > 0 ? s.bvps : null, m = [];
+  if (iv.fvEps != null) m.push({id: "eps", l: "Kazanç değeri (EPS; tahvil + risk primi iskontolu)", v: iv.fvEps});
+  if (iv.fvOe != null) m.push({id: "fcf", l: "Nakit akışı değeri (serbest nakit akışı/hisse)", v: iv.fvOe});
+  if (gn != null) m.push({id: "graham", l: "Graham sayısı (√(22,5 × EPS × defter değeri))", v: gn});
+  if (st && st.medPe > 0 && s.eps > 0) m.push({id: "pe", l: `Sektör medyan F/K (${fmt(st.medPe, 1)}) × EPS`, v: st.medPe * s.eps});
+  if (st && st.medPb > 0 && book) m.push({id: "pb", l: `Sektör medyan PD/DD (${fmt(st.medPb, 2)}) × defter değeri`, v: st.medPb * book});
+  const vals = m.map(x => x.v).filter(x => x > 0).sort((a, b) => a - b);
+  const mid = vals.length ? (vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2) : null;
+  const spread = vals.length >= 2 ? vals[vals.length - 1] / vals[0] : null;
+  return {book, price: s.close, pbNow: book ? s.close / book : null, methods: m, lo: vals.length ? vals[0] : null, hi: vals.length ? vals[vals.length - 1] : null, fair: mid,
+    upside: mid ? (mid / s.close - 1) * 100 : null, bookUpside: book ? (book / s.close - 1) * 100 : null, confidence: spread == null ? "az yöntem" : spread < 1.6 ? "yüksek" : spread < 3 ? "orta" : "düşük"};
 }

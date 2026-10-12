@@ -1,4 +1,4 @@
-﻿"""TradingOfis yerel sunucusu: http://localhost:8765
+"""TradingOfis yerel sunucusu: http://localhost:8765
 - Arayüzü (template.html) sunar.
 - TradingView'den BIST verisini çeker; her 15 dakikada bir arka planda yeniler.
 - /api/data (önbellekteki veri), /api/refresh (POST, hemen yeniler).
@@ -36,6 +36,11 @@ def fetch() -> None:
             with lock:
                 state["error"] = f"{type(e).__name__}: {e}"[:200]
             return
+        try:  # Tarayıcı sayfası için geniş tablo (tüm göstergeler)
+            from fetcher import fetch_wide
+            (HERE / "screener.json").write_text(json.dumps(fetch_wide(), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        except Exception:
+            pass
         try:  # haber akışı hisse verisinden bağımsız; hata verirse eski haber kalır
             news = {"ts": int(time.time()), "news": fetch_news(liquid_names(new["stocks"]), time.time())}
             NEWS.write_text(json.dumps(news, ensure_ascii=False), encoding="utf-8")
@@ -52,6 +57,8 @@ def history_loop() -> None:
                 names = liquid_names(state["stocks"]) if state["stocks"] else []
                 if names:
                     data = history.build(names, log=lambda m: None)
+                    ohlcv = data.pop("_ohlcv", None)
+                    history.write_ohlcv(ohlcv)
                     if len(data["stocks"]) >= len(names) // 2:
                         HISTORY.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         except Exception:
@@ -84,10 +91,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send((HERE / "template.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/data":
             self._send(snapshot(), "application/json; charset=utf-8")
-        elif self.path.split("?")[0] in ("/news.json", "/history.json", "/picks.json", "/core.js", "/research.json", "/portfolios.json", "/snapshots.json", "/news_log.json", "/research_history.json"):
+        elif self.path.split("?")[0] in ("/news.json", "/history.json", "/picks.json", "/core.js", "/research.json", "/portfolios.json", "/snapshots.json", "/news_log.json", "/research_history.json", "/screener.json", "/fields.json", "/ohlcv.json", "/manifest.webmanifest", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png"):
             f = HERE / self.path.split("?")[0].lstrip("/")
             if f.exists():
-                self._send(f.read_bytes(), "application/javascript; charset=utf-8" if f.suffix == ".js" else "application/json; charset=utf-8")
+                ct = {".js": "application/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json"}.get(f.suffix, "application/json; charset=utf-8")
+                self._send(f.read_bytes(), ct)
             else:
                 self._send(b"{}", "application/json; charset=utf-8", 404)
         else:

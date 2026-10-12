@@ -26,7 +26,7 @@ N_BARS = 800
 KEEP_CLOSES = 170
 
 
-def get_hist(tv, name: str, retries: int = 3):
+def get_hist(tv, name: str, retries: int = 4):
     from tvDatafeed import Interval
     for _ in range(retries):
         try:
@@ -78,6 +78,7 @@ def build(names: list[str], log=print) -> dict:
     stocks, pool = {}, {"A": {h: [] for h in HORIZONS}, "B": {h: [] for h in HORIZONS}, "C": {h: [] for h in HORIZONS}}
     pool_n = {"A": 0, "B": 0, "C": 0}
     base = {h: [] for h in HORIZONS}
+    ser = {}
     for k, name in enumerate(names, 1):
         df = get_hist(tv, name)
         if df is None:
@@ -85,6 +86,7 @@ def build(names: list[str], log=print) -> dict:
             if k % 10 == 0:
                 tv = TvDatafeed()  # bağlantı koptuysa yeniden bağlan
             continue
+        ser[name] = (df.index, df["close"].astype(float).to_numpy(), df["volume"].astype(float).to_numpy())
         close = df["close"].astype(float).reset_index(drop=True)
         lr = np.log(close).diff().dropna()
         sig = signals(close)
@@ -113,6 +115,17 @@ def build(names: list[str], log=print) -> dict:
         if idf is not None:
             index = {"name": sym, "last": str(idf.index[-1])[:10], "closes": [round(float(x), 2) for x in idf["close"].tail(260)]}
             break
+    # backtest atölyesi için sıkıştırılmış fiyat/hacim serisi (ortak tarih ekseni: endeks)
+    axis = [str(d)[:10] for d in idf.index] if index and idf is not None else sorted({str(d)[:10] for v in ser.values() for d in v[0]})
+    pos = {d: i for i, d in enumerate(axis)}
+    ohlcv = {"dates": axis, "stocks": {}, "index": [round(float(x), 2) for x in idf["close"].tolist()] if index and idf is not None else None}
+    for nm, (ix, cl, vo) in ser.items():
+        c = [None] * len(axis); v = [None] * len(axis)
+        for d, a, b2 in zip(ix, cl, vo):
+            i = pos.get(str(d)[:10])
+            if i is not None:
+                c[i] = round(float(a), 3); v[i] = int(round(float(b2) / 1000))
+        ohlcv["stocks"][nm] = {"c": c, "v": v}
     macro = {}
     for key, sym in (("rf10", "TR10Y"), ("rf2", "TR02Y")):
         try:
@@ -127,9 +140,25 @@ def build(names: list[str], log=print) -> dict:
     pooled["base"] = summarize({h: np.concatenate(v).tolist() if v else [] for h, v in base.items()}, 0)
     return {
         "ts": int(time.time()), "generated": now.strftime("%Y-%m-%d %H:%M"),
-        "bars": N_BARS, "pooled": pooled, "index": index, "macro": macro,
+        "bars": N_BARS, "pooled": pooled, "index": index, "macro": macro, "_ohlcv": ohlcv,
         "stocks": stocks,
     }
+
+
+def write_ohlcv(ohlcv) -> None:
+    """Backtest verisi haftada bir yenilenir (depo şişmesin); mevcut dosya eksikse (≥%10 daha az hisse) hemen yenilenir."""
+    if not ohlcv:
+        return
+    of = HERE / "ohlcv.json"
+    fresh = not of.exists() or time.time() - of.stat().st_mtime > 6 * 86400
+    if not fresh:
+        try:
+            old_n = len(json.loads(of.read_text(encoding="utf-8")).get("stocks", {}))
+            fresh = len(ohlcv["stocks"]) > old_n * 1.1
+        except Exception:
+            fresh = True
+    if fresh:
+        of.write_text(json.dumps(ohlcv, separators=(",", ":")), encoding="utf-8")
 
 
 def is_stale() -> bool:
@@ -164,6 +193,17 @@ def main() -> None:
     data = build(names, log=lambda m: print(m, flush=True))
     if len(data["stocks"]) < max(1, len(names) // 2):
         sys.exit("Çok az hisse için veri alınabildi; history.json güncellenmedi.")
+    if OUT.exists():  # önceki kayıt çok daha doluysa (geçici bağlantı sorunu) üzerine yazma
+        try:
+            prev = len(json.loads(OUT.read_text(encoding="utf-8")).get("stocks", {}))
+            if len(data["stocks"]) < 0.8 * prev:
+                sys.exit(f"Yeni veri eksik ({len(data['stocks'])} < önceki {prev}); history.json korundu, sonra tekrar denenecek.")
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+    ohlcv = data.pop("_ohlcv", None)
+    write_ohlcv(ohlcv)
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"history.json yazıldı: {len(data['stocks'])} hisse")
 

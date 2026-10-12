@@ -1,4 +1,4 @@
-﻿"""TradingView'den BIST verisini çeker (yerel sunucu ve GitHub Actions ortak kullanır)."""
+"""TradingView'den BIST verisini çeker (yerel sunucu ve GitHub Actions ortak kullanır)."""
 import math
 import time
 from datetime import datetime
@@ -63,3 +63,35 @@ def fetch_snapshot() -> dict:
         raise RuntimeError("TradingView boş veri döndürdü")
     return {"ts": int(time.time()), "generated": datetime.now(TZ).strftime("%Y-%m-%d %H:%M"),
             "stocks": stocks, "error": None}
+
+
+def _round_sig(x):
+    if x is None or isinstance(x, (str, bool)):
+        return x
+    if x == 0:
+        return 0
+    d = max(0, 4 - int(math.floor(math.log10(abs(x)))))
+    return round(x, min(d, 6))
+
+
+def fetch_wide() -> dict:
+    """TradingView'in tüm (kapsamı yeterli) göstergelerini ve temel verilerini sütun-sütun döndürür (Tarayıcı sayfası için)."""
+    import json as _json
+    from pathlib import Path as _P
+    ids = _json.loads((_P(__file__).parent / "screener_fields.json").read_text(encoding="utf-8"))
+    names, cols = None, {}
+    text_cols = ["description", "sector", "industry"]
+    batches = [ids[i:i + 150] for i in range(0, len(ids), 150)]
+    for k, batch in enumerate(batches):
+        sel = ["name"] + (text_cols if k == 0 else []) + batch
+        _, df = Query().set_markets("turkey").select(*sel).order_by("volume", ascending=False).limit(1500).get_scanner_data()
+        if names is None:
+            names = df["name"].tolist()
+            for c in text_cols:
+                cols[c] = [None if (v is None or (isinstance(v, float) and math.isnan(v))) else v for v in df[c].tolist()]
+        elif df["name"].tolist() != names:  # sıralama farklıysa isme göre hizala
+            df = df.set_index("name").reindex(names).reset_index()
+        for c in batch:
+            if c in df.columns:
+                cols[c] = [None if (v is None or (isinstance(v, float) and math.isnan(v))) else _round_sig(v) for v in df[c].tolist()]
+    return {"ts": int(time.time()), "generated": datetime.now(TZ).strftime("%Y-%m-%d %H:%M"), "names": names, "f": cols}

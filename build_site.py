@@ -13,7 +13,7 @@ SITE = HERE / "site"
 
 SITE.mkdir(exist_ok=True)
 shutil.copy(HERE / "template.html", SITE / "index.html")
-for extra in ("core.js", "picks.json", "research.json", "portfolios.json", "snapshots.json", "news_log.json", "research_history.json"):
+for extra in ("core.js", "picks.json", "research.json", "portfolios.json", "snapshots.json", "news_log.json", "research_history.json", "ohlcv.json", "manifest.webmanifest", "sw.js", "icon.svg", "icon-192.png", "icon-512.png"):
     if (HERE / extra).exists():
         shutil.copy(HERE / extra, SITE / extra)
 snap = fetch_snapshot()
@@ -21,6 +21,15 @@ snap = fetch_snapshot()
 
 news = {"ts": int(time.time()), "news": fetch_news(liquid_names(snap["stocks"]), time.time())}
 (SITE / "news.json").write_text(json.dumps(news, ensure_ascii=False), encoding="utf-8")
+
+try:  # Tarayıcı sayfası için geniş tablo (tüm göstergeler); hata verirse site yine yayınlanır
+    from fetcher import fetch_wide
+    wide = fetch_wide()
+    (SITE / "screener.json").write_text(json.dumps(wide, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"screener.json: {len(wide['names'])} hisse, {len(wide['f'])} alan")
+except Exception as e:
+    print("screener.json üretilemedi:", e)
+shutil.copy(HERE / "fields.json", SITE / "fields.json")
 
 hist = HERE / "history.json"
 if hist.exists():
