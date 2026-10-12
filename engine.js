@@ -13,6 +13,7 @@ const read = (f, d) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } 
 const data = read(path.join(SITE, "data.json"), null), hist = read(path.join(SITE, "history.json"), null);
 const news = (read(path.join(SITE, "news.json"), {news: {}}) || {}).news || {};
 const research = read("research.json", null);
+const mtfr = read("mtf_composite.json", null);
 const intra = read("intraday.json", null);
 if (!data || !data.stocks || !data.stocks.length || !hist) { console.log("data/history yok; atlandı."); process.exit(0); }
 
@@ -45,11 +46,11 @@ function copyOut() { if (fs.existsSync("portfolios.json")) { fs.mkdirSync(SITE, 
 const src = ["core.js", "engine_core.js"].map(f => fs.readFileSync(path.join(__dirname, f), "utf8")).join("\n");
 const rf2 = hist.macro && hist.macro.rf2 ? hist.macro.rf2 : 33;
 const idxClose = hist.index && hist.index.closes && hist.index.closes.length ? hist.index.closes[hist.index.closes.length - 1] : null;
-const ctx = vm.createContext({console, Intl, Math, Date, JSON, __data: data, __hist: hist, __news: news, __research: research, __intra: intra, __state: st, __date: date, __cy: Math.round(rf2 * 0.85) / 100, __idx: idxClose, __mode: MODE, __today: now.date});
+const ctx = vm.createContext({console, Intl, Math, Date, JSON, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __intra: intra, __state: st, __date: date, __cy: Math.round(rf2 * 0.85) / 100, __idx: idxClose, __mode: MODE, __today: now.date});
 const out = vm.runInContext(`
 ${src}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
-RESEARCH = __research; NOW = Date.now(); INTRA = __intra;
+RESEARCH = __research; MTFR = __mtfr; NOW = Date.now(); INTRA = __intra;
 let ST = __state || initState(__date, __cy);
 ST.config.cashYield = __cy;
 if (__mode === "fill") { const n = fillOnly(ST, __data, __today); console.log("Seans içi doldurma: " + n + " işlem"); } else runDay(ST, __data, __date, __idx);

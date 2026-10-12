@@ -37,6 +37,27 @@ COLUMNS = [
     "open", "gross_margin_ttm", "total_debt_fq", "ebitda_ttm", "cash_n_short_term_invest_fq",
 ]
 
+# Çok zamanlı tarama: günlük (|1 yok), haftalık (|1W), aylık (|1M). Ek ad: günlük "", haftalık "_w", aylık "_m".
+MTF_BASES = {
+    "RSI": "rsi", "MACD.macd": "macd", "MACD.signal": "macds", "ADX": "adx", "ADX+DI": "pdi", "ADX-DI": "mdi",
+    "SMA20": "sma20", "SMA50": "sma50", "ChaikinMoneyFlow": "cmf", "MoneyFlow": "mfi", "Stoch.K": "stk", "Stoch.D": "std",
+    "Mom": "mom", "CCI20": "cci", "AO": "ao", "Recommend.All": "rec", "Recommend.MA": "recma", "Recommend.Other": "recosc",
+    "Ichimoku.BLine": "ichb", "P.SAR": "psar", "BB.upper": "bbu", "BB.lower": "bbl", "BBPower": "bbp", "UO": "uo", "W.R": "wr", "VWMA": "vwma",
+}
+MTF_EXTRA = {"SMA200|1W": "sma200_w", "EMA20": "ema20", "EMA50": "ema50", "EMA200": "ema200", "High.6M": "h6m", "Low.6M": "l6m", "Perf.Y": "py", "Perf.YTD": "pytd",
+             "float_shares_percent_current": "ff", "average_volume_10d_calc": "av10", "average_volume_30d_calc": "av30", "average_volume_60d_calc": "av60",
+             "average_volume_90d_calc": "av90", "volume_change": "vchg", "gap": "gap", "Volatility.W": "volw", "Volatility.M": "volm", "KltChnl.upper": "kcu", "KltChnl.lower": "kcl",
+             "DonchCh20.Upper": "dcu", "DonchCh20.Lower": "dcl", "Aroon.Up": "aru", "Aroon.Down": "ard", "Pivot.M.Classic.R1": "pr1", "Pivot.M.Classic.S1": "ps1", "Pivot.M.Classic.Middle": "pmid"}
+for _tf, _sfx in (("", ""), ("|1W", "_w"), ("|1M", "_m")):
+    for _b, _k in MTF_BASES.items():
+        if _tf == "" and _k in ("sma20", "sma50", "rsi", "adx", "bbu", "bbl"):
+            continue  # günlükte zaten var
+        COLUMNS.append(_b + _tf)
+        RENAME[_b + _tf] = _k + _sfx
+for _b, _k in MTF_EXTRA.items():
+    COLUMNS.append(_b)
+    RENAME[_b] = _k
+
 
 def clean(v):
     if v is None or (isinstance(v, float) and math.isnan(v)):

@@ -133,6 +133,7 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
 .warns{margin:0;padding-left:16px;font-size:12.5px}.warns li{margin:3px 0}
 .bl{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;white-space:nowrap}
 .bl-strong{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
+.bl-cand{background:color-mix(in srgb,var(--up) 14%,transparent);color:var(--up)}
 .bl-watch{background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent2)}
 .bl-neutral{background:var(--panel2);color:var(--mute)}
 .bl-avoid{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}
@@ -262,6 +263,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
+      <a data-view="grafik"><i data-ico="bars"></i>Grafik &amp; Göstergeler</a>
+      <a data-view="zaman"><i data-ico="compass"></i>Zaman Taraması</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
       <a data-view="tarayici"><i data-ico="filter"></i>Tarayıcı (tüm göstergeler)</a>
       <a data-view="ekranlar"><i data-ico="filter"></i>Efsane Ekranları</a>
@@ -356,9 +359,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-adaylar">
       <section class="card">
         <div class="filterbar">
-          <label>Liste<select id="mode"><option value="guc">Güç liderleri (önerilen)</option><option value="alt">Alt banda yakın (ters dönüş)</option><option value="hepsi">Tüm likit hisseler (RS sırası)</option></select></label>
+          <label>Liste<select id="mode"><option value="guc">Güç liderleri + çok zamanlı liderler (önerilen)</option><option value="alt">Alt banda yakın (ters dönüş)</option><option value="hepsi">Tüm likit hisseler (RS sırası)</option></select></label>
           <label>Sektör<select id="sec"><option value="">Hepsi</option></select></label>
-          <label>Komite kararı<select id="lab"><option value="">Hepsi</option><option value="strong">Güçlü aday</option><option value="watch">İzle</option><option value="neutral">Nötr</option><option value="avoid">Uzak dur</option></select></label>
+          <label>Komite kararı<select id="lab"><option value="">Hepsi</option><option value="strong">Güçlü aday</option><option value="cand">Aday</option><option value="watch">İzle</option><option value="neutral">Nötr</option><option value="avoid">Uzak dur</option></select></label>
           <label id="tolLbl" style="display:none">Alt banda yakınlık (%)<input id="tol" type="number" value="3" step="0.5" min="0"></label>
           <label>SMA50<select id="sma"><option value="any">Hepsi</option><option value="above">Üstünde</option><option value="below">Altında</option></select></label>
           <label class="inline"><input id="favonly" type="checkbox"> Sadece favoriler ★</label>
@@ -389,6 +392,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-karsilastir"><section class="card" id="cmpView"></section></div>
 
     <!-- TARAYICI -->
+    <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
+    <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
     <div class="view" id="v-tarayici"><section class="card" id="scrView"></section></div>
 
     <!-- ANALİZ MASASI -->
@@ -690,10 +695,11 @@ const COLS = [
   ["bbDist", "Alt banda %", "hide-sm", "Fiyatın Bollinger alt bandına uzaklığı. Araştırmada alt banda yakın hisseler piyasanın gerisinde kaldı."],
   ["rsi", "RSI", "hide-sm", "14 günlük RSI: 30 altı aşırı satım, 70 üstü aşırı alım."],
   ["chips", "Efsaneler", "hide-sm", "B Buffett · S Simons · L Livermore · K Kellogg · Ş Şeytanın Avukatı. Yeşil olumlu, gri nötr, kırmızı olumsuz."],
-  ["score", "Komite", "", "Efsanelerin toplam oyu: ≥3 güçlü aday, ≥1 izle, 0 nötr, negatif uzak dur."],
+  ["mtfb", "G·H·A", "hide-sm", "Çok zamanlı skor (0-100): Günlük · Haftalık · Aylık. Haftalık en tutarlı olanıdır. Ayrıntı: Zaman Taraması sayfası."],
+  ["score", "Komite", "", "Efsanelerin toplam oyu: ≥3 güçlü aday, 2 aday, 1 izle, 0/−1 nötr, ≤−2 uzak dur."],
 ];
-const LABELS = {strong: "GÜÇLÜ ADAY", watch: "İZLE", neutral: "NÖTR", avoid: "UZAK DUR"};
-const labKey = sc => sc >= 3 ? "strong" : sc >= 1 ? "watch" : sc === 0 ? "neutral" : "avoid";
+const LABELS = {strong: "GÜÇLÜ ADAY", cand: "ADAY", watch: "İZLE", neutral: "NÖTR", avoid: "UZAK DUR"};
+const labKey = sc => sc >= 3 ? "strong" : sc === 2 ? "cand" : sc === 1 ? "watch" : sc >= -1 ? "neutral" : "avoid";
 const badge = sc => `<span class="bl bl-${labKey(sc)}">${LABELS[labKey(sc)]}</span>`;
 const chipsOf = r => PERSONAS.map(([k, n, ch]) => `<span class="chip ${r.l[k].v > 0 ? "v1" : r.l[k].v < 0 ? "vm" : "v0"}" title="${n}">${ch}</span>`).join("");
 function fillSectors() {
@@ -707,7 +713,7 @@ function render() {
   current = candidates();
   if (UNIVERSE.length && $("sec").options.length <= 1) fillSectors();
   baseResults = current.map(s => [s, committee(s)]);
-  baseResults.forEach(([s, r]) => { s.score = r.score; const vv = valuation(s); s.upside = vv.upside; s.fair = vv.fair; });
+  baseResults.forEach(([s, r]) => { s.mtfb = s.mtf ? s.mtf.b : null; s.score = r.score; const vv = valuation(s); s.upside = vv.upside; s.fair = vv.fair; });
   const sec = $("sec").value, lab = $("lab").value;
   let results = baseResults.filter(([s, r]) => (!sec || trSector(s.sector) === sec) && (!lab || labKey(r.score) === lab));
   results = [...results].sort((a, b) => {
@@ -721,8 +727,8 @@ function render() {
   $("tbl").tBodies[0].innerHTML = results.length ? results.map(([s, r]) => `<tr data-n="${s.name}" class="${selected === s.name ? "sel" : ""}">
     <td><span class="star ${FAVS.has(s.name) ? "on" : ""}" data-fav="${s.name}" title="Favori">${FAVS.has(s.name) ? "★" : "☆"}</span><b>${s.name}</b><span class="nm">${esc(s.description)}</span></td>
     <td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td><td><b>${fmt(s.rs, 0)}</b></td><td class="hide-sm">${fmt(s.dist52, 1)}</td><td class="hide-sm ${sign(s.upside)}">${s.upside == null ? "–" : fmt(s.upside, 0)}</td><td class="hide-sm">${fmt(s.bbDist)}</td><td class="hide-sm">${fmt(s.rsi, 0)}</td>
-    <td class="hide-sm" style="text-align:right">${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`).join("")
-    : `<tr><td colspan="10" class="mute" style="text-align:center;padding:24px">Kriterlere uyan hisse yok. Filtreleri gevşetmeyi deneyin.</td></tr>`;
+    <td class="hide-sm" style="text-align:right">${chipsOf(r)}</td><td class="hide-sm">${mtfCell(s)}</td><td>${badge(r.score)}</td></tr>`).join("")
+    : `<tr><td colspan="11" class="mute" style="text-align:center;padding:24px">Kriterlere uyan hisse yok. Filtreleri gevşetmeyi deneyin.</td></tr>`;
   $("extra").innerHTML = "<h2>🪑 Efsaneler masaya ek hisse getiriyor</h2><div class='sub'>Listede olmayan ama kendi kriterlerine uyan hisseler. Tıklayarak inceleyin.</div>" +
     extras(current).map(([who, why, arr]) => `<p><b>${who}:</b> <span class="mute">${why}</span><br>${arr.length ?
       arr.map(s => `<span class="pill" data-x="${s.name}">${s.name}</span>`).join("") : "<span class='mute'>Şu an uygun hisse yok.</span>"}</p>`).join("");
@@ -760,6 +766,149 @@ function renderNews() {
       <span>${tagHtml(i.t)}<span class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)}</span></span><span class="mute" style="margin-left:auto;white-space:nowrap">${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></div>`).join("")}</div>`
     : "<p class='mute'>Bu türde haber yok.</p>");
 }
+
+/* ---------- Çok zamanlı skor hücresi, para akışı vekilleri ---------- */
+const scCls = v => v == null ? "" : v >= 70 ? "up" : v <= 30 ? "down" : "";
+function mtfCell(s) {
+  const m = s.mtf; if (!m) return '<span class="mute">–</span>';
+  const f = v => v == null ? "–" : fmt(v, 0);
+  return `<span title="Günlük · Haftalık · Aylık skor"><span class="${scCls(m.d)}">${f(m.d)}</span> · <b class="${scCls(m.w)}">${f(m.w)}</b> · <span class="${scCls(m.m)}">${f(m.m)}</span></span>`;
+}
+function flowHtml(s) {
+  const row = (a, b, c) => `<tr><td style="text-align:left">${a}</td><td>${b}</td><td class="mute" style="text-align:left;white-space:normal">${c}</td></tr>`;
+  const sg = v => v == null ? "–" : (v > 0 ? "+" : "") + fmt(v, 2);
+  const vt = s.av10 > 0 && s.av60 > 0 ? s.av10 / s.av60 : null;
+  return `<details class="meet"><summary>💧 Para akışı ve hacim (derinlik/takas yerine vekiller)</summary><div class="tw"><table><tbody>
+    ${row("CMF günlük / haftalık / aylık", `${sg(s.cmf)} / ${sg(s.cmf_w)} / ${sg(s.cmf_m)}`, "Chaikin Para Akışı: + ise kapanışlar günün üst yarısında, yani alıcı baskın. Araştırmada günlük CMF tutarlı biçimde işe yaradı.")}
+    ${row("MFI (hacim ağırlıklı RSI)", `${fmt(s.mfi, 0)} / ${fmt(s.mfi_w, 0)}`, "80 üstü aşırı alım, 20 altı aşırı satım; tek başına kanıtsız.")}
+    ${row("Hacim eğilimi (10g / 60g ortalama)", vt == null ? "–" : fmt(vt, 2) + "x", "1'in üstü: son haftalarda hacim artıyor.")}
+    ${row("Göreceli hacim (seans düzeltmeli)", s.rvol == null ? "–" : fmt(s.rvol, 2) + "x", "Seans içinde geçen süreye göre tam güne ölçeklenir.")}
+    ${row("VWAP'a göre", s.vwap > 0 ? (s.close / s.vwap - 1 >= 0 ? "+" : "") + fmt((s.close / s.vwap - 1) * 100, 1) + "%" : "–", "Fiyat VWAP üstündeyse gün içi alıcılar kârda.")}
+    ${row("Halka açıklık (float)", s.ff == null ? "–" : "%" + fmt(s.ff, 0), "Düşük halka açıklıkta fiyat daha kolay oynar.")}
+    ${row("Gap (açılış boşluğu)", s.gap == null ? "–" : fmt(s.gap, 2) + "%", "")}
+    </tbody></table></div><p class="note">Emir defteri derinliği ve takas (aracı kurum dağılımı) verisi TradingView'de yoktur; yukarıdaki göstergeler bunların en yakın vekilleridir.</p></details>`;
+}
+
+/* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
+let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
+let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
+const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
+const ZINFO = {
+  uyum: ["Günlük, haftalık ve aylık skorun üçü de ilk %40'ta, haftalık ≥ 70. Geçmişte (2023-26) bu grup 20 günde piyasa ortalamasının ~%1,8 üstünde, diğerleri ~%0,2 altında kaldı; iki yarıda da aynı yönde.", "uyum"],
+  hafta: ["Haftalık skor: haftalık trend, 6 aylık zirveye yakınlık, haftalık SMA50, DI+/DI−, RSI, CMF, 6 ay getiri. En tutarlı bulgu: en iyi %10 dilimi 20 günde ~%2,8 fazla getirdi; boğada ve ayıda pozitif.", "haftalik"],
+  gun: ["Günlük skor: CMF, RSI (momentum), DI+/DI−, fiyat/SMA20. Kısa vadede (5 gün) avantaj küçük ve kararsız; bunu tek başına değil, haftalık güçlü hissede giriş zamanlaması için kullanın.", "gunluk"],
+  ay: ["Aylık skor: uzun trend, 52h yakınlık, aylık CMF, 6 ay ve 1 yıl getiri. 60 günlük ufukta bu örneklemde istatistiksel olarak anlamlı bir ayrışma bulunamadı (yalnızca ~25 bağımsız dönem); bağlam içindir, sinyal sayılmaz.", "aylik"],
+  akis: ["Para girişi: günlük ve haftalık CMF pozitif, hacim ortalamanın üstünde. CMF günlük göstergeler içinde en tutarlı olanıydı (iki yarıda ve boğa/ayıda pozitif) ama etkisi küçüktür.", "gunluk"],
+  topar: ["Haftalık orta, günlük güçlü, para girişi var: dipten dönüş adayları. DENEYSEL: bu kurulum ayrıca test edilmedi; araştırma 'ucuzluk' alımının BIST'te kaybettirdiğini gösterdi, bu yüzden küçük pozisyon ve sıkı stop şart.", null],
+};
+function zRows() {
+  const el = UNIVERSE.filter(s => s.mtf && s.mtf.w != null && s.tl >= zMin && (!zSec || trSector(s.sector) === zSec));
+  const tier = s => mtfTier(s).id;
+  let a, key;
+  if (zTab === "uyum") { a = el.filter(s => tier(s) === "uyumlu"); key = s => s.mtf.b; }
+  else if (zTab === "hafta") { a = el.filter(s => s.mtf.w >= 70); key = s => s.mtf.w; }
+  else if (zTab === "gun") { a = el.filter(s => s.mtf.d >= 70); key = s => s.mtf.d; }
+  else if (zTab === "ay") { a = el.filter(s => s.mtf.m >= 70); key = s => s.mtf.m; }
+  else if (zTab === "akis") { a = el.filter(s => s.cmf > 0.1 && (s.cmf_w == null || s.cmf_w > 0) && (s.rvol == null || s.rvol >= 0.8)); key = s => s.cmf; }
+  else { a = el.filter(s => tier(s) === "toparlanan"); key = s => s.mtf.d; }
+  return a.sort((x, y) => key(y) - key(x));
+}
+function renderZaman() {
+  if (!UNIVERSE.length) { $("zView").innerHTML = "<p class='mute'>Veri bekleniyor…</p>"; return; }
+  const all = UNIVERSE.filter(s => s.mtf && s.mtf.w != null), cnt = {}; all.forEach(s => { const t = mtfTier(s); cnt[t.id] = (cnt[t.id] || 0) + 1; });
+  const rows = zRows(), shown = rows.slice(0, zTop), [info, tkey] = ZINFO[zTab];
+  const secs = [...new Set(UNIVERSE.map(s => trSector(s.sector)))].sort((a, b) => a.localeCompare(b, "tr"));
+  const ev = MTFR && tkey && MTFR.tests[tkey];
+  const evH = tkey === "gunluk" ? "5" : tkey === "aylik" ? "60" : "20", e = ev && ev[evH];
+  const evLine = e ? `<p class="note">Geçmiş test (${MTFR.stocks} hisse, ${MTFR.from} → ${MTFR.to}): en iyi %10 dilimi ${evH} günde piyasa ortalamasının <b>${e.top10 > 0 ? "+" : ""}${fmt(e.top10, 2)}%</b> üstünde (en kötü %20: ${fmt(e.bot20, 2)}%), isabet (piyasayı yenme oranı) <b>%${fmt(e.hit, 0)}</b>, t = ${fmt(e.t, 1)}; ilk yarı ${fmt(e.h1, 2)}% / ikinci yarı ${fmt(e.h2, 2)}%${e.bull != null ? `; boğada ${fmt(e.bull, 2)}%, ayıda ${e.bear != null ? fmt(e.bear, 2) + "%" : "–"}` : ""}.</p>` : "";
+  const regime = REGIME ? `<div class="note" style="border-left:3px solid var(--warn);padding-left:10px;margin:8px 0">Piyasa rejimi: <b>${REGIME.label}</b> · hisselerin %${fmt(REGIME.a50, 0)}'i SMA50, %${fmt(REGIME.a200, 0)}'i SMA200 üstünde. ${REGIME.trend === "bear" ? "Ayı piyasasında eski 'güçlü aday' süzgeci (4 efsaneden 3'ü onaylamalı) neredeyse hiç hisse bırakmaz; bu sayfa mutlak değil GÖRECELİ güce bakar: piyasanın gerisindekileri eler, öndekileri sıralar. Skorların avantajı piyasa ortalamasına göredir; hisse piyasadan iyi olsa da mutlak getirisi eksi olabilir." : ""}</div>` : "";
+  const T = id => MTF_TIERS[id].label;
+  $("zView").innerHTML = `<h2>Zaman Taraması <span class="sub">günlük · haftalık · aylık</span></h2>
+    <p class="note">Her hisse üç zaman diliminde, TradingView göstergeleriyle puanlanır (0-100; evrendeki yüzdelik sıra ortalaması). Göstergeler önce BIST geçmişinde ufuklarında test edilip seçildi; ağırlık en tutarlı olan haftalık skorda.</p>
+    ${regime}
+    <div class="tabs">${ZTABS.map(([k, n]) => `<button class="tab ${zTab === k ? "on" : ""}" data-ztab="${k}">${n}${k === zTab ? ` (${rows.length})` : ""}</button>`).join("")}</div>
+    <p class="note">${info}</p>${evLine}
+    <div class="controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">
+      <label>Min. hacim (mn TL)<select id="zMin">${[1, 5, 10, 30, 100].map(v => `<option value="${v}" ${zMin === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>Sektör<select id="zSec"><option value="">Hepsi</option>${secs.map(n => `<option ${zSec === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+      <label>Göster<select id="zTop">${[20, 40, 100, 300].map(v => `<option value="${v}" ${zTop === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <span class="mute">Evren: ${Object.entries(cnt).map(([k, v]) => `${T(k)} ${v}`).join(" · ")}</span></div>
+    ${shown.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük skor">G</th><th title="Haftalık skor">H</th><th title="Aylık skor">A</th><th title="0,25 G + 0,5 H + 0,25 A">Birleşik</th><th>Kurulum</th><th title="Haftalık skorun geçmişte 20 günde verdiği piyasa üstü getiri">Geçmiş 20g beklenti</th><th title="Chaikin Para Akışı (günlük)">CMF</th><th>Efsaneler</th><th>Komite</th></tr></thead><tbody>${shown.map(s => {
+      const r = committee(s), t = mtfTier(s), ex = mtfExpect(s), m = s.mtf;
+      return `<tr data-x="${esc(s.name)}"><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td>
+        <td class="${scCls(m.d)}">${fmt(m.d, 0)}</td><td class="${scCls(m.w)}"><b>${fmt(m.w, 0)}</b></td><td class="${scCls(m.m)}">${fmt(m.m, 0)}</td><td><b>${fmt(m.b, 0)}</b></td>
+        <td><span class="vt ${t.cls || "mute"}" title="${esc(t.tip)}">${t.label}</span></td><td class="${sign(ex)}">${ex == null ? "–" : (ex > 0 ? "+" : "") + fmt(ex, 1) + "%"}</td><td class="${sign(s.cmf)}">${s.cmf == null ? "–" : fmt(s.cmf, 2)}</td>
+        <td>${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`; }).join("")}</tbody></table></div>`
+      : `<p class="mute">Bu süzgeçle hisse yok. Minimum hacmi düşürmeyi ya da başka bir sekmeyi deneyin.</p>`}
+    <details style="margin-top:12px"><summary><b>Hangi göstergeler kanıtlandı?</b> (BIST 2023-26 testi)</summary>${evidenceTable()}</details>
+    <p class="note">Dürüst okuma: bu skorlar küçük ama tutarlı bir avantaj gösterir (haftalıkta piyasayı yenme oranı yaklaşık %52-53; avantaj büyüklükte, isabet oranında değil). "Doğruluk yüzdesi" garanti edilemez; hayatta kalma yanlılığı, tek rejim ve maliyetsizlik testi iyimser kılar. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>`;
+  $("zMin").onchange = e => { zMin = +e.target.value; store.set("zMin", zMin); renderZaman(); };
+  $("zSec").onchange = e => { zSec = e.target.value; renderZaman(); };
+  $("zTop").onchange = e => { zTop = +e.target.value; renderZaman(); };
+}
+function evidenceTable() {
+  if (!MTFS) return "<p class='mute'>Araştırma verisi yüklenmedi.</p>";
+  const NAMES = {gunluk: "Günlük (5 günlük ufuk)", haftalik: "Haftalık (20 gün)", aylik: "Aylık (60 gün)"};
+  return Object.entries(MTFS.tests).map(([tf, o]) => `<h3 style="margin:10px 0 4px">${NAMES[tf]}</h3><div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th>IC</th><th>t</th><th>En iyi−en kötü %20 (%)</th><th>Pozitif dönem %</th><th>İlk yarı IC</th><th>İkinci yarı IC</th><th>Boğa IC</th><th>Ayı IC</th></tr></thead><tbody>${Object.entries(o).filter(([, e]) => e).map(([k, e]) => `<tr class="${e.t >= 2 && e.ic1 * e.ic2 > 0 ? "up" : ""}"><td style="text-align:left">${esc(k)}</td><td>${e.ic}</td><td>${fmt(e.t, 1)}</td><td>${e.spread == null || Number.isNaN(e.spread) ? "–" : fmt(e.spread, 2)}</td><td>${fmt(e.pos, 0)}</td><td>${e.ic1}</td><td>${e.ic2}</td><td>${e.ic_bull ?? "–"}</td><td>${e.ic_bear ?? "–"}</td></tr>`).join("")}</tbody></table></div>`).join("") +
+    `<p class="note">IC: gösterge sıralaması ile sonraki dönem fazla getirisi sıralaması arasındaki korelasyon. Yeşil satır: t ≥ 2 ve iki yarıda aynı işaret. Aylık ufukta örnek küçüktür (≈25 bağımsız dönem), sonuçlara güvenilmemelidir.</p>`;
+}
+document.addEventListener("click", e => { const z = e.target.closest("[data-ztab]"); if (z) { zTab = z.dataset.ztab; store.set("zTab", zTab); renderZaman(); } });
+
+/* ---------- Grafik & Göstergeler: TradingView gelişmiş grafik (kendi göstergeni ekleyebilirsin) ---------- */
+let chSym = store.get("chSym", "THYAO"), chIv = store.get("chIv", "D"), chSt = store.get("chSt", ["Volume@tv-basicstudies"]), chLoaded = false;
+const CH_IV = [["15", "15 dk"], ["60", "1 saat"], ["240", "4 saat"], ["D", "Günlük"], ["W", "Haftalık"], ["M", "Aylık"]];
+const CH_ST = [["Volume@tv-basicstudies", "Hacim"], ["MASimple@tv-basicstudies", "SMA"], ["MAExp@tv-basicstudies", "EMA"], ["BB@tv-basicstudies", "Bollinger"], ["RSI@tv-basicstudies", "RSI"], ["MACD@tv-basicstudies", "MACD"],
+  ["Stochastic@tv-basicstudies", "Stokastik"], ["IchimokuCloud@tv-basicstudies", "Ichimoku"], ["ChaikinMoneyFlow@tv-basicstudies", "CMF"], ["MoneyFlow@tv-basicstudies", "MFI"], ["OnBalanceVolume@tv-basicstudies", "OBV"],
+  ["VWAP@tv-basicstudies", "VWAP"], ["ParabolicSAR@tv-basicstudies", "Parabolik SAR"], ["ATR@tv-basicstudies", "ATR"], ["DirectionalMovementIndex@tv-basicstudies", "DMI/ADX"]];
+function loadTv() {
+  return new Promise((res, rej) => {
+    if (window.TradingView) return res();
+    const s = document.createElement("script"); s.src = "https://s3.tradingview.com/tv.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s);
+  });
+}
+function chartHtmlSelf() {
+  const s = UNIVERSE.find(x => x.name === chSym);
+  return s ? `<div class="note">${valLine(s)} · Çok zamanlı skor G·H·A: ${mtfCell(s)} · ${mtfTier(s) ? mtfTier(s).label : ""}</div>` : "";
+}
+async function drawTv() {
+  const box = $("tvBox"); if (!box) return;
+  box.innerHTML = "<p class='mute' style='padding:16px'>Grafik yükleniyor…</p>";
+  try {
+    await loadTv();
+    box.innerHTML = '<div id="tvChart" style="height:100%"></div>';
+    new TradingView.widget({container_id: "tvChart", autosize: true, symbol: "BIST:" + chSym, interval: chIv, timezone: "Europe/Istanbul", locale: "tr",
+      theme: document.documentElement.dataset.theme === "light" ? "light" : "dark", style: "1", toolbar_bg: "transparent", enable_publishing: false, allow_symbol_change: true,
+      hide_side_toolbar: false, withdateranges: true, save_image: true, details: false, studies: chSt});
+  } catch (err) { box.innerHTML = `<p class="down" style="padding:16px">TradingView grafiği yüklenemedi (ağ engeli olabilir). <a href="https://tr.tradingview.com/chart/?symbol=BIST%3A${encodeURIComponent(chSym)}" target="_blank" rel="noopener">TradingView'de aç ↗</a></p>`; }
+}
+let chKey = "";
+function renderChartPage() {
+  const key = [chSym, chIv, chSt.join(), document.documentElement.dataset.theme].join("|");
+  if ($("tvChart") && key === chKey) { $("chSelf").innerHTML = chartHtmlSelf(); return; } // veri yenilenince grafiği sıfırlama
+  chKey = key;
+  const favs = [...FAVS].slice(0, 12), recent = (CMP || []).slice(0, 3);
+  $("chView").innerHTML = `<h2>Grafik &amp; Göstergeler <span class="sub">TradingView · 15 dk gecikmeli</span></h2>
+    <div class="controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0">
+      <label>Hisse<input id="chIn" list="tickers" value="${esc(chSym)}" style="width:120px" placeholder="THYAO"></label><button id="chGo" class="pbtn">Göster</button>
+      <a class="mute" id="chExt" target="_blank" rel="noopener" href="https://tr.tradingview.com/chart/?symbol=BIST%3A${encodeURIComponent(chSym)}">TradingView'de aç ↗</a></div>
+    <div class="tabs">${CH_IV.map(([k, n]) => `<button class="tab ${chIv === k ? "on" : ""}" data-chiv="${k}">${n}</button>`).join("")}</div>
+    <div class="tabs">${CH_ST.map(([k, n]) => `<button class="tab ${chSt.includes(k) ? "on" : ""}" data-chst="${k}">${n}</button>`).join("")}</div>
+    ${favs.length ? `<div class="note">Favoriler: ${favs.map(n => `<span class="pill" data-chsym="${esc(n)}">${esc(n)}</span>`).join("")}</div>` : ""}
+    <div id="chSelf">${chartHtmlSelf()}</div>
+    <div id="tvBox" style="height:calc(100vh - 330px);min-height:480px;margin-top:8px;border:1px solid var(--line);border-radius:12px;overflow:hidden"></div>
+    <p class="note">Grafikteki <b>Göstergeler</b> düğmesinden TradingView'deki tüm göstergeleri kendiniz ekleyebilir, çizim araçlarını kullanabilirsiniz (hesap gerekmez). Yukarıdaki düğmeler sık kullanılanları hızlıca açar/kapatır; ayarlarınız bu tarayıcıda hatırlanır. BIST verisi 15 dk gecikmelidir.</p>`;
+  drawTv();
+}
+function chGo(sym) { sym = String(sym || "").trim().toUpperCase().replace(/^BIST:/, ""); if (!sym) return; chSym = sym; store.set("chSym", sym); renderChartPage(); history.replaceState(null, "", "#grafik"); }
+document.addEventListener("click", e => {
+  if (view !== "grafik") return;
+  if (e.target.closest("#chGo")) { chGo($("chIn").value); return; }
+  const iv = e.target.closest("[data-chiv]"); if (iv) { chIv = iv.dataset.chiv; store.set("chIv", chIv); renderChartPage(); return; }
+  const st = e.target.closest("[data-chst]"); if (st) { const k = st.dataset.chst; chSt = chSt.includes(k) ? chSt.filter(x => x !== k) : [...chSt, k]; store.set("chSt", chSt); renderChartPage(); return; }
+  const fv = e.target.closest("[data-chsym]"); if (fv) { chGo(fv.dataset.chsym); }
+});
+document.addEventListener("keydown", e => { if (view === "grafik" && e.key === "Enter" && e.target.id === "chIn") chGo(e.target.value); });
+function openChart(name) { chSym = name; store.set("chSym", name); closeDetail(); show("grafik"); }
 
 /* ---------- Efsane ekranları ---------- */
 let screenTab = "buffett", screenCache = null;
@@ -1668,7 +1817,7 @@ function renderCalendar() {
 
 /* ---------- Pozisyon hesaplayıcı, detay yardımcıları ---------- */
 function actionsHtml(name) {
-  return `<div class="actions"><button data-cmp="${esc(name)}">⇄ ${CMP.includes(name) ? "Karşılaştırmadan çıkar" : "Karşılaştır"}</button><button data-share="${esc(name)}">🔗 Bağlantıyı kopyala</button><button data-print="1">🖨 PDF / Yazdır</button><button data-an="${esc(name)}">🔎 Tam analiz</button></div>`;
+  return `<div class="actions"><button data-cmp="${esc(name)}">⇄ ${CMP.includes(name) ? "Karşılaştırmadan çıkar" : "Karşılaştır"}</button><button data-share="${esc(name)}">🔗 Bağlantıyı kopyala</button><button data-print="1">🖨 PDF / Yazdır</button><button data-an="${esc(name)}">🔎 Tam analiz</button><button data-chart="${esc(name)}">📈 Gelişmiş grafik</button></div>`;
 }
 function eventsHtml(s) {
   const bits = [];
@@ -1740,6 +1889,14 @@ function meetingHtml(s, r) {
   const m = meeting(s, r);
   return `<details class="meet" open><summary>🗣 Masa toplantısı</summary>${m.lines.map(l => `<div class="say"><span class="av av-${l.who}">${WHO[l.who][1]}</span><div><b>${WHO[l.who][0]}</b><div>${esc(l.text)}</div></div></div>`).join("")}<div class="verdict">${esc(m.verdict)}</div></details>`;
 }
+function mtfBox(s) {
+  const m = s.mtf, t = mtfTier(s); if (!m || !t) return "";
+  const bar = (n, v, h) => `<div class="row2"><span class="mute">${n}</span><b class="${scCls(v)}">${v == null ? "–" : fmt(v, 0) + "/100"}</b></div>`;
+  const ex = mtfExpect(s);
+  return `<div class="note" style="margin:8px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px"><b>Çok zamanlı skor:</b> <span class="vt ${t.cls || "mute"}" title="${esc(t.tip)}">${t.label}</span>
+    ${bar("Günlük (zamanlama, 1-5 gün)", m.d)}${bar("Haftalık (ana skor, 2-4 hafta)", m.w)}${bar("Aylık (bağlam)", m.m)}
+    ${ex != null ? `<div class="mute">Geçmişte haftalık skoru bu dilimdeki hisseler 20 günde piyasa ortalamasının ${ex > 0 ? "+" : ""}${fmt(ex, 1)}% ${ex > 0 ? "üstünde" : "altında"} kaldı.</div>` : ""}</div>`;
+}
 /* ---------- Detay paneli (sağdan açılan çekmece) ---------- */
 function detail(name, target = "detail") {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
@@ -1750,7 +1907,7 @@ function detail(name, target = "detail") {
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
-    meetingHtml(s, r) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    mtfBox(s) + meetingHtml(s, r) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="${P}cv" style="height:150px"></canvas>
@@ -1888,7 +2045,7 @@ function renderDashboard() {
   const s0 = UNIVERSE.find(x => x.name === want);
   $("statNote").textContent = s0 ? `${s0.description ?? ""} · Fiyat ${fmt(s0.close)} · alt bant ${fmt(s0.bb_lower)} · SMA50 ${fmt(s0.sma50)} (kesikli) · gölge: Bollinger bandı` : "";
   drawStat();
-  const lab = [["strong", "var(--up)"], ["watch", "var(--accent2)"], ["neutral", "var(--mute)"], ["avoid", "var(--down)"]];
+  const lab = [["strong", "var(--up)"], ["cand", "color-mix(in srgb,var(--up) 60%,var(--accent2))"], ["watch", "var(--accent2)"], ["neutral", "var(--mute)"], ["avoid", "var(--down)"]];
   const segs = lab.map(([k, c]) => ({k, c, n: LABELS[k], v: sc.filter(x => labKey(x) === k).length}));
   donut($("donut1"), segs.map(s => ({v: s.v, color: css(s.c.slice(4, -1))})), String(R0.length), "aday");
   $("donutList").innerHTML = segs.map(s => `<div class="li" data-lab="${s.k}" title="Bu kararı alan hisseleri listele"><span class="dot" style="background:color-mix(in srgb,${s.c} 22%,transparent);color:${s.c}">●</span>${s.n}<span class="v">${s.v}</span></div>`).join("");
@@ -1935,6 +2092,8 @@ function refreshView() {
   else if (view === "kutu") renderInbox();
   else if (view === "rapor") renderReport();
   else if (view === "tarayici") renderScreener();
+  else if (view === "zaman") renderZaman();
+  else if (view === "grafik") renderChartPage();
   else if (view === "atolye") renderBacktestLab();
   else if (view === "portfoyum") renderMyPort();
   else if (view === "arastirma") renderResearch();
@@ -2015,6 +2174,8 @@ async function getJson(url) { try { const r = await fetch(url, {cache: "no-store
 async function loadAux() {
   const n = await getJson("news.json?t=" + Date.now()); if (n && n.news) NEWS = n.news;
   if (!RESEARCH) { const rs = await getJson("research.json?t=" + Math.floor(Date.now() / 36e5)); if (rs && rs.signals) { RESEARCH = rs; screenCache = null; } }
+  if (!MTFR) { const m = await getJson("mtf_composite.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFR = m; }
+  if (!MTFS) { const m = await getJson("mtf_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFS = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
     if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
@@ -2058,6 +2219,7 @@ document.addEventListener("click", e => {
   const sc = e.target.closest("[data-sector]"); if (sc) { $("lab").value = ""; fillSectors(); $("sec").value = sc.dataset.sector; show("adaylar"); return; }
   const lb = e.target.closest("[data-lab]"); if (lb) { $("sec").value = ""; $("lab").value = lb.dataset.lab; show("adaylar"); return; }
   const an = e.target.closest("[data-an]"); if (an) { openAnalysis(an.dataset.an); return; }
+  const ch = e.target.closest("[data-chart]"); if (ch) { openChart(ch.dataset.chart); return; }
   if (e.target.closest("#anGo")) { openAnalysis(($("anIn").value || "").trim().toUpperCase()); return; }
   const mq = e.target.closest("[data-my-quick]"); if (mq) { const n = mq.dataset.myQuick, s = UNIVERSE.find(x => x.name === n); const sh = parseFloat(window.prompt(`${n} kaç adet?`, "100")); if (!(sh > 0)) return; const c = parseFloat(window.prompt(`${n} ortalama maliyetiniz (TL)?`, String(s ? s.close : ""))); if (myAdd(n, sh, c)) { toast(n + " portföyüne eklendi"); show("portfoyum"); } return; }
   if (e.target.closest("[data-my-add]")) { if (myAdd($("myN").value, parseFloat($("mySh").value), parseFloat($("myCost").value))) renderMyPort(); return; }
@@ -2104,9 +2266,10 @@ buildRules();
 applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
 let first = location.hash.slice(1);
 if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(escape(atob(first.slice(7))))); scrSave(); } catch (err) {} first = "tarayici"; }
+if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "grafik", "zaman", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

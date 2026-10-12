@@ -17,7 +17,20 @@ const RULE_DEFS = [
 ];
 const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
 
+/* Seans içi hacim düzeltmesi: TradingView'in göreceli hacmi (rvol) "bugüne kadarki hacim / 10 günlük TAM gün ortalaması"dır.
+   Öğleden önce her hisse düşük görünür (medyan ≈0,4) ve "hacim patlaması" hiç yakalanmaz. Geçen seans payına bölerek tam güne ölçeklenir
+   (BIST sürekli işlem 10:00-18:00; hacim U biçimli olduğundan geçen süre^0,75 kullanılır). Seans dışında düzeltme yoktur. */
+function sessionFrac() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Istanbul", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  if (p.weekday === "Sat" || p.weekday === "Sun") return 1;
+  const min = (+p.hour % 24) * 60 + +p.minute, x = (min - 600) / 480;
+  if (x >= 1 || x <= 0) return 1;
+  return Math.max(0.12, Math.pow(x, 0.75));
+}
 function enrich(s) {
+  if (s.rvolRaw === undefined) s.rvolRaw = s.rvol;
+  const fr = sessionFrac();
+  s.rvol = s.rvolRaw != null && fr < 1 ? s.rvolRaw / fr : s.rvolRaw;
   s.ok = s.close > 0 && s.bb_lower != null && s.bb_upper != null && s.sma50 != null;
   s.bbDist = s.ok ? (s.close / s.bb_lower - 1) * 100 : null;
   s.smaDist = s.ok ? (s.close / s.sma50 - 1) * 100 : null;
@@ -53,6 +66,7 @@ function computeRegime(universe, hist) {
 }
 /* Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getirinin yüzdelik ortalaması (research.py ile aynı bileşim) */
 function rankUniverse(uni) {
+  rankMtf(uni);
   const el = uni.filter(s => s.ok && s.tl >= 5 && s.h52 > 0);
   el.forEach(s => { s._rk = []; });
   for (const key of ["dist52", "p6m", "p1m"]) {
@@ -62,6 +76,59 @@ function rankUniverse(uni) {
   el.forEach(s => { s.rs = s._rk.length >= 2 ? s._rk.reduce((a, b) => a + b, 0) / s._rk.length : null; delete s._rk; });
   const inEl = new Set(el);
   uni.forEach(s => { if (!inEl.has(s)) s.rs = null; });
+}
+/* ---------- Çok zamanlı skor (günlük / haftalık / aylık) ----------
+   mtf_research.py: göstergeler zaman diliminin ufkunda test edildi (günlük→5g, haftalık→20g, aylık→60g); mtf_composite.py bileşikleri sınadı.
+   Her skor, seçilen göstergelerin evren içindeki yüzdelik sıralamasının ortalamasıdır (0-100). Haftalık skor en tutarlı olandır;
+   günlük skor zamanlama, aylık skor bağlam içindir. Göstergeler TradingView'in kendi hesaplarıdır (haftalık |1W, aylık |1M). */
+function pctRankMap(el, fn) {
+  const arr = el.map(s => [fn(s), s]).filter(([v]) => v != null && Number.isFinite(v)).sort((a, b) => a[0] - b[0]), m = new Map();
+  for (let i = 0; i < arr.length;) { // eşit değerlere ortalama sıra
+    let j = i; while (j + 1 < arr.length && arr[j + 1][0] === arr[i][0]) j++;
+    const r = arr.length > 1 ? (i + j) / 2 / (arr.length - 1) * 100 : 50; for (let k = i; k <= j; k++) m.set(arr[k][1], r); i = j + 1;
+  }
+  return m;
+}
+const dmi = (a, b) => a != null && b != null ? a - b : null;
+const MTF_FEATS = {
+  d: [["CMF (para akışı)", s => s.cmf], ["RSI (momentum, aşırı satım değil)", s => s.rsi], ["DI+ − DI− (yön)", s => dmi(s.pdi, s.mdi)], ["Fiyat/SMA20", s => s.sma20 > 0 ? s.close / s.sma20 - 1 : null]],
+  w: [["Haftalık trend (fiyat > SMA20 > SMA50)", s => s.sma20_w > 0 && s.sma50_w > 0 ? (s.close > s.sma20_w && s.sma20_w > s.sma50_w ? 1 : 0) : null],
+      ["6 aylık zirveye yakınlık", s => s.h6m > 0 ? s.close / s.h6m - 1 : null], ["Fiyat/haftalık SMA50", s => s.sma50_w > 0 ? s.close / s.sma50_w - 1 : null],
+      ["Haftalık DI+ − DI−", s => dmi(s.pdi_w, s.mdi_w)], ["Haftalık RSI", s => s.rsi_w], ["Haftalık CMF", s => s.cmf_w], ["6 ay getiri", s => s.p6m]],
+  m: [["Uzun trend (SMA50 > SMA200)", s => trendUp(s) == null ? null : trendUp(s) ? 1 : 0], ["52 hafta zirvesine yakınlık", s => s.dist52], ["Aylık CMF", s => s.cmf_m], ["6 ay getiri", s => s.p6m], ["1 yıl getiri", s => s.py]],
+};
+function rankMtf(uni) {
+  const el = uni.filter(s => s.ok && s.tl >= 5);
+  const sc = {};
+  for (const tf of ["d", "w", "m"]) {
+    const maps = MTF_FEATS[tf].map(([, fn]) => pctRankMap(el, fn));
+    sc[tf] = new Map(el.map(s => { const v = maps.map(m => m.get(s)).filter(x => x != null); return [s, v.length >= Math.ceil(maps.length / 2) ? v.reduce((a, b) => a + b, 0) / v.length : null]; }));
+  }
+  const inEl = new Set(el);
+  uni.forEach(s => {
+    if (!inEl.has(s)) { s.mtf = null; return; }
+    const d = sc.d.get(s), w = sc.w.get(s), m = sc.m.get(s);
+    s.mtf = {d, w, m, b: w == null ? null : 0.25 * (d ?? 50) + 0.5 * w + 0.25 * (m ?? 50)};
+  });
+}
+let MTFR = null; // mtf_composite.json: bileşik skorların geçmiş testi
+function mtfExpect(s) { // haftalık skorun dilimine göre geçmiş 20 günlük fazla getiri (%)
+  const t = MTFR && MTFR.tests && MTFR.tests.haftalik && MTFR.tests.haftalik["20"];
+  if (!t || !s.mtf || s.mtf.w == null) return null;
+  return t.dec[Math.min(9, Math.floor(s.mtf.w / 10))];
+}
+const MTF_TIERS = {
+  uyumlu: {label: "Uyumlu lider", cls: "up", tip: "Günlük, haftalık ve aylık skorların üçü de ilk %40'ta ve haftalık ≥ 70. Geçmişte üç zaman diliminin uyumu en iyi ayrışmayı verdi."},
+  hlider: {label: "Haftalık lider", cls: "up", tip: "Haftalık skor ≥ 80: en tutarlı bulgu (iki yarıda ve boğa/ayı rejiminde pozitif)."},
+  toparlanan: {label: "Toparlanan (deneysel)", cls: "", tip: "Haftalık orta (50-80), günlük ≥ 75 ve para girişi (CMF > 0): erken dönüş adayı. Bu grup ayrıca test EDİLMEDİ; deneysel."},
+  zayif: {label: "Zayıf", cls: "down", tip: "Haftalık skor ≤ 30: geçmişte piyasanın altında kalan grup."},
+  notr: {label: "Nötr", cls: "", tip: "Belirgin bir üstünlük yok."},
+};
+function mtfTier(s) {
+  const m = s.mtf; if (!m || m.w == null) return null;
+  const d = m.d ?? 50, w = m.w, mo = m.m ?? 50;
+  const id = w >= 70 && d >= 60 && mo >= 60 ? "uyumlu" : w >= 80 ? "hlider" : w < 80 && w >= 50 && d >= 75 && s.cmf > 0 ? "toparlanan" : w <= 30 ? "zayif" : "notr";
+  return {id, ...MTF_TIERS[id]};
 }
 const rsDecile = s => s.rs == null ? null : Math.min(9, Math.floor(s.rs / 10));
 const trendUp = s => s.sma200 == null ? null : s.close > s.sma50 && s.sma50 > s.sma200;
@@ -215,6 +282,7 @@ function simons(s) {
   const f = exp != null && s10 ? exp / 100 / ((s10 / 100) ** 2) : null;
   const w = f != null && f > 0 ? Math.min(R.sCap, R.sKelly * f * 100) : 0;
   const top = RESEARCH && RESEARCH.rs_top_trend, tr = trendUp(s);
+  const mt = s.mtf, mexp = mtfExpect(s), mtOk = mt && mt.w != null && mt.w >= 80 && mexp != null && mexp >= R.sEdge;
   const checks = [
     chk(exp == null ? null : exp >= R.sEdge, `Model beklentisi: 10 günde piyasa ortalamasının ≥ %${R.sEdge} üstü`, exp == null ? "araştırma yok" : `${exp > 0 ? "+" : ""}${fmt(exp, 2)}% (RS dilimi ${dec == null ? "–" : dec + 1}/10)`),
     chk(s.rs == null ? null : s.rs >= R.sRs, `Göreceli güç yüzdesi ≥ ${R.sRs} (52 hafta yakınlığı + 6 ay + 1 ay)`, s.rs == null ? "–" : fmt(s.rs, 0)),
@@ -223,17 +291,20 @@ function simons(s) {
     chk(edge == null ? null : edge >= 0.1, "Beklenti/oynaklık oranı ≥ 0,1 (gürültüye göre sinyal)", edge == null ? "–" : fmt(edge, 2)),
     chk(top ? top.n >= 20 : null, "Model yeterli gözlemle test edilmiş (≥ 20 örtüşmeyen dönem)", top ? `${top.n} dönem, isabet ${pc(top.win)}` : "–"),
     chk(s.tl >= R.kTl / 2, "Likit (modelin işlem yapabileceği boyut)", `${fmt(s.tl, 0)} mn TL`),
+    chk(mt && mt.w != null ? mt.w >= 70 : null, "Haftalık çok göstergeli skor ≥ 70 (araştırmanın en tutarlı grubu)", mt && mt.w != null ? `${fmt(mt.w, 0)}/100${mexp != null ? `, geçmiş 20g fazla getiri ${mexp > 0 ? "+" : ""}${fmt(mexp, 1)}%` : ""}` : "–"),
+    chk(mt && mt.d != null && mt.w != null && mt.m != null ? mt.d >= 60 && mt.w >= 60 && mt.m >= 60 : null, "Üç zaman dilimi uyumlu (günlük, haftalık, aylık skorların hepsi ≥ 60)", mt ? `${fmt(mt.d, 0)} / ${fmt(mt.w, 0)} / ${fmt(mt.m, 0)}` : "–"),
   ];
   const k = tally(checks);
   let v = 0;
   if (exp != null && (exp <= -0.8 || pen.length)) v = -1;
   else if (exp != null && exp >= R.sEdge && s.rs >= R.sRs && !pen.length) v = 1;
-  const t = v > 0 ? `Model "al" diyor: RS dilimi ${dec + 1}/10, beklenen fazla getiri ${exp > 0 ? "+" : ""}${fmt(exp, 2)}% / 10 gün. Bunu bir hikâyeye bağlamıyorum; örüntü geçmişte (${top ? top.n : "?"} dönemde) kazandırdı. Tek işlemde haklı olmak zorunda değilim; küçük avantajı çok işleme yayarım.`
+  else if (mtOk && !pen.length && (exp == null || exp > -0.8)) v = 1; // RS dilimi sınırda olsa da haftalık çok göstergeli skor güçlüyse model olumlu
+  const t = v > 0 ? `Model "al" diyor: ${exp != null ? `RS dilimi ${dec + 1}/10, beklenen fazla getiri ${exp > 0 ? "+" : ""}${fmt(exp, 2)}% / 10 gün` : "haftalık çok göstergeli skor güçlü"}${mtOk ? `; haftalık skor ${fmt(mt.w, 0)}/100 (geçmişte bu dilim 20 günde ${mexp > 0 ? "+" : ""}${fmt(mexp, 1)}% fazla getirdi)` : ""}. Bunu bir hikâyeye bağlamıyorum; örüntü geçmişte (${top ? top.n : "?"} dönemde) kazandırdı. Tek işlemde haklı olmak zorunda değilim; küçük avantajı çok işleme yayarım.`
     : v < 0 ? `Model karşı: ${pen.length ? pen.join(", ") + " geçmişte tutarlı biçimde kaybettirdi" : "RS dilimi en alt grupta, beklenti negatif"}. Modelin dediğini yaparım, kendi fikrimi araya sokmam.`
     : "Beklenti avantaj eşiğinin altında. Avantaj yoksa işlem yok; modeli zorlamam.";
   const plan = w > 0 ? `Önerilen ağırlık %${fmt(w, 1)} (kesirli Kelly ${R.sKelly}, tavan %${R.sCap}). Ufuk 10 iş günü; süre dolunca ya da model skoru bozulunca çıkar. Aşırı sapmaya karşı −%8 emniyet stopu.`
     : "Ağırlık sıfır: model bu hissede avantaj görmüyor.";
-  return {v, score: k.score, checks, t, plan, exp, edge, w, dec};
+  return {v, score: k.score, checks, t, plan, exp, edge, w, dec, mexp};
 }
 
 /* =====================================================================================
@@ -259,6 +330,7 @@ function livermore(s) {
     chk(REGIME ? !bear || s.rs >= 90 : null, "Piyasa rejimi uygun (ayıda yalnızca en güçlü liderler)", REGIME ? REGIME.label : "–"),
     chk(secRank ? secRank.rank <= Math.ceil(secRank.total * 0.4) : null, "Sektörü güçlü: sektör RS sıralamasında ilk %40 (liderler sektörleriyle yükselir)", secRank ? `${secRank.rank}/${secRank.total}. sıra` : "–"),
     chk(support, "Araştırma desteği: 52h yakınlık / kırılım sinyalleri hâlâ kanıtlı (yaşlanmamış)", support == null ? "kanıt yok" : support ? "kanıtlı" : "KANIT KAYBI: yeni giriş yok"),
+    chk(s.sma20_w > 0 && s.sma50_w > 0 ? s.close > s.sma20_w && s.sma20_w > s.sma50_w : null, "Haftalık grafik de yukarı: fiyat > haftalık SMA20 > SMA50 (araştırmada en güçlü tek gösterge)", s.sma20_w > 0 ? `${fmt(s.close)} / ${fmt(s.sma20_w)} / ${s.sma50_w ? fmt(s.sma50_w) : "–"}` : "–"),
   ];
   const k = tally(checks);
   let v = tr && leader && k.score >= 70 && (nearPivot || (s.dist52 != null && s.dist52 >= -5)) && !extended ? 1 : (tr === false && s.close < s.sma50) || k.score < 30 ? -1 : 0;
@@ -293,6 +365,7 @@ function kellogg(s) {
     chk(s.tl >= R.kTl, `Likidite/spread: günlük hacim ≥ ${R.kTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
     chk(REGIME ? !bear : null, "Piyasa ayıda değil (kırılımlar ayıda tutmuyor)", REGIME ? REGIME.label : "–"),
     chk(catalyst ? true : null, "Katalizör: son 2 günde olumlu haber/KAP", catalyst ? "var" : "yok (zorunlu değil)"),
+    chk(s.cmf == null ? null : s.cmf > 0, "Para girişi: Chaikin Para Akışı (CMF) > 0 (alıcılar gün içi aralığın üst yarısında kapatıyor)", s.cmf == null ? "–" : fmt(s.cmf, 2)),
     chk(support, "Araştırma desteği: hacimli itiş + kırılım sinyali hâlâ avantajlı (son 1 yıl)", support == null ? "kanıt yok/belirsiz" : support ? "kanıtlı" : "KANIT KAYBI: yeni giriş yok"),
   ];
   const k = tally(checks);
@@ -355,7 +428,7 @@ function committee(s) {
   const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
   l.seytan = devil(s, Object.values(l));
   const score = Object.values(l).reduce((a, x) => a + x.v, 0), veto = l.seytan.veto;
-  const label = score >= 3 && !veto ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
+  const label = score >= 3 && !veto ? "GÜÇLÜ ADAY" : score === 2 && !veto ? "ADAY" : score >= 1 ? "İZLE" : score >= -1 ? "NÖTR" : "UZAK DUR";
   return { l, score, label, veto };
 }
 
@@ -376,7 +449,16 @@ function meeting(s, r) {
     : kl.v < 0 ? "Hacimli düşüş var; bu satıcı baskısı. Ben uzağım." : `Benim için ${s.name}'de hacim ve kırılım birlikte yok; ilgi çekmeyen yerde vakit harcamam.`);
   say("seytan", dv.veto ? `Durun. ${dv.severe.join(" ve ")}. Bu koşulda işlem olmaz.` : dv.v < 0 ? `Tersini düşünelim: ${s.name} nasıl para kaybettirir? ${dv.checks.filter(c => c.s === BAD).slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "").replace(/:.*$/, "")).join("; ")}. Karşıyım.`
     : `Tersini düşündüm; büyük bir batma nedeni görmüyorum. Ama pozisyon, stop mesafesine göre en çok %${fmt(dv.maxPos, 1)} olsun.`);
-  const verdict = r.veto && r.score >= 3 ? "Karar: güçlü ama Şeytanın Avukatı veto etti; masa işlem yapmıyor." : r.score >= 3 ? "Karar: masa uzlaştı, güçlü aday." : r.score >= 1 ? "Karar: izleme listesi; teyit bekleniyor." : r.score === 0 ? "Karar: net değil, bekleyelim." : "Karar: uzak durulacak.";
+  const mt = s.mtf, tier = mtfTier(s), mexp = mtfExpect(s);
+  if (tier && (tier.id === "uyumlu" || tier.id === "hlider")) {
+    say("simons", `Çok zamanlı tabloya bakın: günlük ${fmt(mt.d, 0)}, haftalık ${fmt(mt.w, 0)}, aylık ${fmt(mt.m, 0)}. Haftalık skoru bu dilimdeki hisseler geçmişte 20 günde piyasanın ortalamasının ${mexp != null ? (mexp > 0 ? "+" : "") + fmt(mexp, 1) + "% " : ""}üstünde kaldı ve bu iki yarıda, boğada da ayıda da tuttu. İsabet oranı %53 civarı: avantaj küçük, ama çok işleme yayılınca birikir. Heyecanlıyım, ama abartmıyorum.`);
+    if (s.sma20_w > 0) say("livermore", `Haftalık grafikte de aynı hikâye: fiyat haftalık SMA20 (${fmt(s.sma20_w)}) üstünde${s.sma50_w ? `, o da SMA50 (${fmt(s.sma50_w)}) üstünde` : ""}. Günlük ve haftalık aynı yöne bakınca en az direnç çizgisi gerçekten yukarıdır.`);
+    if (s.cmf != null && s.cmf > 0.05) say("kellogg", `Para akışı da olumlu: CMF ${fmt(s.cmf, 2)}${s.cmf_w != null ? ` (haftalık ${fmt(s.cmf_w, 2)})` : ""}. Alıcılar gün sonunda fiyatı üst yarıda tutuyor; hacmin yönü doğru.`);
+    if (REGIME && REGIME.trend === "bear") say("seytan", `Dikkat: piyasa ayı rejiminde. Bu skorların avantajı piyasa ORTALAMASINA göre ölçüldü: hisse piyasadan iyi olabilir ama mutlak getiri yine de eksi çıkabilir. Pozisyon küçük, stop hazır.`);
+  } else if (tier && tier.id === "toparlanan") {
+    say("kellogg", `Dipte toparlanma izi var: günlük skor ${fmt(mt.d, 0)}, para girişi (CMF ${fmt(s.cmf, 2)}). Haftalık trend henüz oturmadı; bu bir erken dönüş denemesi, kanıtlı bir kural değil. Küçük pozisyon, sıkı stop.`);
+  }
+  const verdict = r.veto && r.score >= 3 ? "Karar: güçlü ama Şeytanın Avukatı veto etti; masa işlem yapmıyor." : r.score >= 3 ? "Karar: masa uzlaştı, güçlü aday." : r.score === 2 ? "Karar: aday; masanın çoğu olumlu, kalan itirazlar not edildi." : r.score >= 1 ? "Karar: izleme listesi; teyit bekleniyor." : r.score === 0 ? "Karar: net değil, bekleyelim." : "Karar: uzak durulacak.";
   return {lines, verdict};
 }
 
@@ -398,7 +480,9 @@ function riskRadar(uni, n) {
 }
 /* Güç listesi: araştırmanın en güçlü bulgusu (RS lideri + yükselen trend). Aday Hisseler sayfasının varsayılan kaynağı. */
 function strengthList(uni, n, minTl) {
-  return uni.filter(s => s.ok && s.rs != null && s.tl >= (minTl ?? 5) && trendUp(s)).sort((a, b) => b.rs - a.rs).slice(0, n);
+  const lead = s => { const t = mtfTier(s); return t && (t.id === "uyumlu" || t.id === "hlider"); };
+  const key = s => 0.5 * s.rs + 0.5 * (s.mtf && s.mtf.b != null ? s.mtf.b : s.rs);
+  return uni.filter(s => s.ok && s.rs != null && s.tl >= (minTl ?? 5) && (trendUp(s) || lead(s))).sort((a, b) => key(b) - key(a)).slice(0, n);
 }
 
 /* ---------- Değer tablosu: defter değeri, şu anki değer, olması gereken değer ----------
