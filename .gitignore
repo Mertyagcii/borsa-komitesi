@@ -5,3 +5,4 @@ news.json
 *.pyc
 alerts.txt
 cache/
+intraday.json

@@ -192,6 +192,68 @@ def evaluate_factor(fac: pd.DataFrame, fwd: dict, h: int):
             "spread": round(float(spreads.mean() * 100), 2), "pos": round(float((ics > 0).mean() * 100), 0)}
 
 
+HIST_FILE = HERE / "research_history.json"
+FUND_DIR = HERE / "fundamentals"
+
+
+def track_history(res: dict) -> list:
+    """Haftalık araştırma geçmişi: her sinyalin karar/t/fazla getirisi. Önceki çalıştırmaya göre karar değişimlerini döndürür."""
+    hist = []
+    if HIST_FILE.exists():
+        try:
+            hist = json.loads(HIST_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            hist = []
+    now = {"date": res["generated"][:10], "signals": {s["id"]: {"v": s["verdict"], "t": (s.get("h10") or {}).get("t"), "x": (s.get("h10") or {}).get("excess"), "aging": s.get("aging")} for s in res["signals"]},
+           "deciles": res.get("rs_deciles")}
+    changes = []
+    if hist:
+        prev = hist[-1]["signals"]
+        for s in res["signals"]:
+            a = prev.get(s["id"])
+            if a and (a["v"] != s["verdict"] or bool(a.get("aging")) != bool(s.get("aging"))):
+                changes.append({"id": s["id"], "label": s["label"], "from": a["v"] + (" (yaşlanıyor)" if a.get("aging") else ""),
+                                "to": s["verdict"] + (" (yaşlanıyor)" if s.get("aging") else ""), "date": now["date"]})
+    if not hist or hist[-1]["date"] != now["date"]:
+        hist.append(now)
+    HIST_FILE.write_text(json.dumps(hist[-80:], ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return changes
+
+
+def pit_eval() -> dict:
+    """Noktasal (point-in-time) temel veri testi: haftalık temel veri kayıtları biriktikçe kalite/değer faktörlerinin sonraki dönem getirisini ölçer."""
+    files = sorted(FUND_DIR.glob("*.json")) if FUND_DIR.exists() else []
+    out = {"snapshots": len(files), "needed": 8, "ready": False, "factors": []}
+    if len(files) < 8:
+        return out
+    snaps = []
+    for fp in files:
+        d = json.loads(fp.read_text(encoding="utf-8"))
+        df = pd.DataFrame(d["rows"], columns=d["cols"]).set_index("name")
+        snaps.append((d["d"], df))
+    defs = {"roe": ("ROE", 1), "nm": ("Net marj", 1), "gm": ("Brüt marj", 1), "de": ("Düşük borç/özsermaye", -1), "pe": ("Düşük F/K", -1),
+            "pb": ("Düşük PD/DD", -1), "fcfy": ("FCF getirisi", 1), "epsg": ("EPS büyümesi", 1), "dy": ("Temettü verimi", 1)}
+    for k, (label, sg) in defs.items():
+        ics = []
+        for (d0, a), (d1, b) in zip(snaps[:-1], snaps[1:]):
+            a = a.copy()
+            a["fcfy"] = a["fcf"] / a["mcap"] * 100 if "fcf" in a and "mcap" in a else np.nan
+            if k not in a.columns:
+                continue
+            ret = (b["close"] / a["close"] - 1).replace([np.inf, -np.inf], np.nan)
+            m = a[k].notna() & ret.notna()
+            if k == "pe":
+                m &= a["pe"] > 0
+            if m.sum() < 30:
+                continue
+            ics.append((a[k][m] * sg).rank().corr((ret[m] - ret[m].mean()).rank()))
+        if len(ics) >= 6:
+            arr = np.array(ics)
+            out["factors"].append({"id": k, "label": label, "ic": round(float(arr.mean()), 3), "t": round(float(arr.mean() / (arr.std() / np.sqrt(len(arr)))), 2), "n": len(arr)})
+    out["ready"] = bool(out["factors"])
+    return out
+
+
 def run(force=False, limit=None, log=print) -> dict:
     data = load(force, limit, log)
     f, index = frames(data)
@@ -202,10 +264,14 @@ def run(force=False, limit=None, log=print) -> dict:
         regime = pd.Series(np.where((index > m50) & (m50 > m200), "bull", np.where((index < m50) & (index < m200), "bear", "mixed")), index=index.index)
         regime[m200.isna()] = np.nan
     sigs = []
+    cut = f["close"].index[-1] - pd.Timedelta(days=365)
+    fwd_r = {h: fwd[h].loc[cut:] for h in HORIZONS}
+    reg_r = regime.loc[cut:] if regime is not None else None
     for s in signal_defs(x):
         row = {k: s[k] for k in ("id", "label", "who")}
         for h in HORIZONS:
             row[f"h{h}"] = evaluate_signal(s["sig"], fwd, regime, h)
+        row["recent"] = evaluate_signal(s["sig"].loc[cut:], fwd_r, reg_r, 10)  # son 1 yıl: yaşlanma kontrolü
         sigs.append(row)
     facs = []
     for s in factor_defs(x):
@@ -227,6 +293,10 @@ def run(force=False, limit=None, log=print) -> dict:
         return "belirsiz"
     for s in sigs:
         s["verdict"] = verdict(s.get("h10"))
+        r = s.get("recent")
+        # tam örneklemde kanıt var ama son 1 yılda avantaj kaybolmuşsa: yaşlanıyor
+        s["aging"] = bool(s["verdict"] == "kanıt var" and (not r or r["excess"] <= 0 or r["t"] < 1.0))
+        s["active"] = bool(s["verdict"] == "kanıt var" and not s["aging"]) or (s["verdict"] == "belirsiz" and (s.get("h10") or {}).get("excess", 0) > 0)
     for s in facs:
         h = s.get("h10")
         s["verdict"] = "yetersiz" if not h else "kanıt var" if h["t"] >= 2 and h["spread"] > 0 else "ters kanıt" if h["t"] <= -2 and h["spread"] < 0 else "belirsiz"
@@ -264,6 +334,8 @@ def run(force=False, limit=None, log=print) -> dict:
         "rs_top_trend": {"excess": round(float(top_tr.mean() * 100), 2), "std": round(float(top_tr.std() * 100), 2), "win": round(float((top_tr > 0).mean() * 100), 0), "n": int(len(top_tr))} if len(top_tr) else None,
         "sigma10": round(float(ex10.stack().dropna().std() * 100), 2),
     }
+    res["pit"] = pit_eval()
+    res["changes"] = track_history(res)
     OUT.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return res
 

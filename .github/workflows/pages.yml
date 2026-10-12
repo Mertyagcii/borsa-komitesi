@@ -48,14 +48,16 @@ jobs:
       - run: python build_site.py
       - name: Komite karnesi kaydi ve uyarilar (gunde bir kez, kapanistan sonra)
         run: node signals.js
+      - name: Gun ici 15 dakikalik cubuklar (yalnizca islenecek yeni islem gunu varsa)
+        run: python intraday.py
       - name: Sanal portfoyler (gunde bir kez, kapanistan sonra)
         run: node engine.js
       - name: picks/snapshots/portfolios degistiyse kaydet
         run: |
-          if [ -n "$(git status --porcelain picks.json snapshots.json portfolios.json research.json)" ]; then
+          if [ -n "$(git status --porcelain picks.json snapshots.json portfolios.json research.json research_history.json news_log.json fundamentals)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"
-            git add picks.json snapshots.json portfolios.json research.json
+            git add picks.json snapshots.json portfolios.json research.json research_history.json news_log.json fundamentals
             git commit -m "karne/portfoy kaydi guncellendi"
             git pull --rebase origin main
             git push

@@ -214,6 +214,9 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .vb.mid{background:var(--panel2);color:var(--mute)}
 .logl{font-size:13px;margin:6px 0;display:flex;gap:8px}
 .logl time{flex:none;color:var(--mute);font-size:11.5px;width:78px}
+.corr{border-collapse:collapse;font-size:12px}.corr td,.corr th{padding:4px 8px;text-align:center;border:1px solid var(--line);cursor:default}
+.wbar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:6px 0}.wbar i{display:block}
+.secbar{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden;min-width:90px}.secbar i{display:block;height:100%;background:var(--accent)}
 </style>
 </head>
 <body>
@@ -225,6 +228,7 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
       <a data-view="ekranlar"><i data-ico="filter"></i>Efsane Ekranları</a>
+      <a data-view="sektorler"><i data-ico="compass"></i>Sektörler</a>
       <a data-view="portfoyler"><i data-ico="wallet"></i>Portföyler</a>
       <a data-view="favoriler"><i data-ico="star"></i>Favoriler</a>
       <a data-view="karsilastir"><i data-ico="columns"></i>Karşılaştır</a>
@@ -342,6 +346,9 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
     <!-- KARŞILAŞTIR -->
     <div class="view" id="v-karsilastir"><section class="card" id="cmpView"></section></div>
 
+    <!-- SEKTÖRLER -->
+    <div class="view" id="v-sektorler"><section class="card" id="sectorView"></section></div>
+
     <!-- PORTFÖYLER -->
     <div class="view" id="v-portfoyler"><section class="card" id="portView"></section></div>
 
@@ -392,6 +399,10 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
         <h2 style="margin-top:18px">Sayfalar</h2>
         <ul>
           <li><b>Efsane Ekranları:</b> Her efsane tüm likit hisseleri kendi kontrol listesiyle tarar; Şeytanın Avukatı "risk radarı" verir.</li>
+          <li><b>Sektörler:</b> Sektörlerin göreceli gücü ve rotasyonu (hangi sektör ivme kazanıyor/kaybediyor). Livermore, sektörü güçlü hisseleri tercih eder.</li>
+          <li><b>Ofis Fonu:</b> Portföyler sayfasında dört efsanenin birleşik portföyü: eşit, performansa ya da rejime göre ağırlık; korelasyon, aynı hisseyi tutanlar ve sektör dağılımı.</li>
+          <li><b>Sinyal yaşlanması:</b> Araştırma her hafta yenilenir; bir sinyal son 1 yılda avantajını kaybederse ilgili kurallar yeni pozisyon açmaz ve uyarı çıkar.</li>
+          <li><b>Gün içi stop:</b> Portföy motoru 15 dakikalık çubuklarla stop ve hedefin hangisinin önce gerçekleştiğini kronolojik olarak ölçer.</li>
           <li><b>Karşılaştır:</b> 2-3 hisseyi temel, teknik, komite ve risk ölçütleriyle yan yana koyar (en iyi değer yeşil).</li>
           <li><b>Komite Karnesi:</b> Her iş günü kapanışta komitenin kararları kaydedilir; 5/10/20 iş günü sonra hissenin getirisi, aynı dönemde 150 likit hissenin ortalamasıyla kıyaslanır. İlk sonuçlar kayıttan 5 iş günü sonra görünür. Örneklem küçükken (n&lt;20) sonuçlar anlamsızdır.</li>
           <li><b>Detay paneli:</b> Pozisyon hesaplayıcı (sermaye, risk %, stop türüne göre lot ve hedefler), bağlantı kopyalama ve PDF/yazdır.</li>
@@ -467,6 +478,7 @@ const ICONS = {
   columns: '<rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="18" rx="1.5"/>',
   award: '<circle cx="12" cy="8" r="6"/><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5"/>',
   filter: '<polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/>',
+  compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
   wallet: '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
   flask: '<path d="M9 3h6"/><path d="M10 3v6L4 19a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 19l-6-10V3"/>',
 };
@@ -568,6 +580,7 @@ function auditor(cands, results) {
   }
   if (!Object.keys(NEWS).length) issues.push("Haber verisi yüklenmedi: Temel & Haber Analisti haber yorumu yapamıyor.");
   if (!RESEARCH) issues.push("Araştırma verisi yüklenmedi: Simons'ın modeli beklenti üretemiyor.");
+  researchAlerts().forEach(a => issues.unshift(a));
   results.forEach(([s, r]) => {
     const mc = monteCarlo(s);
     if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
@@ -608,7 +621,7 @@ function fillSectors() {
 }
 function render() {
   NOW = Date.now(); REGIME = UNIVERSE.length ? computeRegime(UNIVERSE, HIST) : null;
-  if (UNIVERSE.length) rankUniverse(UNIVERSE);
+  if (UNIVERSE.length) { rankUniverse(UNIVERSE); computeSectorStats(UNIVERSE); }
   $("tolLbl").style.display = $("mode").value === "alt" ? "" : "none";
   current = candidates();
   if (UNIVERSE.length && $("sec").options.length <= 1) fillSectors();
@@ -653,11 +666,6 @@ function toast(msg) {
   let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }
   el.textContent = msg; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2200);
 }
-const trLower = s => String(s || "").replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase();
-const TAGS = [["Temettü", /temettü|kâr payı|kar payı/, "up"], ["Bedelsiz", /bedelsiz|bölünme/, "up"], ["Bilanço", /bilanço|finansal sonuç|net dönem|çeyrek|faaliyet raporu/, ""],
-  ["İhale/Sözleşme", /ihale|sözleşme|sipariş|anlaşma/, "up"], ["Dava/Ceza", /dava|ceza|soruşturma|tedbir|yasak|iflas|konkordato/, "down"], ["Geri alım", /geri alım/, "up"],
-  ["Analist", /hedef fiyat|tavsiye|\(.*yatırım\)|beklenti/, ""]];
-const tagsOf = title => { const x = trLower(title); return TAGS.filter(([, re]) => re.test(x)); };
 const tagHtml = title => tagsOf(title).map(([n, , c]) => `<span class="ntag ${c}">${n}</span>`).join("");
 let newsTag = "";
 function renderNews() {
@@ -666,7 +674,7 @@ function renderNews() {
   const seen = new Set(), all = items.sort((a, b) => b.ts - a.ts).filter(i => !seen.has(i.t) && seen.add(i.t));
   const list = all.filter(i => !newsTag || tagsOf(i.t).some(([n]) => n === newsTag)).slice(0, 80);
   $("newsView").innerHTML = `<h2>Son haberler <span class="sub">(likit hisseler, TradingView/KAP akışı)</span></h2>
-    <div class="tabs">${[["", "Hepsi"], ...TAGS.map(([n]) => [n, n])].map(([k, n]) => `<button class="tab ${newsTag === k ? "on" : ""}" data-ntag="${k}">${n}</button>`).join("")}</div>` + (list.length ?
+    <div class="tabs">${[["", "Hepsi"], ...NEWS_TAGS.map(([n]) => [n, n])].map(([k, n]) => `<button class="tab ${newsTag === k ? "on" : ""}" data-ntag="${k}">${n}</button>`).join("")}</div>` + (list.length ?
     `<div class="nlist">${list.map(i => `<div class="nitem"><span class="pill tk" data-x="${esc(i.tk)}">${esc(i.tk)}</span>
       <span>${tagHtml(i.t)}<span class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)}</span></span><span class="mute" style="margin-left:auto;white-space:nowrap">${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></div>`).join("")}</div>`
     : "<p class='mute'>Bu türde haber yok.</p>");
@@ -743,6 +751,34 @@ function drawCompare(stocks) {
   stocks.forEach((s, k) => { g.fillStyle = cols[k]; g.fillText(s.name, w - 60 - k * 0 , 14 + k * 14); });
 }
 
+/* ---------- Sektörler: RS sıralaması ve rotasyon ---------- */
+let SNAPS = null, snapsAt = 0;
+async function loadSnaps() { if (SNAPS && Date.now() - snapsAt < 3600e3) return; const s = await getJson("snapshots.json?t=" + Math.floor(Date.now() / 36e5)); if (s) { SNAPS = s; snapsAt = Date.now(); } }
+function sectorRel(k) { // k günlük göreli getiri (sektör − piyasa), günlük kayıtlardan
+  if (!SNAPS) return {}; const ds = Object.keys(SNAPS).sort(); if (ds.length < 2) return {};
+  const last = SNAPS[ds[ds.length - 1]], base = SNAPS[ds[Math.max(0, ds.length - 1 - k)]];
+  const by = Object.fromEntries(UNIVERSE.map(s => [s.name, trSector(s.sector)])), grp = {}, all = [];
+  Object.keys(last).forEach(n => { if (!base[n]) return; const r = (last[n] / base[n] - 1) * 100; all.push(r); (grp[by[n] || "Diğer"] = grp[by[n] || "Diğer"] || []).push(r); });
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length, m = mean(all);
+  return Object.fromEntries(Object.entries(grp).filter(([, a]) => a.length >= 3).map(([k2, a]) => [k2, mean(a) - m]));
+}
+async function renderSectors() {
+  const el = $("sectorView"); if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  await loadSnaps();
+  const rows = computeSectorStats(UNIVERSE), nsn = SNAPS ? Object.keys(SNAPS).length : 0, r5 = sectorRel(5), r20 = sectorRel(20);
+  const lab = r => { const n = trSector(r.name), a = r5[n], b = r20[n]; if (nsn < 6 || a == null) return ["", ""]; const acc = a - b / 4; return acc > 0.3 ? ["ivme kazanıyor", "up"] : acc < -0.3 ? ["ivme kaybediyor", "down"] : ["yatay", "mute"]; };
+  const ranked = rows.map(r => ({r, l: lab(r)})), up3 = ranked.filter(x => x.l[1] === "up").slice(0, 3), dn3 = ranked.filter(x => x.l[1] === "down").slice(-3);
+  el.innerHTML = `<h2>🧭 Sektör gücü ve rotasyon <span class="sub">(likit hisselerin göreceli gücüne göre; ${rows.length} sektör)</span></h2>
+    <p class="note">Liderler sektörleriyle birlikte yükselir: Livermore bir hissenin sektörü RS sıralamasında ilk %40'taysa ek puan verir. Rotasyon sütunu, sektörün son 5 günlük göreli getirisini son 20 günle kıyaslar (günlük kayıt: ${nsn} gün${nsn < 6 ? "; en az 6 gün gerekir, veri birikiyor" : ""}).</p>
+    ${nsn >= 6 ? `<p><b class="up">İvme kazanan:</b> ${up3.map(x => esc(trSector(x.r.name))).join(", ") || "–"} · <b class="down">ivme kaybeden:</b> ${dn3.map(x => esc(trSector(x.r.name))).join(", ") || "–"}</p>` : ""}
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Sektör</th><th>Hisse</th><th>Medyan RS</th><th>Sıra</th><th>1 ay %</th><th>3 ay %</th><th>SMA50 üstü</th><th>Göreli 5g</th><th>Göreli 20g</th><th>Rotasyon</th></tr></thead><tbody>
+    ${ranked.map(({r, l}) => { const n = trSector(r.name); return `<tr data-sector="${esc(n)}" style="cursor:pointer"><td style="text-align:left"><b>${esc(n)}</b></td><td>${r.n}</td>
+      <td><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><span class="secbar"><i style="width:${r.rs}%"></i></span>${fmt(r.rs, 0)}</div></td><td>${r.rank}/${rows.length}</td>
+      <td class="${sign(r.p1m)}">${fmt(r.p1m, 1)}</td><td class="${sign(r.p3m)}">${fmt(r.p3m, 1)}</td><td>%${fmt(r.above, 0)}</td>
+      <td class="${sign(r5[n])}">${r5[n] == null ? "–" : fmt(r5[n], 2)}</td><td class="${sign(r20[n])}">${r20[n] == null ? "–" : fmt(r20[n], 2)}</td><td class="${l[1]}">${l[0] || "–"}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note">Bir satıra tıklayınca o sektörün hisseleri Aday Hisseler sayfasında süzülür.</p>`;
+}
+
 /* ---------- Sanal portföyler ---------- */
 let PORT = null, portAt = 0, portSel = "komite";
 async function loadPort() {
@@ -759,6 +795,47 @@ const STRAT = {
   kellogg: "Momentum: hacim ≥2x ve ≥%4 itiş + kırılım (ayı rejiminde yok). Risk işlem başına %1, stop gün içi dip/−%7, +%10'da yarısını satar, 8 günde çıkar.",
   komite: "Masa kararı: skor ≥2, veto yok, Şeytanın Avukatı itiraz etmiyor; işlem başına %1 risk, 2×ATR izleyen stop, sektör başına ≤3, en çok 10 pozisyon, 20 gün.",
 };
+const FUND_K = ["buffett", "simons", "livermore", "kellogg"];
+let fundMode = "eq";
+function regimeStats() { // portföy -> rejim -> günlük getiriler
+  const out = {};
+  for (const k of Object.keys(PORT.p)) { const nav = PORT.p[k].nav; out[k] = {}; for (let i = 1; i < nav.length; i++) { const rg = nav[i].rg || "mixed"; (out[k][rg] = out[k][rg] || []).push(nav[i].v / nav[i - 1].v - 1); } }
+  return out;
+}
+const PRIOR = {bull: {buffett: .2, simons: .25, livermore: .30, kellogg: .25}, mixed: {buffett: .25, simons: .25, livermore: .25, kellogg: .25}, bear: {buffett: .35, simons: .30, livermore: .20, kellogg: .15}};
+function fundWeights(mode) {
+  const eq = Object.fromEntries(FUND_K.map(k => [k, 1 / FUND_K.length]));
+  if (mode === "perf") { const rets = FUND_K.map(k => [k, retOf(PORT.p[k].nav.map(x => x.v), 9999) ?? 0]).sort((a, b) => b[1] - a[1]), rw = [.4, .3, .2, .1]; return Object.fromEntries(rets.map(([k], i) => [k, rw[i]])); }
+  if (mode === "rejim") {
+    const rg = REGIME ? REGIME.trend : "mixed", st = regimeStats(), ev = FUND_K.map(k => [k, st[k][rg] || []]);
+    if (ev.every(([, a]) => a.length >= 20)) { const m = ev.map(([k, a]) => [k, Math.max(0.05, a.reduce((x, y) => x + y, 0) / a.length * 100 + 0.5)]), tot = m.reduce((s, [, w]) => s + w, 0); return Object.fromEntries(m.map(([k, w]) => [k, w / tot])); }
+    return {...PRIOR[rg]};
+  }
+  return eq;
+}
+const corr = (a, b) => { const n = Math.min(a.length, b.length); if (n < 5) return null; const x = a.slice(-n), y = b.slice(-n), mx = x.reduce((s, v) => s + v, 0) / n, my = y.reduce((s, v) => s + v, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; } return sxx && syy ? sxy / Math.sqrt(sxx * syy) : null; };
+function fundHtml() {
+  const w = fundWeights(fundMode), rets = Object.fromEntries(FUND_K.map(k => [k, PORT.p[k].nav.map(x => x.v).slice(1).map((v, i) => v / PORT.p[k].nav[i].v - 1)])), n = Math.min(...FUND_K.map(k => rets[k].length));
+  const lvl = [100]; for (let i = 0; i < n; i++) lvl.push(lvl[lvl.length - 1] * (1 + FUND_K.reduce((s, k) => s + w[k] * rets[k][i], 0)));
+  const holders = {}, secV = {}; let tot = 0;
+  Object.keys(PORT.p).forEach(k => PORT.p[k].pos.forEach(x => { (holders[x.n] = holders[x.n] || []).push(LNAMES[k]); }));
+  FUND_K.forEach(k => PORT.p[k].pos.forEach(x => { const px = (UNIVERSE.find(s => s.name === x.n) || {}).close || x.lastClose || x.avg, v = px * x.sh; tot += v; const sc = trSector(x.sector); secV[sc] = (secV[sc] || 0) + v; }));
+  const over = Object.entries(holders).filter(([, a]) => a.length >= 2), sec = Object.entries(secV).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const cm = FUND_K.map(a => FUND_K.map(b => a === b ? 1 : corr(rets[a], rets[b])));
+  const col = v => v == null ? "" : `background:color-mix(in srgb,${v > 0 ? "var(--down)" : "var(--up)"} ${Math.min(60, Math.abs(v) * 60)}%,transparent)`;
+  const colors = {buffett: "#3b82f6", simons: "#a855f7", livermore: "#f59e0b", kellogg: "#ec4899"};
+  return `<h2 style="margin-top:16px">🏦 Ofis Fonu <span class="sub">(dört efsanenin birleşik portföyü; Komite dahil değil)</span></h2>
+    <div class="tabs">${[["eq", "Eşit ağırlık"], ["perf", "Performansa göre"], ["rejim", "Rejime göre"]].map(([k, l]) => `<button class="tab ${fundMode === k ? "on" : ""}" data-fm="${k}">${l}</button>`).join("")}</div>
+    <div class="wbar">${FUND_K.map(k => `<i style="width:${w[k] * 100}%;background:${colors[k]}" title="${LNAMES[k]} %${fmt(w[k] * 100, 0)}"></i>`).join("")}</div>
+    <div class="note">${FUND_K.map(k => `<span style="color:${colors[k]}">■</span> ${LNAMES[k]} %${fmt(w[k] * 100, 0)}`).join(" · ")}${fundMode === "rejim" ? ` · rejim: ${REGIME ? REGIME.label : "–"} (${FUND_K.every(k => (regimeStats()[k][REGIME ? REGIME.trend : "mixed"] || []).length >= 20) ? "kendi verimizle" : "başlangıç önerisi: karnede ≥20 gün birikince veriyle güncellenir"})` : ""}</div>
+    <p>Fon değeri: <b>${fmt(lvl[lvl.length - 1], 2)}</b> (başlangıç 100) · bugün ${pcell(retOf(lvl, 1))} · hafta ${pcell(retOf(lvl, 5))} · ay ${pcell(retOf(lvl, 21))} · başlangıçtan ${pcell(retOf(lvl, 9999))} · maks. düşüş ${lvl.length > 1 ? fmt(maxDd(lvl), 1) + "%" : "–"}</p>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div><b>Korelasyon</b> <span class="sub">(günlük getiri)</span>${n >= 5 ? `<table class="corr"><tr><th></th>${FUND_K.map(k => `<th>${LNAMES[k].split(" ")[1] || LNAMES[k]}</th>`).join("")}</tr>${FUND_K.map((a, i) => `<tr><th>${LNAMES[a].split(" ")[1] || LNAMES[a]}</th>${cm[i].map(v => `<td style="${col(v)}">${v == null ? "–" : fmt(v, 2)}</td>`).join("")}</tr>`).join("")}</table>` : `<p class="note">En az 5 işlem günü gerekir (${n}/5).</p>`}</div>
+      <div style="flex:1;min-width:240px"><b>Aynı hisseyi tutanlar</b> ${over.length ? `<ul>${over.map(([nm, a]) => `<li><b>${esc(nm)}</b> <span class="mute">${a.join(", ")}</span></li>`).join("")}</ul>` : "<p class='note'>Çakışan pozisyon yok.</p>"}</div>
+      <div style="flex:1;min-width:240px"><b>Sektör dağılımı</b> <span class="sub">(yatırılan tutar)</span>${sec.length ? sec.map(([s, v]) => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px"><span style="width:120px">${esc(s)}</span><span class="secbar" style="flex:1"><i style="width:${v / tot * 100}%"></i></span>%${fmt(v / tot * 100, 0)}</div>`).join("") : "<p class='note'>Açık pozisyon yok.</p>"}</div>
+    </div>`;
+}
 const retOf = (arr, n) => arr.length < 2 ? null : (arr[arr.length - 1] / arr[Math.max(0, arr.length - 1 - n)] - 1) * 100;
 function maxDd(arr) { let pk = -Infinity, dd = 0; arr.forEach(v => { pk = Math.max(pk, v); dd = Math.min(dd, v / pk - 1); }); return dd * 100; }
 function perfRows() {
@@ -805,6 +882,7 @@ function renderPortfolios() {
       ${perfTable()}
       <canvas id="eqCv" style="height:240px;margin:12px 0"></canvas>
       <div class="note">Başlangıç = 100. ${Object.keys(PORT.p).map(k => `<span style="color:${LCOL[k]}">■ ${LNAMES[k]}</span>`).join(" ")} <span style="color:${LCOL.xu}">┅ BIST 100</span> <span style="color:${LCOL.ew}">┅ Likit 150 eşit ağırlık</span></div>
+      ${fundHtml()}
       <div class="tabs" style="margin-top:14px">${Object.keys(PORT.p).map(k => `<button class="tab ${portSel === k ? "on" : ""}" data-pk="${k}">${LNAMES[k]}</button>`).join("")}</div>
       <p class="note">${esc(STRAT[portSel])}</p>
       <h2>Açık pozisyonlar <span class="sub">(nakit ${fmt(sel.cash, 0)} TL)</span></h2>
@@ -818,31 +896,66 @@ function renderPortfolios() {
     drawEquity();
   });
 }
-document.addEventListener("click", e => { const t2 = e.target.closest("[data-pk]"); if (t2 && view === "portfoyler") { portSel = t2.dataset.pk; renderPortfolios(); } else if (t2 && view === "karne") { portSel = t2.dataset.pk; show("portfoyler"); } });
+document.addEventListener("click", e => { const fm = e.target.closest("[data-fm]"); if (fm) { fundMode = fm.dataset.fm; renderPortfolios(); return; }
+  const t2 = e.target.closest("[data-pk]"); if (t2 && view === "portfoyler") { portSel = t2.dataset.pk; renderPortfolios(); } else if (t2 && view === "karne") { portSel = t2.dataset.pk; show("portfoyler"); } });
 
 /* ---------- Sistem araştırması ---------- */
-function renderResearch() {
+function researchAlerts() {
+  if (!RESEARCH) return [];
+  const a = (RESEARCH.changes || []).map(c => `Araştırma değişimi: "${c.label}" ${c.from} → ${c.to}.`);
+  RESEARCH.signals.filter(s => s.aging).forEach(s => a.push(`Sinyal yaşlanıyor: "${s.label}" son 1 yılda avantajını kaybetti; ilgili kurallar yeni giriş yapmıyor.`));
+  return a;
+}
+let RESHIST = null;
+async function renderResearch() {
   const el = $("resView");
   if (!RESEARCH) { el.innerHTML = "<h2>Sistem araştırması</h2><p class='mute'>Araştırma verisi yükleniyor…</p>"; return; }
+  if (!RESHIST) RESHIST = (await getJson("research_history.json?t=" + Math.floor(Date.now() / 36e5))) || [];
   const Rr = RESEARCH, vb = v => `<span class="vb ${v === "kanıt var" ? "good" : v === "ters kanıt" ? "badv" : "mid"}">${v}</span>`;
   const good = Rr.signals.filter(s => s.verdict === "kanıt var"), bad = Rr.signals.filter(s => s.verdict === "ters kanıt");
-  const sigRow = s => { const h = s.h10; return h ? `<tr><td style="text-align:left;white-space:normal">${esc(s.label)}</td><td>${s.who}</td><td>${h.n}</td><td class="${sign(h.excess)}">${h.excess > 0 ? "+" : ""}${fmt(h.excess, 2)}%</td><td>%${fmt(h.win, 0)}</td><td>${fmt(h.t, 1)}</td><td>${fmt(h.h1, 2)} / ${fmt(h.h2, 2)}</td><td>${h.bull == null ? "–" : fmt(h.bull, 2)} / ${h.bear == null ? "–" : fmt(h.bear, 2)}</td><td>${vb(s.verdict)}</td></tr>` : ""; };
+  const status = s => s.verdict === "ters kanıt" ? '<span class="vb badv">devre dışı</span>' : s.aging ? '<span class="vb badv">yaşlanıyor</span>' : s.active ? '<span class="vb good">aktif</span>' : '<span class="vb mid">kanıt yok</span>';
+  const sigRow = s => { const h = s.h10, r = s.recent; return h ? `<tr><td style="text-align:left;white-space:normal">${esc(s.label)}</td><td>${s.who}</td><td>${h.n}</td><td class="${sign(h.excess)}">${h.excess > 0 ? "+" : ""}${fmt(h.excess, 2)}%</td><td>%${fmt(h.win, 0)}</td><td>${fmt(h.t, 1)}</td><td>${fmt(h.h1, 2)} / ${fmt(h.h2, 2)}</td><td>${h.bull == null ? "–" : fmt(h.bull, 2)} / ${h.bear == null ? "–" : fmt(h.bear, 2)}</td><td class="${r ? sign(r.excess) : ""}">${r ? (r.excess > 0 ? "+" : "") + fmt(r.excess, 2) + "% (t=" + fmt(r.t, 1) + ")" : "–"}</td><td>${vb(s.verdict)} ${status(s)}</td></tr>` : ""; };
   const facRow = s => { const h = s.h10; return h ? `<tr><td style="text-align:left;white-space:normal">${esc(s.label)}</td><td>${s.who}</td><td class="${sign(h.ic)}">${fmt(h.ic, 3)}</td><td>${fmt(h.t, 1)}</td><td class="${sign(h.spread)}">${h.spread > 0 ? "+" : ""}${fmt(h.spread, 2)}%</td><td>%${fmt(h.pos, 0)}</td><td>${vb(s.verdict)}</td></tr>` : ""; };
-  const dec = Rr.rs_deciles, mx = Math.max(...dec.map(Math.abs), 0.5);
-  el.innerHTML = `<h2>🔬 Sistem araştırması <span class="sub">(${Rr.stocks} likit hisse · ${Rr.from} → ${Rr.to} · ${Rr.days} gün · 10 günlük taban %${fmt(Rr.base10, 2)})</span></h2>
-    <p class="note">Bu sayfa sistemin <b>neyi bildiğini</b> gösterir. Her sinyalden sonra ertesi gün açılıştan 10 iş günü tutulsaydı, aynı dönemde evrenin ortalamasına göre ne kazanılırdı? Efsanelerin kuralları bu sonuçlara göre ayarlandı. Uyarı: ~3 yıl, tek rejim (enflasyonlu nominal TL), bugünün likit listesi (hayatta kalma yanlılığı), maliyet yok. Sonuçlar <b>ipucudur, kanıt değil</b>; yarı-yarıya tutarlılık ve rejim kırılımı bu yüzden gösterilir.</p>
+  const dec = Rr.rs_deciles, mx = Math.max(...dec.map(Math.abs), 0.5), alerts = researchAlerts(), pit = Rr.pit || {snapshots: 0, needed: 8, factors: []};
+  el.innerHTML = `<h2>🔬 Sistem araştırması <span class="sub">(${Rr.stocks} likit hisse · ${Rr.from} → ${Rr.to} · ${Rr.days} gün · 10 günlük taban %${fmt(Rr.base10, 2)} · ${RESHIST.length} haftalık kayıt)</span></h2>
+    <p class="note">Bu sayfa sistemin <b>neyi bildiğini</b> gösterir. Her sinyalden sonra ertesi gün açılıştan 10 iş günü tutulsaydı, aynı dönemde evrenin ortalamasına göre ne kazanılırdı? Efsanelerin kuralları bu sonuçlara bağlıdır: bir sinyal <b>yaşlanırsa</b> (son 1 yılda avantaj kaybolursa) ya da ters kanıt çıkarsa ilgili kurallar yeni pozisyon açmaz. Uyarı: ~3 yıl, tek rejim (enflasyonlu nominal TL), bugünün likit listesi, maliyet yok; sonuçlar <b>ipucudur, kanıt değil</b>.</p>
+    ${alerts.length ? `<div class="card" style="background:var(--panel2);border-color:var(--warn);margin:10px 0"><b>⚠ Yaşlanma / değişim uyarıları</b><ul>${alerts.map(a => `<li>${esc(a)}</li>`).join("")}</ul></div>` : `<p class="up">✔ Yaşlanma uyarısı yok: kanıtlı sinyallerin hiçbiri son 1 yılda avantajını kaybetmedi.</p>`}
     <div class="card" style="background:var(--panel2);margin:10px 0"><b>Ne öğrendik?</b><ul>
-      ${good.map(s => `<li class="up">✔ <b>${esc(s.label)}</b>: 10 günde piyasanın ${fmt(s.h10.excess, 2)}% üstü (t=${fmt(s.h10.t, 1)}, iki yarıda da pozitif).</li>`).join("") || "<li class='mute'>Kanıtı güçlü sinyal yok.</li>"}
+      ${good.map(s => `<li class="up">✔ <b>${esc(s.label)}</b>: 10 günde piyasanın ${fmt(s.h10.excess, 2)}% üstü (t=${fmt(s.h10.t, 1)}, iki yarıda da pozitif${s.aging ? "; AMA son 1 yılda zayıfladı" : ""}).</li>`).join("") || "<li class='mute'>Kanıtı güçlü sinyal yok.</li>"}
       ${bad.map(s => `<li class="down">✘ <b>${esc(s.label)}</b>: 10 günde piyasanın ${fmt(s.h10.excess, 2)}% altı (t=${fmt(s.h10.t, 1)}): BU SİNYALDE ALIM YAPMIYORUZ.</li>`).join("")}
       <li>Göreceli güç sıralamasında en üst dilim ortalamayı ${fmt(dec[9], 2)}% geçti, en alt dilim ${fmt(dec[0], 2)}% geride kaldı: <b>güç güçlenmeye devam etti</b>, zayıflık zayıflamaya.</li></ul></div>
     <h2>Göreceli güç (RS) dilimlerine göre 10 günlük fazla getiri</h2>
     <div class="bar9">${dec.map((v, i) => `<div style="height:${Math.max(4, Math.abs(v) / mx * 100)}%;background:${v >= 0 ? "var(--up)" : "var(--down)"};align-self:flex-end"><span>${i + 1}</span></div>`).join("")}</div>
     <div class="note" style="margin-top:20px">1 = en zayıf %10, 10 = en güçlü %10. Değerler: ${dec.map(v => fmt(v, 2) + "%").join(" · ")}${Rr.rs_top_trend ? `. En güçlü 10 hisse + yükselen trend: ${fmt(Rr.rs_top_trend.excess, 2)}% fazla getiri, isabet %${Rr.rs_top_trend.win} (${Rr.rs_top_trend.n} dönem).` : ""}</div>
-    <h2 style="margin-top:16px">Sinyaller <span class="sub">(10 günlük ufuk)</span></h2>
-    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Sinyal</th><th>Efsane</th><th>Adet</th><th>Fazla getiri</th><th>İsabet</th><th>t</th><th>Yarı1 / Yarı2</th><th>Boğa / Ayı</th><th>Karar</th></tr></thead><tbody>${Rr.signals.map(sigRow).join("")}</tbody></table></div>
+    <h2 style="margin-top:16px">Sinyaller <span class="sub">(10 günlük ufuk; "Son 1 yıl" yaşlanma kontrolüdür)</span></h2>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Sinyal</th><th>Efsane</th><th>Adet</th><th>Fazla getiri</th><th>İsabet</th><th>t</th><th>Yarı1 / Yarı2</th><th>Boğa / Ayı</th><th>Son 1 yıl</th><th>Karar / durum</th></tr></thead><tbody>${Rr.signals.map(sigRow).join("")}</tbody></table></div>
     <h2 style="margin-top:16px">Faktörler <span class="sub">(sıra korelasyonu IC ve üst-alt %20 farkı)</span></h2>
     <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Faktör</th><th>Efsane</th><th>IC</th><th>t</th><th>Üst−alt %20</th><th>Pozitif dönem</th><th>Karar</th></tr></thead><tbody>${Rr.factors.map(facRow).join("")}</tbody></table></div>
+    <h2 style="margin-top:16px">Temel veri testi (Buffett'ın kalite/değer ölçütleri) <span class="sub">(noktasal haftalık kayıtlar: ${pit.snapshots}/${pit.needed})</span></h2>
+    ${pit.ready ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Faktör</th><th>IC (1 haftalık)</th><th>t</th><th>Dönem</th></tr></thead><tbody>${pit.factors.map(f => `<tr><td style="text-align:left">${esc(f.label)}</td><td class="${sign(f.ic)}">${fmt(f.ic, 3)}</td><td>${fmt(f.t, 1)}</td><td>${f.n}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="note">Geçmiş bilanço verisi noktasal (o günkü haliyle) olmadığı için Buffett'ın ölçütlerini şimdi test edemiyoruz. Bugünden itibaren her hafta temel veriler kaydediliyor; ${pit.needed} hafta birikince kalite/değer faktörleri otomatik test edilecek (${pit.snapshots}/${pit.needed}).</p>`}
     <p class="note">t ≥ 2 ve iki yarıda aynı işaret: "kanıt var". t ≤ −2 ve iki yarıda negatif: "ters kanıt". Diğerleri belirsiz. Değerlendirme: ${Rr.generated}.</p>`;
+}
+
+/* ---------- Karne: rejim performansı ve haber etkisi ---------- */
+function regimeTable() {
+  const st = regimeStats(), RG = [["bull", "Boğa"], ["mixed", "Geçiş"], ["bear", "Ayı"]], mean = a => a.reduce((x, y) => x + y, 0) / a.length * 100;
+  return `<h3 style="margin:14px 0 6px;font-size:14px">Rejim karnesi <span class="sub">(hangi efsane hangi piyasa rejiminde kazanıyor? ortalama günlük getiri · gün sayısı)</span></h3>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Portföy</th>${RG.map(([, n]) => `<th>${n}</th>`).join("")}</tr></thead><tbody>
+    ${Object.keys(PORT.p).map(k => `<tr><td style="text-align:left">${LNAMES[k]}</td>${RG.map(([r]) => { const a = st[k][r] || []; return `<td>${a.length ? `<span class="${sign(mean(a))}">${mean(a) > 0 ? "+" : ""}${fmt(mean(a), 2)}%</span> <span class="mute">(${a.length}g)</span>${a.length < 20 ? '<span class="few">az</span>' : ""}` : "<span class='mute'>–</span>"}</td>`; }).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="note">Ofis Fonu'nun "Rejime göre" ağırlıkları, her rejimde ≥20 gün veri biriktiğinde bu tabloya göre kendiliğinden güncellenir.</p>`;
+}
+let NEWSLOG = null, nlAt = 0;
+async function loadNewsLog() { if (NEWSLOG && Date.now() - nlAt < 3600e3) return; const n = await getJson("news_log.json?t=" + Math.floor(Date.now() / 36e5)); if (n && n.events) { NEWSLOG = n; nlAt = Date.now(); } }
+function newsStudyHtml() {
+  const head = "<h2 style='margin-top:18px'>📰 Haber etkisi <span class='sub'>(etiketli haberden sonra hisse piyasa ortalamasına göre ne yaptı?)</span></h2>";
+  if (!NEWSLOG || !NEWSLOG.events.length) return head + "<p class='mute'>Haber olayları birikiyor; sonuçlar 5 iş günü sonra görünür.</p>";
+  const exc = (e, h) => e.r && e.r[h] != null && e.b && e.b[h] != null ? e.r[h] - e.b[h] : null, by = {};
+  NEWSLOG.events.forEach(e => e.tags.forEach(tg => (by[tg] = by[tg] || []).push(e)));
+  const st = (arr, h) => { const xs = arr.map(e => exc(e, h)).filter(x => x != null); return {n: xs.length, m: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null, hit: xs.length ? xs.filter(x => x > 0).length / xs.length * 100 : null}; };
+  const cell = s => s.n ? `<span class="${sign(s.m)}">${s.m > 0 ? "+" : ""}${fmt(s.m, 1)}%</span> · isabet %${fmt(s.hit, 0)} <span class="mute">(n=${s.n})</span>${s.n < 20 ? '<span class="few">az örnek</span>' : ""}` : "<span class='mute'>bekliyor</span>";
+  return head + `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Haber türü</th><th>Olay</th><th>5 iş günü</th><th>10 iş günü</th></tr></thead><tbody>${NEWS_TAGS.map(([n]) => `<tr><td style="text-align:left">${n}</td><td>${(by[n] || []).length}</td><td>${cell(st(by[n] || [], 5))}</td><td>${cell(st(by[n] || [], 10))}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">Her etiketli haber (son 4 gün) bir kez kaydedilir; giriş fiyatı kayıt günü kapanışıdır. Kellogg'un "olumlu haber katalizörü" ölçütü bu sonuçlarla doğrulanmadan ağırlık kazanmaz.</p>`;
 }
 
 /* ---------- Karne ---------- */
@@ -854,8 +967,8 @@ async function loadPicks() {
 }
 async function renderKarne() {
   const el = $("karneView"); el.innerHTML = "<h2>Komite karnesi</h2><p class='mute'>Yükleniyor…</p>";
-  await Promise.all([loadPicks(), loadPort()]);
-  const perf = PORT ? `<h2>💼 Portföy karnesi <span class="sub">(günlük · haftalık · aylık · başlangıçtan; detay için satıra tıklayın)</span></h2>${perfTable()}<p class="note">Her portföy ${fmt(PORT.config.capital, 0)} TL ile ${PORT.start} tarihinde başladı. Kıyaslar: BIST 100 ve likit 150 hissenin eşit ağırlıklı endeksi.</p>` : "<p class='mute'>Portföy verisi henüz yok.</p>";
+  await Promise.all([loadPicks(), loadPort(), loadNewsLog()]);
+  const perf = PORT ? `<h2>💼 Portföy karnesi <span class="sub">(günlük · haftalık · aylık · başlangıçtan; detay için satıra tıklayın)</span></h2>${perfTable()}${regimeTable()}<p class="note">Her portföy ${fmt(PORT.config.capital, 0)} TL ile ${PORT.start} tarihinde başladı. Kıyaslar: BIST 100 ve likit 150 hissenin eşit ağırlıklı endeksi.</p>` : "<p class='mute'>Portföy verisi henüz yok.</p>";
   if (!PICKS || !PICKS.picks.length) { el.innerHTML = perf + "<h2 style='margin-top:16px'>Karar karnesi</h2><p class='mute'>Henüz karar kaydı yok.</p>"; return; }
   const P = PICKS.picks, ex = (p, h) => p.r && p.r[h] != null && p.b && p.b[h] != null ? p.r[h] - p.b[h] : null;
   const stat = (arr, h) => { const xs = arr.map(p => ex(p, h)).filter(x => x != null); return {n: xs.length, mean: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null, hit: xs.length ? xs.filter(x => x > 0).length / xs.length * 100 : null}; };
@@ -873,7 +986,7 @@ async function renderKarne() {
     <h2 style="margin-top:16px">Efsane oyları isabetli mi? <span class="sub">(komite adaylarında, 10 iş günü fazla getiri)</span></h2>
     <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Efsane</th><th>Olumlu oy verdiğinde</th><th>Olumsuz oy verdiğinde</th></tr></thead><tbody>
     ${votes.map(([n, pos, neg]) => `<tr><td style="text-align:left">${n}</td><td>${cell(stat(pos, 10))}</td><td>${cell(stat(neg, 10))}</td></tr>`).join("")}</tbody></table></div>
-    <p class="note">İyi bir efsane için beklenti: olumlu oyda fazla getiri pozitif, olumsuz oyda negatif.</p>`;
+    <p class="note">İyi bir efsane için beklenti: olumlu oyda fazla getiri pozitif, olumsuz oyda negatif.</p>${newsStudyHtml()}`;
 }
 
 /* ---------- Genel Bakış: rejim ve takvim ---------- */
@@ -1157,6 +1270,7 @@ function refreshView() {
   else if (view === "karsilastir") renderCompare();
   else if (view === "karne") renderKarne();
   else if (view === "portfoyler") renderPortfolios();
+  else if (view === "sektorler") renderSectors();
   else if (view === "arastirma") renderResearch();
   if (selected && drawerOpen()) detail(selected);
 }
@@ -1311,7 +1425,7 @@ applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matche
 let first = location.hash.slice(1);
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "adaylar", "ekranlar", "portfoyler", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "adaylar", "ekranlar", "sektorler", "portfoyler", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

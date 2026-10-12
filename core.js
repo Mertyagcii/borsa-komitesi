@@ -118,6 +118,33 @@ function tally(checks) {
 const isFin = s => s.sector === "Finance";
 const graham = s => s.eps > 0 && s.bvps > 0 ? Math.sqrt(22.5 * s.eps * s.bvps) : null;
 const evidence = id => RESEARCH && RESEARCH.signals ? RESEARCH.signals.find(x => x.id === id) : null;
+/* Sinyal yaşlanması: araştırmada kanıtı ters çıkan ya da son 1 yılda avantajı kaybolan sinyal "false" döner (kural devre dışı).
+   true = kanıtlı, null = kanıt yok/belirsiz (kural çalışır ama destek sayılmaz). */
+function signalOk(id) {
+  const e = evidence(id); if (!e) return null;
+  if (e.verdict === "ters kanıt" || e.aging) return false;
+  if (e.verdict === "kanıt var") return true;
+  return e.recent && e.recent.excess <= 0 ? false : null;
+}
+
+/* ---------- Haber türleri (KAP/haber başlığı sınıflandırması) ---------- */
+const trLower = s => String(s || "").replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase();
+const NEWS_TAGS = [["Temettü", /temettü|kâr payı|kar payı/, "up"], ["Bedelsiz", /bedelsiz|bölünme/, "up"], ["Bilanço", /bilanço|finansal sonuç|net dönem|çeyrek|faaliyet raporu/, ""],
+  ["İhale/Sözleşme", /ihale|sözleşme|sipariş|anlaşma/, "up"], ["Dava/Ceza", /dava|ceza|soruşturma|tedbir|yasak|iflas|konkordato/, "down"], ["Geri alım", /geri alım/, "up"],
+  ["Analist", /hedef fiyat|tavsiye|\(.*yatırım\)|beklenti/, ""]];
+const tagsOf = title => { const x = trLower(title); return NEWS_TAGS.filter(([, re]) => re.test(x)); };
+
+/* ---------- Sektör istatistikleri: medyan RS, 1 ay getiri, SMA50 üstü oranı; RS'ye göre sıralama ---------- */
+let SECTOR_STATS = {};
+function computeSectorStats(uni) {
+  const g = {};
+  uni.filter(s => s.ok && s.rs != null && s.tl >= 10).forEach(s => { (g[s.sector || "Diğer"] = g[s.sector || "Diğer"] || []).push(s); });
+  const med = a => { const b = a.filter(x => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
+  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length, rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100}));
+  rows.sort((x, y) => y.rs - x.rs); rows.forEach((r, i) => { r.rank = i + 1; });
+  SECTOR_STATS = Object.fromEntries(rows.map(r => [r.name, {...r, total: rows.length}]));
+  return rows;
+}
 
 /* Adil değer (büyüyen kalıcı gelir): iskonto oranı = tahvil getirisi + hisse risk primi; büyüme = son EPS büyümesinin %75'i,
    [0, enflasyon] aralığıyla sınırlı (yüksek enflasyonda kazançlar uzun vadede enflasyondan hızlı büyüyemez).
@@ -219,6 +246,8 @@ function livermore(s) {
   const nearPivot = np != null && np >= 1 - R.lPiv / 100;
   const leader = s.rs != null && s.rs >= (bear ? 90 : R.lRs);
   const extended = s.smaDist != null && s.smaDist > R.lExt;
+  const secRank = SECTOR_STATS[s.sector || "Diğer"] || null;
+  const sA = signalOk("yakin52"), sB = signalOk("kirilim20_trend"), support = sA === false || sB === false ? false : sA || sB ? true : null;
   const checks = [
     chk(tr, "En az direnç çizgisi yukarı: fiyat > SMA50 > SMA200", `${fmt(s.close)} / ${fmt(s.sma50)} / ${s.sma200 ? fmt(s.sma200) : "–"}`),
     chk(s.rs == null ? null : leader, `Lider hisse: göreceli güç ≥ ${bear ? 90 : R.lRs}${bear ? " (ayı rejimi: yalnızca en güçlüler)" : ""}`, s.rs == null ? "–" : fmt(s.rs, 0)),
@@ -228,10 +257,13 @@ function livermore(s) {
     chk(s.dist52 == null ? null : s.dist52 >= -10, "Zirveye yakın: 52 hafta zirvesinin %10 içinde", pc(s.dist52)),
     chk(s.smaDist == null ? null : !extended, `Pivottan çok uzaklaşmamış (SMA50 üstü ≤ %${R.lExt}): kovalamam`, pc(s.smaDist)),
     chk(REGIME ? !bear || s.rs >= 90 : null, "Piyasa rejimi uygun (ayıda yalnızca en güçlü liderler)", REGIME ? REGIME.label : "–"),
+    chk(secRank ? secRank.rank <= Math.ceil(secRank.total * 0.4) : null, "Sektörü güçlü: sektör RS sıralamasında ilk %40 (liderler sektörleriyle yükselir)", secRank ? `${secRank.rank}/${secRank.total}. sıra` : "–"),
+    chk(support, "Araştırma desteği: 52h yakınlık / kırılım sinyalleri hâlâ kanıtlı (yaşlanmamış)", support == null ? "kanıt yok" : support ? "kanıtlı" : "KANIT KAYBI: yeni giriş yok"),
   ];
   const k = tally(checks);
   let v = tr && leader && k.score >= 70 && (nearPivot || (s.dist52 != null && s.dist52 >= -5)) && !extended ? 1 : (tr === false && s.close < s.sma50) || k.score < 30 ? -1 : 0;
   if (bear && v > 0 && !(s.rs >= 90)) v = 0;
+  if (support === false && v > 0) v = 0; // araştırmada avantaj kaybolmuşsa yeni pozisyon açmaz
   const t = v > 0 ? `Tape'e bakıyorum: trend yukarı, ${s.name} lider grupta (RS ${fmt(s.rs, 0)}) ve pivot ${nearPivot ? "kırılıyor" : "yakında"}${s.rvol >= R.lVol ? ", hacim de eşlik ediyor" : ""}. Burada beklentiye değil teyide oynuyorum; teyit geldi.`
     : v < 0 ? "Düşen bıçak tutulmaz. Trend aşağı ya da hisse liderlerin arasında değil; böyle yerde 'ucuz' diye alan umut ticareti yapıyordur."
     : bear ? "Piyasa ayı rejiminde; bu hisse yeterince güçlü bir lider değil. Beklemek de bir pozisyondur. Net fırsat yoksa işlem yapmam."
@@ -249,6 +281,7 @@ function livermore(s) {
 function kellogg(s) {
   const rv = s.rvol, bear = REGIME && REGIME.trend === "bear";
   const brk = s.h1m ? s.close >= s.h1m * 0.98 : null;
+  const support = signalOk("kellogg_itis_kirilim");
   const nn = NEWS[s.name], catalyst = nn && nn.items && nn.items.some(i => NOW / 1000 - i.ts < 2 * 86400 && i.s > 0);
   const thrust = s.change >= R.kChg && rv >= R.kRvol;
   const checks = [
@@ -260,9 +293,11 @@ function kellogg(s) {
     chk(s.tl >= R.kTl, `Likidite/spread: günlük hacim ≥ ${R.kTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
     chk(REGIME ? !bear : null, "Piyasa ayıda değil (kırılımlar ayıda tutmuyor)", REGIME ? REGIME.label : "–"),
     chk(catalyst ? true : null, "Katalizör: son 2 günde olumlu haber/KAP", catalyst ? "var" : "yok (zorunlu değil)"),
+    chk(support, "Araştırma desteği: hacimli itiş + kırılım sinyali hâlâ avantajlı (son 1 yıl)", support == null ? "kanıt yok/belirsiz" : support ? "kanıtlı" : "KANIT KAYBI: yeni giriş yok"),
   ];
   const k = tally(checks);
-  const v = thrust && brk !== false && s.tl >= R.kTl && !bear && k.score >= 60 ? 1 : rv >= R.kRvol && s.change <= -R.kChg ? -1 : 0;
+  const v0 = thrust && brk !== false && s.tl >= R.kTl && !bear && k.score >= 60 ? 1 : rv >= R.kRvol && s.change <= -R.kChg ? -1 : 0;
+  const v = v0 > 0 && support === false ? 0 : v0;
   const t = v > 0 ? `Hacim ${fmt(rv, 1)}x, fiyat %${fmt(s.change, 1)} itiyor ve direnç ${brk ? "aşılıyor" : "yakın"}: momentum canlı${catalyst ? ", üstüne haber de var" : ""}. Hızlı hareket eden yerde olmak isterim; ama stop'um hazır.`
     : v < 0 ? "Hacim yüksek ama fiyat sert düşüyor: bu dağıtım, alıcı yok satıcı var. Kimse bıçağı tutmaz; uzak dururum."
     : bear ? "Piyasa ayı rejiminde; kırılımlar bu ortamda sık sık geri dönüyor. Yavaş piyasada kenarda beklerim."

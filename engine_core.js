@@ -5,6 +5,7 @@
    - Komisyon+BSMV ≈ %0,15 ve kayma %0,10 (taraf başına) varsayımdır. Nakit, tahvil getirisine yakın bir oranla faiz kazanır.
    - Yalnızca uzun pozisyon (BIST'te açığa satış kısıtlı). Bedelsiz/bölünme tespit edilirse adet düzeltilir. */
 const ENGINE = {capital: 1000000, cost: 0.0015, slip: 0.0010};
+let INTRA = null; // {date, bars:{HISSE:[[o,h,l,c],...]}}: varsa stop/hedef gün içi kronolojik sırayla yürütülür
 const LEGENDS = ["buffett", "simons", "livermore", "kellogg", "komite"];
 const LNAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", komite: "Komite (Şeytanın Avukatı gözetiminde)"};
 const r2 = x => Math.round(x * 100) / 100;
@@ -75,6 +76,24 @@ function manageDay(p, by, date, lg) {
       }
     }
     if (pos.entry !== date) pos.days++;
+    const bars = INTRA && INTRA.date === date && INTRA.bars && INTRA.bars[pos.n];
+    if (bars && bars.length) { // kronolojik yürütme: önce hangisi gerçekleşti?
+      let sold = false;
+      for (const b of bars) {
+        if (pos.stop && b[2] <= pos.stop) {
+          sellPos(p, pos, pos.sh, Math.min(b[0], pos.stop) * (1 - ENGINE.slip), date, `Stop (${fmt(pos.stop)} TL) gün içinde çalıştı${b[0] < pos.stop ? " (boşlukla)" : ""}.`, lg);
+          sold = true; break;
+        }
+        if (pos.target && !pos.trimmed && b[1] >= pos.target) {
+          sellPos(p, pos, Math.max(1, Math.floor(pos.sh / 2)), pos.target * (1 - ENGINE.slip), date, `Hedef (${fmt(pos.target)} TL) geldi: yarısını sattım (scale out), kalanın stop'u girişe çekildi.`, lg);
+          pos.trimmed = true; pos.stop = Math.max(pos.stop || 0, pos.avg);
+        }
+        pos.peak = Math.max(pos.peak, b[1]);
+      }
+      if (sold) continue;
+      pos.lastClose = s.close;
+      continue;
+    }
     if (pos.stop && s.lo > 0 && s.lo <= pos.stop) {
       const px = Math.min(s.open, pos.stop) * (1 - ENGINE.slip);
       sellPos(p, pos, pos.sh, px, date, `Stop (${fmt(pos.stop)} TL) çalıştı${s.open < pos.stop ? " (açılış boşluğu)" : ""}.`, lg);
@@ -199,7 +218,7 @@ function signalsKomite(p, stocks, by, date, nav) {
 /* ======== Bir işlem günü ======== */
 function runDay(st, data, date, idx) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s])); window_by = by;
-  rankUniverse(stocks); REGIME = computeRegime(stocks, HIST);
+  rankUniverse(stocks); computeSectorStats(stocks); REGIME = computeRegime(stocks, HIST);
   current = strengthList(stocks, 25, 5);
   const prevDate = st.lastDate, days = prevDate ? Math.max(1, Math.round((new Date(date) - new Date(prevDate)) / 864e5)) : 0;
   const cy = st.config.cashYield || 0.30;
@@ -211,7 +230,7 @@ function runDay(st, data, date, idx) {
       manageDay(p, by, date, lg);
     }
     const nav = navOf(p, by);
-    p.nav.push({d: date, v: r2(nav), c: r2(p.cash)});
+    p.nav.push({d: date, v: r2(nav), c: r2(p.cash), rg: REGIME ? REGIME.trend : null});
     ({buffett: signalsBuffett, simons: signalsSimons, livermore: signalsLivermore, kellogg: signalsKellogg, komite: signalsKomite})[lg](p, stocks, by, date, nav);
   }
   // kıyas: BIST100 ve likit 150 hissenin eşit ağırlıklı endeksi
