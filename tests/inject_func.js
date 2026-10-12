@@ -72,6 +72,18 @@ setTimeout(async function () {
     ok("halkaarz_eklendi", IPOU().length === 1 && $("ipoView").innerHTML.indexOf("Test Enerji") >= 0); $("ivP").value = "20"; $("ivE").value = "2"; document.querySelector("[data-ivcalc]").click(); ok("halkaarz_hesap", $("ivOut").innerHTML.indexOf("F/K") >= 0);
     document.querySelector("[data-ipdel]").click(); ok("halkaarz_silindi", IPOU().length === 0);
     ok("bebek_alanlari", UNIVERSE.filter(function (s) { return s.nipos8 != null; }).length > 100 && UNIVERSE.filter(function (s) { return s.eqg != null; }).length > 100);
+    /* ---- Paylasim, tarama karnesi, sektor akisi, lot simulasyonu ---- */
+    var sh = { v: 1, zf: [{ id: "zz1", name: "Paylasim testi", conds: [{ f: "mtf_w", op: ">=", v: 80 }], sort: { f: "mtf_w", dir: -1 } }], sp: { haftalik: { wMin: 85 } } };
+    var rt = shareDecode(shareEncode(sh)); ok("paylas_gidis_donus", JSON.stringify(rt) === JSON.stringify(sh));
+    ok("paylas_turkce_karakter", shareDecode(shareEncode({ v: 1, zf: [{ id: "a", name: "Şğüöçİ filtre", conds: [] }] })).zf[0].name === "Şğüöçİ filtre");
+    window.confirm = function () { return true; }; zSaveF([]); store.set("scanP", {}); ok("paylas_uygula", shareApply(sh) === true && zFilters().length === 1 && scanP("haftalik").wMin === 85);
+    ok("paylas_gecersiz_reddedilir", shareApply({ v: 2 }) === false); store.set("scanP", {}); zSaveF([]);
+    var sle = scanLiveEval(); ok("tarama_karnesi_yapi", typeof sle.days === "number" && ["haftalik", "gunluk", "aylik", "bebek", "halkaarz"].every(function (k) { return sle.out[k] && sle.out[k][5] && sle.out[k][20]; }));
+    ok("tarama_karnesi_html", scanKarneHtml().indexOf("Haftalık Tarama") >= 0);
+    var sf = sectorFlowHtml(); ok("sektor_akisi", sf.indexOf("Para ak") >= 0 && sf.indexOf("<tr>") >= 0);
+    show("halkaarz"); $("lsZ").value = "500"; $("lsP").value = "20"; $("lsB").value = "50"; $("lsN").value = "500"; $("lsA").value = "10000"; document.querySelector("[data-lscalc]").click();
+    var lo = $("lsOut").innerHTML; ok("lot_simulasyonu", lo.indexOf("lot") >= 0 && lo.indexOf("Toplam") >= 0);
+    $("lsZ").value = "100"; $("lsN").value = "5000"; document.querySelector("[data-lscalc]").click(); ok("lot_dusmeme_olasiligi", $("lsOut").innerHTML.indexOf("olas") >= 0 || $("lsOut").innerHTML.indexOf("lot") >= 0);
     /* ---- Gun ici / tahmin karnesi ---- */
     show("gunici"); await new Promise(function (r) { setTimeout(r, 2500); }); ok("gunici_radar", $("giView").innerHTML.indexOf("Tavan / Taban radar") >= 0); ok("gunici_lim_yuklendi", !!LIM && LIM.tavan.by_streak["1"].n > 100);
     show("tahmin"); await new Promise(function (r) { setTimeout(r, 2500); }); ok("tahmin_acilir", $("thView").innerHTML.indexOf("Skor sa") >= 0 && $("thView").innerHTML.indexOf("Hata analizi") >= 0);

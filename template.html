@@ -818,7 +818,7 @@ function flowHtml(s) {
 
 /* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
 let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
-let GDT = null, GON = null, LIM = null, IPOR = null; // + limit_research.json (tavan/taban) // daytrade_research.json, overnight_research.json
+let GDT = null, GON = null, LIM = null, IPOR = null, SLOG = null; // + scan_log.json (tarama karnesi) // + limit_research.json (tavan/taban) // daytrade_research.json, overnight_research.json
 let MTFW = null, MLOG = null; // mtf_walkforward.json: ileri doğrulama; mtf_log.json: canlı skor kaydı
 let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
 const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
@@ -943,7 +943,7 @@ function zEditorHtml(cf) {
   return `<div class="card" style="background:var(--panel2);margin:10px 0"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><label>Filtre adı<input data-zf="name" value="${esc(cf.name)}" style="width:200px"></label>
     <label>Sırala<select data-zf="sortf">${ZFIELDS.filter(f => !ZFD[f[0]].cat).map(f => `<option value="${f[0]}" ${sortF.f === f[0] ? "selected" : ""}>${esc(f[1])}</option>`).join("")}</select></label>
     <label>Yön<select data-zf="sortd"><option value="-1" ${sortF.dir < 0 ? "selected" : ""}>Büyükten küçüğe</option><option value="1" ${sortF.dir > 0 ? "selected" : ""}>Küçükten büyüğe</option></select></label>
-    <button data-zdup="1">⧉ Kopyala</button><button data-zdel="1" style="color:var(--down)">🗑 Sil</button><button data-zexp="1">📤 Dışa aktar</button><button data-zimp="1">📥 İçe aktar</button></div>
+    <button data-zshare="1">🔗 Paylaş</button><button data-zdup="1">⧉ Kopyala</button><button data-zdel="1" style="color:var(--down)">🗑 Sil</button><button data-zexp="1">📤 Dışa aktar</button><button data-zimp="1">📥 İçe aktar</button></div>
     <div style="margin-top:10px"><b>Koşullar</b> <span class="mute">(hepsi birlikte sağlanmalı · değişiklikler otomatik kaydedilir)</span></div>
     ${cf.conds.map((c, i) => `<div class="zrow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0">${fieldSel(c.f, i)}<select data-zf="op" data-i="${i}">${(ZFD[c.f] && ZFD[c.f].cat ? [["=", "="], ["!=", "≠"]] : [[">=", "≥"], ["<=", "≤"], ["=", "="]]).map(([k, n]) => `<option value="${k}" ${c.op === k ? "selected" : ""}>${n}</option>`).join("")}</select>${valIn(c, i)}${badge(c)}<button data-zcdel="${i}" title="Koşulu sil">✕</button></div>`).join("") || "<p class='mute'>Koşul yok: tüm hisseler listelenir.</p>"}
     <div style="margin-top:6px"><button data-zcadd="1">＋ Koşul ekle</button></div>
@@ -1149,7 +1149,7 @@ function scanEv(key) {
   return tplEv(key);
 }
 function scanParamsHtml(id, P) {
-  return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">${SCAN_PARAMS[id].map(([k, n]) => `<label>${esc(n)}<input data-scp="${k}" type="number" step="any" value="${P[k]}" style="width:92px"></label>`).join("")}<button data-scpreset="1">Varsayılana dön</button></div>`;
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">${SCAN_PARAMS[id].map(([k, n]) => `<label>${esc(n)}<input data-scp="${k}" type="number" step="any" value="${P[k]}" style="width:92px"></label>`).join("")}<button data-scpreset="1">Varsayılana dön</button><button data-scshare="1">🔗 Eşikleri paylaş</button></div>`;
 }
 function scanRowHtml(id, s, i) {
   const r = committee(s), pl = scanPlan(s), dd = s.h52 > 0 ? (1 - s.close / s.h52) * 100 : null;
@@ -1231,6 +1231,26 @@ document.addEventListener("change", e => {
 document.addEventListener("keydown", e => { if (view === "tarama" && e.key === "Enter" && e.target.id === "scanQ") { store.set("scanQ", e.target.value); scanTraceShow(e.target.value); } });
 
 /* ---------- Halka Arz: yeni halka arzlar (otomatik) + yaklaşan halka arzlar (elle takip) ---------- */
+/* ---------- Paylaşım: filtre ve tarama eşikleri tek bağlantıda ---------- */
+const shareEncode = o => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const shareDecode = s => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)))));
+function shareCopy(obj) {
+  const url = location.origin + location.pathname + "#paylas=" + shareEncode(obj);
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast("Paylaşım bağlantısı kopyalandı" + (url.length > 6000 ? " (çok uzun: bazı uygulamalar keser)" : "")), () => window.prompt("Bağlantı:", url));
+}
+function shareApply(o) {
+  if (!o || o.v !== 1) { toast("Geçersiz paylaşım bağlantısı"); return false; }
+  const fl = Array.isArray(o.zf) ? o.zf.filter(f => f && f.id && f.name && Array.isArray(f.conds)) : [], sp = o.sp && typeof o.sp === "object" ? o.sp : {};
+  if (!fl.length && !Object.keys(sp).length) { toast("Bağlantıda içe aktarılacak veri yok"); return false; }
+  if (!window.confirm(`Bağlantıdan ${fl.length} filtre ve ${Object.keys(sp).length} tarama eşiği ayarı içe aktarılsın mı?`)) return false;
+  const have = zFilters(), ids = new Set(have.map(f => f.id)); fl.forEach(f => { if (!ids.has(f.id)) have.push(f); }); zSaveF(have);
+  const cur = store.get("scanP", {}) || {}; Object.keys(sp).forEach(k => { if (SCAN_PARAMS[k]) cur[k] = {...(cur[k] || {}), ...sp[k]}; }); store.set("scanP", cur);
+  toast("İçe aktarıldı"); return true;
+}
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-zshare]")) shareCopy({v: 1, zf: zFilters()});
+  if (e.target.closest("[data-scshare]")) shareCopy({v: 1, sp: store.get("scanP", {}) || {}});
+});
 const IPOU = () => store.get("ipoUpcoming", []);
 const IPO_LINKS = [["SPK Bülteni (onaylar)", "https://spk.gov.tr/spk-bultenleri"], ["KAP (satış duyuruları)", "https://www.kap.org.tr/tr/"], ["Halka Arz Takvimi (halkarz.com)", "https://halkarz.com/"], ["Rota Borsa halka arz takvimi", "https://rotaborsa.com/2026-halka-arz-takvimi/"]];
 let ipoWin = store.get("ipoWin", 12);
@@ -1260,6 +1280,9 @@ function renderIpo() {
     <details class="meet"><summary>🧮 Halka arz değerlendirme hesabı (arz fiyatı sektöre göre pahalı mı?)</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Arz fiyatı (TL)<input id="ivP" type="number" step="any" style="width:100px"></label><label>Tahmini hisse başı kâr (TL, 12 ay)<input id="ivE" type="number" step="any" style="width:110px"></label><label>Hisse başı defter değeri (TL)<input id="ivB" type="number" step="any" style="width:110px"></label>
         <label>Sektör<select id="ivS">${sectors.map(n => `<option>${esc(n)}</option>`).join("")}</select></label><button data-ivcalc="1">Hesapla</button></div><div id="ivOut" class="note"></div></details>
+    <details class="meet"><summary>🎟 Lot dağıtımı ve sonuç simülasyonu (kaç lot düşer, sonuç ne olabilir?)</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Arz büyüklüğü (mn TL)<input id="lsZ" type="number" step="any" style="width:100px"></label><label>Arz fiyatı (TL)<input id="lsP" type="number" step="any" style="width:90px"></label><label>Bireysel pay %<input id="lsB" type="number" value="50" style="width:70px"></label>
+        <label>Tahmini başvuran (bin kişi)<input id="lsN" type="number" value="500" style="width:90px"></label><label>Başvuracağınız tutar (TL)<input id="lsA" type="number" value="10000" style="width:100px"></label><button data-lscalc="1">Hesapla</button></div><div id="lsOut" class="note"></div></details>
     <h3 style="margin:14px 0 4px">2) Yeni halka arzlar <span class="mute" style="font-weight:400">(${listed.length} hisse · son ${ipoWin} ay)</span></h3>
     <div class="tabs">${[6, 12, 24].map(m => `<button class="tab ${ipoWin === m ? "on" : ""}" data-ipwin="${m}">Son ${m} ay</button>`).join("")}</div>
     <p class="note">${med != null ? `Arz fiyatına göre medyan <b class="${sign(med)}">${sgnTxt(med)}</b>; ${below}/${perfs.length} hisse arz fiyatının altında. ` : ""}${ts ? `Geçmiş örnekte (${IPOR.n_ipo} halka arz) ${ts.en_az_1} hissede ilk günlerde tavan serisi görüldü (ortalama ${fmt(ts.ortalama_gun, 1)} gün); tavandaki hisse kuyrukta olduğundan alınamaz.` : ""}</p>
@@ -1278,6 +1301,17 @@ document.addEventListener("click", e => {
   const w = e.target.closest("[data-ipwin]"); if (w) { ipoWin = +w.dataset.ipwin; store.set("ipoWin", ipoWin); renderIpo(); return; }
   if (e.target.closest("[data-ipadd]")) { const n = ($("ipN").value || "").trim(); if (!n) { toast("Şirket adı girin"); return; } const a = IPOU(); a.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: n, code: ($("ipC").value || "").trim().toUpperCase(), appr: $("ipA").value, start: $("ipS").value, end: $("ipE").value, price: +$("ipP").value || null, size: +$("ipZ").value || null, dist: $("ipD").value, note: $("ipT").value.trim()}); store.set("ipoUpcoming", a); renderIpo(); return; }
   const d = e.target.closest("[data-ipdel]"); if (d) { store.set("ipoUpcoming", IPOU().filter(x => x.id !== d.dataset.ipdel)); renderIpo(); return; }
+  if (e.target.closest("[data-lscalc]")) {
+    const Z = +$("lsZ").value, P = +$("lsP").value, B = (+$("lsB").value || 50) / 100, N = (+$("lsN").value || 500) * 1000, A = +$("lsA").value;
+    if (!(Z > 0 && P > 0 && A > 0)) { $("lsOut").innerHTML = "Arz büyüklüğü, fiyat ve tutarı girin."; return; }
+    const lots = Z * 1e6 / P, retail = lots * B, share = retail / N, want = Math.floor(A / P), got = Math.min(want, Math.floor(share)), chance = share >= 1 ? 1 : share;
+    const prf = UNIVERSE.filter(s => s.fbt && ageDaysOf(s) <= 365).map(s => s.ipoperf != null ? s.ipoperf : (s.ipop ? (s.close / s.ipop - 1) * 100 : null)).filter(x => x != null).sort((a, b) => a - b), q = f => prf.length ? prf[Math.min(prf.length - 1, Math.floor(f * prf.length))] : null;
+    const cost = got * P, tavan = IPOR && IPOR.tavan_serisi ? IPOR.tavan_serisi.en_az_1 / IPOR.tavan_serisi.n * 100 : null;
+    $("lsOut").innerHTML = `Toplam ${fmt(lots, 0)} lot, bireysel havuz ${fmt(retail, 0)} lot; eşit dağıtımda kişi başı yaklaşık <b>${fmt(share, 1)} lot</b>. Talebiniz ${fmt(want, 0)} lot: ${share >= 1 ? `yaklaşık <b>${fmt(got, 0)} lot (${fmt(cost, 0)} TL)</b> düşer` : `lot düşme olasılığı yaklaşık <b>%${fmt(chance * 100, 0)}</b> (kura/oransal dağıtım)`}.${tavan != null ? ` Geçmişte halka arzların %${fmt(tavan, 0)}'inde ilk günlerde tavan serisi görüldü.` : ""}
+      ${prf.length && got > 0 ? `<div class="tw"><table><thead><tr><th style="text-align:left">Son 1 yılın halka arzlarına göre (bugünkü fiyat / arz fiyatı)</th><th>Arza göre</th><th>Sizin sonucunuz (maliyet öncesi)</th></tr></thead><tbody>${[["En kötü %10", .1], ["%25", .25], ["Medyan", .5], ["%75", .75], ["En iyi %10", .9]].map(([n, f]) => `<tr><td style="text-align:left">${n}</td><td>${sgn(q(f), 0)}</td><td>${sgn(cost * q(f) / 100, 0, " TL")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <br>Bu dağılım <b>bugünkü</b> fiyatlara göredir (ilk günlerde satış farklı olabilir); n=${prf.length} halka arz. Kâr garantisi yoktur.`;
+    return;
+  }
   if (e.target.closest("[data-ivcalc]")) {
     const p = +$("ivP").value, eps = +$("ivE").value, bv = +$("ivB").value, sec = $("ivS").value, st = Object.values(SECTOR_STATS).length ? SECTOR_STATS[Object.keys(SECTOR_STATS).find(k => trSector(k) === sec) || ""] : null, out = [];
     if (!(p > 0)) { $("ivOut").innerHTML = "Arz fiyatını girin."; return; }
@@ -1544,6 +1578,26 @@ function missHtml() {
   return `<div class="tw"><table><thead><tr><th style="text-align:left">Koşul (lider kurulum, ${h} gün sonrası)</th><th>Gözlem</th><th>Piyasaya göre</th><th>İsabet</th><th>Büyük hata (&lt; −%5)</th></tr></thead><tbody>${row("Tüm lider kurulumlar", obs)}${buckets.map(([n, f]) => row(n, obs.filter(f))).join("")}${Object.entries(secs).sort((a, b) => b[1].length - a[1].length).slice(0, 6).map(([k, a]) => row("Sektör: " + k, a)).join("")}</tbody></table></div>
     <p class="note">Skorun en çok yanıldığı koşulu bulup ona dikkat edin ya da filtreyle eleyin. Küçük örneklerde (n &lt; 30) farklara güvenmeyin.</p>`;
 }
+function scanLiveEval() { // scan_log.json: her gün her senaryonun aday listesi [ad, kapanış]; sonuç = piyasa ortalamasına göre fazla getiri (mtf_log kapanışlarından)
+  const S = (SLOG && SLOG.days) || [], M = (MLOG && MLOG.days) || [], idx = new Map(M.map((d, i) => [d.d, i])), out = {};
+  Object.keys(SCAN_META).forEach(id => { out[id] = {5: [], 10: [], 20: []}; });
+  for (const day of S) {
+    const j = idx.get(day.d); if (j == null) continue;
+    for (const h of [5, 10, 20]) {
+      const k = j + h; if (k >= M.length) continue;
+      const B = new Map(M[k].r.map(x => [x[0], x[4]])); let sum = 0, n = 0;
+      M[j].r.forEach(x => { const c1 = B.get(x[0]); if (c1) { const r = c1 / x[4] - 1; if (Math.abs(r) < 0.6) { sum += r; n++; } } });
+      if (n < 50) continue; const mean = sum / n;
+      for (const id of Object.keys(day.s || {})) (day.s[id] || []).forEach(([nm, c0]) => { const c1 = B.get(nm); if (c1 && c0 > 0) { const r = c1 / c0 - 1; if (Math.abs(r) < 0.6 && out[id]) out[id][h].push((r - mean) * 100); } });
+    }
+  }
+  return {days: S.length, out};
+}
+function scanKarneHtml() {
+  const L = scanLiveEval(), hs = [5, 10, 20], names = {haftalik: "Haftalık Tarama", gunluk: "Günlük Tarama", aylik: "Aylık Tarama", bebek: "Bebek Hisseler", halkaarz: "Halka Arz Taraması"};
+  return `<p class="note">Her kapanıştan sonra bütün tarama senaryolarının (varsayılan eşiklerle) aday listesi kaydedilir; sonuçlar piyasa ortalamasına göre fazla getiri olarak 5/10/20 gün sonra ölçülür. Bu, taramaların gerçekten potansiyelli hisse bulup bulmadığını canlı sınar${L.days ? ` (${L.days} gün kaydı)` : ""}.</p>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Senaryo</th>${hs.map(h => `<th>${h} gün sonra</th>`).join("")}</tr></thead><tbody>${Object.entries(names).map(([id, n]) => `<tr><td style="text-align:left">${n}</td>${hs.map(h => `<td>${liveCell(L.out[id][h])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
 const WFN = {wf: "Her katlamada yeniden seçilen göstergeler", fixed: "Sabit liste (tüm örneklemle seçildi: SIZINTILI)", naive: "Tüm göstergelerin ortalaması", rs: "Sade RS (günlük skor)", rs_cmf: "RS + CMF", ens_rs: "Bileşik + RS (haftalık skor)", ens_rs_w: "RS + haftalık bileşik"};
 function wfHtml(w, title) {
   if (!w) return "";
@@ -1585,6 +1639,7 @@ async function renderTahmin() {
     ${have ? `<div class="tw"><table><thead><tr><th style="text-align:left">Grup (kayıt gününde)</th>${hs.map(h => `<th>${h} gün sonra <span class="mute" style="font-weight:400">(${L.H[h].used} kayıt günü)</span></th>`).join("")}</tr></thead><tbody>${rowsL.map(([n, k]) => `<tr><td style="text-align:left">${n}</td>${hs.map(h => `<td>${liveCell(L.H[h].g[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
       <p class="note">Kapanıştan kapanışa, piyasa ortalamasına göre; örtüşen gözlemler olduğundan n büyük görünür (bağımsız karar sayısı daha azdır). Küçük n'e güvenmeyin: en az 20-30 bağımsız gün biriksin.</p>`
       : `<p class="mute">Canlı kayıt başladı (${L.days} gün). İlk 5 günlük sonuçlar için en az 6 işlem günü gerekir; her gün kapanıştan sonra otomatik eklenir ve sonuçlar bu tabloda kendiliğinden belirir.</p>`}
+    <h2 style="margin-top:14px">Tarama karnesi <span class="sub">(senaryo bazlı canlı doğrulama)</span></h2>${scanKarneHtml()}
     <h2 style="margin-top:14px">2) Kalibrasyon <span class="sub">(skor yükseldikçe sonuç gerçekten iyileşiyor mu?)</span></h2>${calibHtml()}
     <h2 style="margin-top:14px">3) İleri doğrulama <span class="sub">(göstergeler yalnızca eğitim döneminde seçilip görülmemiş dönemde sınandı)</span></h2>
     <p class="note">Aynı geçmişte seçip aynı geçmişte sınamak iyimserdir. Burada her katlamada göstergeler yalnızca eğitim verisiyle seçilir, ardından hiç görülmemiş 60 günde ölçülür. <b>Bulgu:</b> sade göreceli güç (RS) her evrende ve her ufukta tutarlı biçimde güçlü çıktı. Çok göstergeli günlük bileşik görülmemiş dönemde RS'nin gerisinde kaldı (çekirdek evrende hiç işe yaramadı); haftalıkta bileşik ile RS birbirine yakın (fark gürültü içinde). Bu yüzden günlük skor artık RS, haftalık skor ise bileşik + RS birleşimidir. "Sabit liste" satırı sızıntılı olduğu için yalnızca referanstır.</p>
@@ -2341,7 +2396,17 @@ async function renderSectors() {
       <td><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><span class="secbar"><i style="width:${r.rs}%"></i></span>${fmt(r.rs, 0)}</div></td><td>${r.rank}/${rows.length}</td>
       <td class="${sign(r.p1m)}">${fmt(r.p1m, 1)}</td><td class="${sign(r.p3m)}">${fmt(r.p3m, 1)}</td><td>%${fmt(r.above, 0)}</td>
       <td class="${sign(r5[n])}">${r5[n] == null ? "–" : fmt(r5[n], 2)}</td><td class="${sign(r20[n])}">${r20[n] == null ? "–" : fmt(r20[n], 2)}</td><td class="${l[1]}">${l[0] || "–"}</td></tr>`; }).join("")}</tbody></table></div>
+    ${sectorFlowHtml()}
     <p class="note">Bir satıra tıklayınca o sektörün hisseleri Aday Hisseler sayfasında süzülür.</p>`;
+}
+function sectorFlowHtml() {
+  const g = {}; UNIVERSE.filter(s => s.ok && s.tl >= 10 && s.mtf && s.mtf.w != null).forEach(s => { (g[trSector(s.sector)] = g[trSector(s.sector)] || []).push(s); });
+  const baby = new Set(runScan("bebek", scanP("bebek"), {skipLazy: true}).list.map(s => s.name)), med = a => { const b = a.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
+  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([k, a]) => { const lead = a.filter(s => { const t = mtfTier(s); return t && (t.id === "uyumlu" || t.id === "hlider"); }), cheapL = lead.filter(s => { const c = cheapness(s); return c && c.sure && c.lab === "UCUZ"; });
+    return {k, n: a.length, w: med(a.map(s => s.mtf.w)), cmf: med(a.map(s => s.cmf)), cmfw: med(a.map(s => s.cmf_w)), lead: lead.length, share: lead.length / a.length * 100, cheapL: cheapL.length, baby: a.filter(s => baby.has(s.name)).length, top: lead.sort((x, y) => y.mtf.b - x.mtf.b).slice(0, 3)}; }).sort((a, b) => b.w - a.w);
+  return `<h3 style="margin:14px 0 4px">Para akışı ve fırsat haritası <span class="mute" style="font-weight:400">(likit hisseler; haftalık skora göre sıralı)</span></h3>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Sektör</th><th>Hisse</th><th title="Medyan haftalık skor">Haftalık skor</th><th title="Chaikin Para Akışı medyanı (günlük / haftalık): + alıcı baskın">Para akışı (G/H)</th><th>Lider sayısı</th><th>Lider payı</th><th title="Lider ve adil değere göre ucuz">Lider+ucuz</th><th title="Bebek hisse taramasından geçenler">Bebek</th><th style="text-align:left">Öne çıkanlar</th></tr></thead><tbody>${rows.map(r => `<tr><td style="text-align:left"><b>${esc(r.k)}</b></td><td>${r.n}</td><td class="${scCls(r.w)}"><b>${fmt(r.w, 0)}</b></td><td class="${sign(r.cmf)}">${fmt(r.cmf, 2)} / ${fmt(r.cmfw, 2)}</td><td>${r.lead}</td><td>%${fmt(r.share, 0)}</td><td>${r.cheapL}</td><td>${r.baby}</td><td style="text-align:left">${r.top.map(s => `<span class="pill" data-x="${esc(s.name)}">${esc(s.name)}</span>`).join("")}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">Para girişi olan (CMF &gt; 0) ve lider payı yüksek sektörler, fiyat hareketine hacmin de eşlik ettiği yerlerdir. "Bebek" sütunu o sektörde borcu az, özsermayesi büyüyen ama henüz yükselmemiş (trend onayı almış) hisse sayısıdır.</p>`;
 }
 
 /* ---------- Sanal portföyler ---------- */
@@ -3059,6 +3124,7 @@ async function loadAux() {
   { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
+  { const m = await getJson("scan_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) SLOG = m; }
   if (!IPOR) { const m = await getJson("ipo_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.cond) IPOR = m; }
   if (!LIM) { const m = await getJson("limit_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tavan) LIM = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
@@ -3161,6 +3227,7 @@ applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matche
 let first = location.hash.slice(1);
 if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(escape(atob(first.slice(7))))); scrSave(); } catch (err) {} first = "tarayici"; }
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
+if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
 show(["dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");

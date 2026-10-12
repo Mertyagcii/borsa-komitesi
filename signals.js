@@ -25,7 +25,7 @@ function istanbul() {
   return {date: `${p.year}-${p.month}-${p.day}`, wd: p.weekday, min: (+p.hour % 24) * 60 + +p.minute};
 }
 const now = istanbul(), date = opt("date", now.date);
-const mlog = read("mtf_log.json", {days: []}), store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
+const slog = read("scan_log.json", {days: []}), mlog = read("mtf_log.json", {days: []}), store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
 const afterClose = !["Sat", "Sun"].includes(now.wd) && now.min >= 18 * 60 + 45;
 
 function publish() {
@@ -34,6 +34,7 @@ function publish() {
   fs.writeFileSync(path.join(SITE, "news_log.json"), JSON.stringify(nlog));
   fs.writeFileSync(path.join(SITE, "snapshots.json"), JSON.stringify(snaps));
   fs.writeFileSync(path.join(SITE, "mtf_log.json"), JSON.stringify(mlog));
+  fs.writeFileSync(path.join(SITE, "scan_log.json"), JSON.stringify(slog));
 }
 if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
   console.log(!afterClose ? "Seans kapanışı değil; kayıt atlandı." : `${date} zaten kaydedildi.`);
@@ -44,13 +45,13 @@ if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
 /* ---- core.js'i bir vm içinde çalıştır (tarayıcıyla aynı mantık) ---- */
 const coreSrc = fs.readFileSync(path.join(__dirname, "core.js"), "utf8");
 const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __NOW: Date.now()});
-const FUND_COLS = ["name", "close", "roe", "nm", "gm", "de", "fcf", "mcap", "eps", "bvps", "epsg", "pe", "pb", "dy", "debt", "ebitda", "cash", "p1m", "p6m", "rs", "upside", "fair"];
+const FUND_COLS = ["name", "close", "roe", "nm", "gm", "de", "fcf", "mcap", "eps", "bvps", "epsg", "pe", "pb", "dy", "debt", "ebitda", "cash", "p1m", "p6m", "rs", "upside", "fair", "nipos8", "eqg", "nig4", "dbtg", "cr", "revg"];
 const out = vm.runInContext(`
 ${coreSrc}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
 RESEARCH = __research; MTFR = __mtfr; NOW = __NOW;
 const UNI = __data.stocks.map(enrich); rankUniverse(UNI); computeSectorStats(UNI);
-REGIME = computeRegime(UNI, HIST);
+REGIME = computeRegime(UNI, HIST); UNIVERSE = UNI;
 current = strengthList(UNI, 25, 5);
 const res = current.map(s => [s, committee(s)]);
 const sc = personaScreens(UNI, 8, []);
@@ -68,6 +69,7 @@ Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n)
   events,
   mtf: UNI.filter(s => s.ok && s.mtf && s.mtf.w != null && s.close > 0).map(s => [s.name, s.mtf.d == null ? null : Math.round(s.mtf.d), Math.round(s.mtf.w), s.mtf.m == null ? null : Math.round(s.mtf.m), s.close, tierId(s.mtf.d, s.mtf.w, s.mtf.m), Math.round(s.tl), s.atrPct == null ? null : +s.atrPct.toFixed(1), s.nextEarn ? Math.round((s.nextEarn * 1000 - NOW) / 864e5) : null, s.sector || null]),
   mtfEligible: UNI.filter(s => s.ok && s.tl >= 5).length,
+  scans: Object.fromEntries(["haftalik", "gunluk", "aylik", "bebek", "halkaarz"].map(id => [id, runScan(id, scanDefaults(id)).list.slice(0, 60).map(s => [s.name, s.close])])),
 })`, ctx);
 
 const nowClose = Object.fromEntries(data.stocks.filter(s => s.close > 0).map(s => [s.name, s.close]));
@@ -118,7 +120,7 @@ nlog.updated = date;
 const prevDay = mlog.days.filter(x => x.d < date).slice(-1)[0];
 mlog.days = mlog.days.filter(x => x.d !== date);
 // veri kalitesi koruması: skorlu hisse sayısı uygun hisselerin %70'inin altındaysa (TradingView eksik veri verdi) o günün kaydı yazılmaz
-if (out.mtf.length >= 0.7 * out.mtfEligible && out.mtf.length >= 200) mlog.days.push({d: date, r: out.mtf}); else console.log(`Skor kaydı atlandı: ${out.mtf.length}/${out.mtfEligible} hisse (veri eksik).`);
+if (out.mtf.length >= 0.7 * out.mtfEligible && out.mtf.length >= 200) { mlog.days.push({d: date, r: out.mtf}); slog.days = slog.days.filter(x => x.d !== date); slog.days.push({d: date, s: out.scans}); slog.days = slog.days.slice(-160); } else console.log(`Skor kaydı atlandı: ${out.mtf.length}/${out.mtfEligible} hisse (veri eksik).`);
 mlog.days = mlog.days.slice(-160);
 mlog.updated = date;
 const liquidSet = new Set(out.liquid.slice(0, 100).map(x => x[0])), prevT = prevDay ? Object.fromEntries(prevDay.r.map(x => [x[0], x[5]])) : {};
@@ -141,6 +143,7 @@ fs.writeFileSync("picks.json", JSON.stringify(store));
 fs.writeFileSync("snapshots.json", JSON.stringify(snaps));
 fs.writeFileSync("news_log.json", JSON.stringify(nlog));
 fs.writeFileSync("mtf_log.json", JSON.stringify(mlog));
+fs.writeFileSync("scan_log.json", JSON.stringify(slog));
 publish();
 
 const strong = out.committee.filter(c => c.sc >= 3).map(c => c.n);
