@@ -13,7 +13,7 @@ SITE = HERE / "site"
 
 SITE.mkdir(exist_ok=True)
 shutil.copy(HERE / "template.html", SITE / "index.html")
-for extra in ("core.js", "picks.json", "research.json", "mtf_research.json", "mtf_composite.json", "mtf_walkforward.json", "mtf_log.json", "portfolios.json", "snapshots.json", "news_log.json", "research_history.json", "ohlcv.json", "manifest.webmanifest", "sw.js", "icon.svg", "icon-192.png", "icon-512.png"):
+for extra in ("core.js", "picks.json", "research.json", "mtf_research.json", "mtf_composite.json", "mtf_walkforward.json", "mtf_log.json", "daytrade_research.json", "overnight_research.json", "portfolios.json", "snapshots.json", "news_log.json", "research_history.json", "ohlcv.json", "manifest.webmanifest", "sw.js", "icon.svg", "icon-192.png", "icon-512.png"):
     if (HERE / extra).exists():
         shutil.copy(HERE / extra, SITE / extra)
 snap = fetch_snapshot()

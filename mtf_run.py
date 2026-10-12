@@ -17,6 +17,17 @@ try:  # geniş evren başarısız olursa çekirdek analiz yine çalışır
     subprocess.run([sys.executable, str(HERE / "pull_wide.py"), "--if-stale"], check=False, timeout=1500)
 except Exception as e:
     print("geniş evren çekilemedi:", e)
+try:  # gün içi / gece taşıma araştırması: 15 dk veri haftada bir yenilenir
+    ip = HERE / "cache" / "intraday15.pkl"
+    if not ip.exists() or time.time() - ip.stat().st_mtime > 6 * 86400:
+        subprocess.run([sys.executable, str(HERE / "intraday_pull.py"), "--cap", "100"], check=False, timeout=1200)
+    if ip.exists():
+        import daytrade_research
+        import overnight_research
+        daytrade_research.main()
+        overnight_research.main()
+except Exception as e:
+    print("gün içi araştırma başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward

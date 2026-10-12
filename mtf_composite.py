@@ -110,7 +110,7 @@ def event_defs(sc, feats, f):
 def analyze(data, light=False):
     f, index = frames(data)
     C, O = f["close"], f["open"]
-    fwd = {h: C.shift(-h) / O.shift(-1) - 1 for h in (5, 10, 20, 60)}
+    fwd = {h: C.shift(-h) / O.shift(-1) - 1 for h in (1, 2, 3, 5, 10, 20, 60)}
     m50, m200 = index.rolling(50).mean(), index.rolling(200).mean()
     regime = pd.Series(np.where((index > m50) & (m50 > m200), "bull", np.where((index < m50) & (index < m200), "bear", "mixed")), index=index.index)
     feats = build(f)
@@ -118,7 +118,7 @@ def analyze(data, light=False):
     res = {"stocks": int(C.shape[1]), "from": str(C.index[0].date()), "to": str(C.index[-1].date()), "tests": {}, "events": {}}
     for name in ("gunluk", "haftalik", "aylik", "birlesik", "rs_baz", "gunluk_eski", "haftalik_eski"):
         res["tests"][name] = {}
-        for h in ((20,) if light else (5, 10, 20, 60)):
+        for h in ((20,) if light else (1, 2, 3, 5, 10, 20, 60)):
             res["tests"][name][str(h)] = test(sc[name], fwd[h], h, regime, name)
     for k, sig in event_defs(sc, feats, f).items():
         res["events"][k] = {}

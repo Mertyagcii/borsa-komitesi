@@ -133,6 +133,8 @@ svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stro
 .warns{margin:0;padding-left:16px;font-size:12.5px}.warns li{margin:3px 0}
 .bl{display:inline-block;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700;white-space:nowrap}
 .bl-strong{background:color-mix(in srgb,var(--up) 25%,transparent);color:var(--up)}
+.heat{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}.ht{border-radius:6px;color:#fff;font-size:11.5px;line-height:1.15;cursor:pointer;display:flex;flex-direction:column;justify-content:center;text-align:center;height:50px;overflow:hidden;text-shadow:0 1px 2px rgba(0,0,0,.35)}.ht b{font-size:12px}.ht:hover{outline:2px solid var(--accent2)}
+.dcard{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0;background:var(--panel2)}.dverdict{display:inline-block;font-weight:800;letter-spacing:.3px;padding:4px 12px;border-radius:99px;font-size:13px}.dverdict.up{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}.dverdict.down{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}.dverdict.mid{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}.dgrid div{background:var(--panel);border-radius:10px;padding:8px 10px}.dgrid .l{font-size:11.5px;color:var(--mute)}.dgrid b{font-size:15px}
 .bl-cand{background:color-mix(in srgb,var(--up) 14%,transparent);color:var(--up)}
 .bl-watch{background:color-mix(in srgb,var(--accent) 25%,transparent);color:var(--accent2)}
 .bl-neutral{background:var(--panel2);color:var(--mute)}
@@ -264,6 +266,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="grafik"><i data-ico="bars"></i>Grafik &amp; Göstergeler</a>
+      <a data-view="gunici"><i data-ico="bars"></i>Günlük Plan &amp; Gün İçi</a>
       <a data-view="zaman"><i data-ico="compass"></i>Zaman Taraması</a>
       <a data-view="tahmin"><i data-ico="award"></i>Tahmin Karnesi</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
@@ -307,6 +310,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <!-- GENEL BAKIŞ -->
     <div class="view" id="v-dashboard">
       <section class="card hero" id="hero"></section>
+      <section class="card" id="briefCard"></section>
       <div class="row r1">
         <div class="card">
           <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Taranan Hisse</h2></div>
@@ -352,6 +356,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <div class="list" id="auditList"></div>
         </div>
       </div>
+      <section class="card" id="heatCard"></section>
       <div class="row r3"><div class="card" id="regimeCard"></div><div class="card" id="calCard"></div></div>
       <section class="card" id="audit"></section>
     </div>
@@ -394,6 +399,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
 
     <!-- TARAYICI -->
     <div class="view" id="v-tahmin"><section class="card" id="thView"></section></div>
+    <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
     <div class="view" id="v-tarayici"><section class="card" id="scrView"></section></div>
@@ -793,6 +799,7 @@ function flowHtml(s) {
 
 /* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
 let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
+let GDT = null, GON = null; // daytrade_research.json, overnight_research.json
 let MTFW = null, MLOG = null; // mtf_walkforward.json: ileri doğrulama; mtf_log.json: canlı skor kaydı
 let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
 const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
@@ -1010,6 +1017,68 @@ document.addEventListener("change", e => {
   else cur.conds[i][k] = el.value;
   zSaveF(all); renderZaman();
 });
+
+/* ---------- Günlük Plan & Gün İçi: bugün ne yapılır, bekleme süresinin ekonomisi, gün içi kanıtı ---------- */
+function miniLine(cv, vals, color, base) {
+  if (!cv || !vals || vals.length < 2) return;
+  const H = 150, {g, w} = setupCanvas(cv, H), lo = Math.min(...vals, base ?? vals[0]), hi = Math.max(...vals, base ?? vals[0]), X = i => 6 + i / (vals.length - 1) * (w - 12), Y = v => H - 16 - (v - lo) / (hi - lo || 1) * (H - 28);
+  if (base != null) { g.strokeStyle = css("--line"); g.setLineDash([4, 3]); g.beginPath(); g.moveTo(6, Y(base)); g.lineTo(w - 6, Y(base)); g.stroke(); g.setLineDash([]); }
+  g.beginPath(); vals.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
+  g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.textAlign = "left"; g.fillText(fmt(hi, 2), 6, 10); g.fillText(fmt(lo, 2), 6, H - 3);
+}
+function giPhase() {
+  const n = istanbulNow(), m = n.min;
+  if (n.wd === "Sat" || n.wd === "Sun") return "📅 Hafta sonu: borsa kapalı. Plan, son işlem gününün verisine göredir.";
+  if (m < 10 * 60) return "🌅 Seans öncesi: bekleyen alım/satım emirleri bugün açılışta (10:00) dolar.";
+  if (m < 18 * 60) return "⏳ Seans açık: model emirleri kapanıştan sonra üretilir, ertesi sabah açılışta uygulanır. Gün içinde acele karar vermeyin.";
+  return "🌙 Seans kapandı: yarın için emirler hazır; yarın açılışta uygulanır.";
+}
+async function renderGunIci() {
+  const el = $("giView");
+  if (!UNIVERSE.length) { el.innerHTML = "<h2>Günlük Plan &amp; Gün İçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  el.innerHTML = "<h2>Günlük Plan &amp; Gün İçi</h2><p class='mute'>Yükleniyor…</p>";
+  await Promise.all([loadPort(), !GDT || !GON || !MLOG ? loadAux() : null]);
+  const Z = PORT && PORT.p && PORT.p.zaman, T = MTFR && MTFR.tests, hz = [1, 2, 3, 5, 10, 20], cost = (MTFR && MTFR.cost) || 0.5;
+  // --- günlük plan: Zaman Modeli emirleri ve pozisyonları
+  const buys = Z ? Z.orders.filter(o => o.side === "buy") : [], sells = Z ? Z.orders.filter(o => o.side === "sell") : [];
+  const pos = Z ? Z.pos.map(x => { const s = UNIVERSE.find(u => u.name === x.n); return {x, s, px: s ? s.close : x.lastClose, pnl: ((s ? s.close : x.lastClose) / x.avg - 1) * 100, toStop: x.stop && s ? (s.close / x.stop - 1) * 100 : null}; }) : [];
+  // --- lider değişimi (canlı kayıt)
+  const D = (MLOG && MLOG.days) || [], last = D[D.length - 1], prev = D[D.length - 2], isL = c => c === "uyumlu" || c === "hlider";
+  const pm = prev ? new Map(prev.r.map(r => [r[0], r])) : null;
+  const liq = new Set(UNIVERSE.filter(s => s.tl >= 20).map(s => s.name));
+  const joined = last && pm ? last.r.filter(r => liq.has(r[0]) && isL(r[5]) && pm.get(r[0]) && !isL(pm.get(r[0])[5])).slice(0, 12) : [];
+  const dropped = last && pm ? last.r.filter(r => liq.has(r[0]) && !isL(r[5]) && pm.get(r[0]) && isL(pm.get(r[0])[5])).slice(0, 12) : [];
+  const tavan = UNIVERSE.filter(s => s.ok && s.change >= 9.5 && s.tl >= 5), taban = UNIVERSE.filter(s => s.ok && s.change <= -9.5 && s.tl >= 5);
+  const pill = n => `<span class="pill" data-x="${esc(n)}">${esc(n)}</span>`;
+  const evRow = h => { const e = T && T.birlesik && T.birlesik[h]; if (!e) return ""; const net5 = e.top10 - cost, net2 = e.top10 - 0.2; return `<tr><td>${h} gün</td><td>${sgn(e.top10)}</td><td>${sgn(e.top10 / h, 3)}</td><td><b>${sgn(net5)}</b></td><td>${sgn(net2)}</td><td>%${fmt(e.hit, 0)}</td><td>${fmt(e.t, 1)}</td></tr>`; };
+  const tv = GON && GON.tavan;
+  el.innerHTML = `<h2>Günlük Plan &amp; Gün İçi <span class="sub">bugün ne yapılır? günlük al-sat neden zor?</span></h2>
+    <div class="card" style="background:var(--panel2);margin:8px 0"><b>${giPhase()}</b></div>
+    <div class="note" style="border-left:3px solid var(--warn);padding-left:10px;margin:8px 0"><b>Dürüst özet:</b> Günlük (aynı gün ya da ertesi gün) al-sat için maliyet sonrası kazandıran, <b>alınabilir</b> bir kural bulamadık. Neden: skorların günlük avantajı yalnızca ~%0,25 (anlamlı ama küçük), işlem maliyeti ise gidiş-dönüş %0,5. Avantaj gün başına ~%0,13-0,15 birikir; maliyeti çıkarmak için pozisyonu <b>en az 3-5 gün</b> tutmak gerekir. Bu yüzden sistem her gün <b>çalışır</b> (günlük plan, günlük alarm, günlük emir) ama tutma süresi haftalık ufka ayarlıdır.</div>
+    <h2 style="margin-top:12px">1) Bugünün işlem planı <span class="sub">(Zaman Modeli: haftalık skor lideri, mekanik kural)</span></h2>
+    ${Z ? `<div class="tw"><table><thead><tr><th style="text-align:left">Yarın açılışta</th><th style="text-align:left">Hisse</th><th style="text-align:left">Neden</th></tr></thead><tbody>
+      ${buys.map(o => `<tr data-x="${esc(o.n)}"><td style="text-align:left"><span class="vt up">AL</span></td><td style="text-align:left"><b>${esc(o.n)}</b></td><td style="text-align:left;white-space:normal" class="mute">${esc(o.reason)} · tutar ≈ ${fmt(o.amount, 0)} TL${o.stop ? ` · stop ${fmt(o.stop)}` : ""}</td></tr>`).join("")}
+      ${sells.map(o => `<tr data-x="${esc(o.n)}"><td style="text-align:left"><span class="vt down">SAT</span></td><td style="text-align:left"><b>${esc(o.n)}</b></td><td style="text-align:left;white-space:normal" class="mute">${esc(o.reason)}</td></tr>`).join("")}
+      ${buys.length + sells.length ? "" : `<tr><td colspan="3" class="mute" style="text-align:left">Bekleyen emir yok: bugün işlem yapılmıyor.</td></tr>`}</tbody></table></div>
+      ${pos.length ? `<details style="margin-top:8px" open><summary>Açık pozisyonlar (${pos.length}) · stop'a uzaklık</summary><div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Maliyet</th><th>Son</th><th>K/Z</th><th>Stop</th><th>Stop'a uzaklık</th><th>Gün</th></tr></thead><tbody>${pos.map(q => `<tr data-x="${esc(q.x.n)}"><td style="text-align:left"><b>${esc(q.x.n)}</b></td><td>${fmt(q.x.avg)}</td><td>${fmt(q.px)}</td><td>${sgn(q.pnl)}</td><td>${q.x.stop ? fmt(q.x.stop) : "–"}</td><td class="${q.toStop != null && q.toStop < 3 ? "down" : ""}">${q.toStop == null ? "–" : "%" + fmt(q.toStop, 1)}</td><td>${q.x.days}</td></tr>`).join("")}</tbody></table></div></details>` : ""}`
+      : '<p class="mute">Zaman Modeli henüz başlamadı: ilk emirler bir sonraki kapanıştan sonra oluşur.</p>'}
+    <h3 style="margin:12px 0 4px">Lider değişimi <span class="mute" style="font-weight:400">(skor kaydına göre${prev ? ": " + prev.d + " → " + last.d : ""})</span></h3>
+    ${pm ? `<p><b class="up">Yeni lider kurulum:</b> ${joined.length ? joined.map(r => pill(r[0])).join("") : '<span class="mute">yok</span>'}</p><p><b class="down">Liderlikten düşenler (portföyünüzde varsa gözden geçirin):</b> ${dropped.length ? dropped.map(r => pill(r[0])).join("") : '<span class="mute">yok</span>'}</p>` : '<p class="mute">Skor kaydı birikiyor; en az iki işlem günü gerekir (her kapanıştan sonra otomatik eklenir).</p>'}
+    <h3 style="margin:12px 0 4px">Piyasa nabzı</h3>
+    <p>Tavan: <b class="up">${tavan.length}</b> ${tavan.slice(0, 10).map(s => pill(s.name)).join("")} · Taban: <b class="down">${taban.length}</b> ${taban.slice(0, 10).map(s => pill(s.name)).join("")} <span class="mute">(bilgi; tavandaki hisse alınamaz, kuyruk vardır)</span></p>
+    <h2 style="margin-top:14px">2) Bekleme süresinin ekonomisi <span class="sub">(birleşik skorun en iyi %10 dilimi, piyasaya göre fazla getiri)</span></h2>
+    ${T && T.birlesik ? `<div class="tw"><table><thead><tr><th>Tutma süresi</th><th>Brüt fazla getiri</th><th>Gün başına</th><th>Net (%${cost} maliyet)</th><th>Net (%0,2 maliyet)</th><th>İsabet</th><th>t</th></tr></thead><tbody>${hz.map(evRow).join("")}</tbody></table></div>
+      <p class="note">Avantaj her gün birikir (~%0,13-0,25/gün) ama giriş-çıkış maliyeti tek seferliktir: kısa tutmak avantajı maliyete yedirir, uzun tutmak maliyeti seyreltir. 1-2 günde net getiri negatif, ~3 günde başa baş, 5-10 günde pozitif. Komisyonunuz düşükse (%0,2) eşik 1-2 güne iner. <b>Günlük işlem yapıp pozisyonu aynı gün/ertesi gün kapatmak bu yüzden hedeflenmedi.</b></p>` : '<p class="mute">Araştırma verisi yok.</p>'}
+    <h2 style="margin-top:14px">3) Gün içi (aynı gün al-sat) kanıtı <span class="sub">(15 dk, ${GDT ? GDT.stocks + " hisse · " + GDT.from + " → " + GDT.to : ""})</span></h2>
+    ${GDT ? `<div class="tw"><table><thead><tr><th style="text-align:left">Strateji (uzun yön, aynı gün çıkış)</th><th>İşlem</th><th>Brüt</th><th>Net %0,2</th><th>Net %0,5</th><th>t (%0,5)</th><th>İsabet (net)</th><th>İlk / ikinci yarı</th></tr></thead><tbody>
+      <tr class="mute"><td style="text-align:left;white-space:normal">${esc(GDT.baseline.label)}</td><td>${GDT.baseline.n}</td><td>${sgn(GDT.baseline.gross, 3)}</td><td>${sgn(GDT.baseline["net0.2"], 3)}</td><td>${sgn(GDT.baseline["net0.5"], 3)}</td><td>${fmt(GDT.baseline["t0.5"], 1)}</td><td>%${fmt(GDT.baseline["hit0.5"], 0)}</td><td>${fmt(GDT.baseline.h1, 2)} / ${fmt(GDT.baseline.h2, 2)}</td></tr>
+      ${Object.values(GDT.strategies).filter(e => e.gross != null && e.label.indexOf("BTST") < 0).map(e => `<tr><td style="text-align:left;white-space:normal">${esc(e.label)}</td><td>${e.n}</td><td>${sgn(e.gross, 3)}</td><td>${sgn(e["net0.2"], 3)}</td><td><b>${sgn(e["net0.5"], 3)}</b></td><td>${fmt(e["t0.5"], 1)}</td><td>%${fmt(e["hit0.5"], 0)}</td><td>${fmt(e.h1, 2)} / ${fmt(e.h2, 2)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">Hiçbir gün içi kural maliyet sonrası pozitif değil; "sabah düşüş sıçraması" brüt pozitif ama net sıfır. BIST'te gün içi ortalama getiri hafif negatiftir; getiri kapanış→açılış aralığında oluşur.</p>` : '<p class="mute">Gün içi araştırma henüz yok.</p>'}
+    <h2 style="margin-top:14px">4) "Kapanışta al, sabah sat" neden kural yapılmadı? <span class="sub">(bulgu ve düzeltme)</span></h2>
+    ${tv ? `<div class="note" style="border-left:3px solid var(--down);padding-left:10px;margin:8px 0"><b>İlk bulgu yanıltıcıydı:</b> kapanışı günün en yükseğine yakın ve hacimli hisselerin ertesi sabah +%1,1 brüt yükseldiği görülmüştü (t ≈ 3,9). Ancak bu sinyallerin <b>%${fmt(tv.share, 0)}'i tavan kapatan hisseler</b>ydi; tavandaki hisse kuyrukta olduğundan kapanışta <b>alınamaz</b>. Tavan hariç alınabilir kısımda sonuç <b>negatif</b>: ${sgn(tv.ex_tavan.gross)} brüt, ${sgn(tv.ex_tavan["net0.5"])} net (n ${tv.ex_tavan.n}, t ${fmt(tv.ex_tavan["t0.5"], 1)}). Yalnızca tavanlarda ise ertesi sabah ortalama ${sgn(tv.only_tavan.gross)} (isabet %${fmt(tv.only_tavan["hit0.5"], 0)}) ama bunlara giriş mümkün değil. Bu yüzden Gün Sonu (BTST) modeli <b>kurulmadı</b>.</div>` : ""}
+    <h2 style="margin-top:14px">Günlük kullanım önerisi</h2>
+    <ul class="note"><li><b>Sabah:</b> Genel Bakış'ta piyasa rejimine ve bu sayfadaki "yarın açılışta" listesine bakın.</li><li><b>Gün içi:</b> işlem aramayın; alarmlar (Analiz Masası'ndan fiyat/skor alarmı) sizi uyarsın.</li><li><b>Akşam:</b> skor kaydı güncellenir; lider değişimini ve Zaman Modeli emirlerini kontrol edin.</li><li><b>Tutma süresi:</b> en az 3-5 gün, tercihen haftalık skor liderliği bozulana kadar (20 gün civarı); stop her zaman önceden belirlenir (Pozisyon Hesaplayıcı).</li><li>Eğitim amaçlıdır, yatırım tavsiyesi değildir.</li></ul>`;
+}
 
 /* ---------- Tahmin Karnesi & Doğrulama: canlı sonuçlar, kalibrasyon, ileri doğrulama, maliyet, dayanıklılık ---------- */
 const sgn = (v, d = 2, suf = "%") => v == null || Number.isNaN(v) ? "–" : `<span class="${v > 0 ? "up" : v < 0 ? "down" : ""}">${v > 0 ? "+" : ""}${fmt(v, d)}${suf}</span>`;
@@ -2127,6 +2196,70 @@ function meetingHtml(s, r) {
   const m = meeting(s, r);
   return `<details class="meet" open><summary>🗣 Masa toplantısı</summary>${m.lines.map(l => `<div class="say"><span class="av av-${l.who}">${WHO[l.who][1]}</span><div><b>${WHO[l.who][0]}</b><div>${esc(l.text)}</div></div></div>`).join("")}<div class="verdict">${esc(m.verdict)}</div></details>`;
 }
+function decisionCard(s, r) {
+  const t = mtfTier(s), m = s.mtf, bear = REGIME && REGIME.trend === "bear", lead = t && (t.id === "uyumlu" || t.id === "hlider"), veto = r.veto, sc = r.score;
+  let v, cls, why;
+  if (lead && !veto && sc >= 1) { v = "GÜÇLÜ GÖRÜNÜM"; cls = "up"; why = "Skorlar ve masa aynı yönde."; }
+  else if (lead) { v = "İZLE · itirazlar var"; cls = "mid"; why = veto ? "Şeytanın Avukatı veto etti: " + r.l.seytan.severe.join(", ") + "." : "Skorlar güçlü ama masanın oyu zayıf (" + (sc > 0 ? "+" : "") + sc + ")."; }
+  else if ((t && t.id === "zayif") || sc <= -2) { v = "UZAK DUR"; cls = "down"; why = t && t.id === "zayif" ? "Haftalık skor zayıf: geçmişte bu grup piyasanın gerisinde kaldı." : "Masa olumsuz (" + sc + ")."; }
+  else { v = "NÖTR"; cls = "mid"; why = "Belirgin bir üstünlük ya da zayıflık yok."; }
+  const atr = s.atr, stop = atr ? Math.max(s.close - 2.5 * atr, s.close * 0.90) : null, risk = stop ? s.close - stop : null, target = risk ? s.close + 2 * risk : null;
+  const stopPct = risk ? risk / s.close * 100 : null, maxPos = stopPct ? Math.min(33, 1 / stopPct * 100) : null;
+  const ex = mtfExpect(s), cost = (MTFR && MTFR.cost) || 0.5, ed = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null, vl = valuation(s);
+  const pos = [], neg = [];
+  if (s.sma20_w > 0 && s.close > s.sma20_w && s.sma20_w > s.sma50_w) pos.push("Haftalık trend yukarı"); else if (s.sma50_w > 0 && s.close < s.sma50_w) neg.push("Fiyat haftalık SMA50'nin altında");
+  if (s.rs != null) (s.rs >= 80 ? pos : s.rs <= 30 ? neg : []).push(`Göreceli güç ${fmt(s.rs, 0)}/100`);
+  if (s.cmf != null) (s.cmf > 0.1 ? pos : s.cmf < -0.1 ? neg : []).push(`Para akışı (CMF) ${s.cmf > 0 ? "pozitif" : "negatif"}: ${fmt(s.cmf, 2)}`);
+  if (vl.upside != null) (vl.upside >= 25 ? pos : vl.upside <= -40 ? neg : []).push(`Adil değere ${vl.upside >= 0 ? "%" + fmt(vl.upside, 0) + " uzak (ucuz)" : "göre %" + fmt(-vl.upside, 0) + " pahalı"}`);
+  if (bear) neg.push("Piyasa ayı rejiminde (avantaj piyasaya göredir)");
+  if (ed != null && ed >= -1 && ed <= 7) neg.push(`Bilanço ${fmt(Math.max(0, ed), 0)} gün içinde: sürpriz riski`);
+  if (s.atrPct != null && s.atrPct > 5) neg.push(`Yüksek oynaklık (ATR %${fmt(s.atrPct, 1)})`);
+  if (s.tl < 10) neg.push("Düşük hacim: çıkış zor olabilir");
+  const li = a => a.length ? `<ul style="margin:4px 0 0 16px">${a.slice(0, 4).map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : '<span class="mute"> –</span>';
+  return `<div class="dcard"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="dverdict ${cls}">${v}</span><span class="mute">${esc(why)}</span></div>
+    <div class="dgrid"><div><div class="l">Giriş bölgesi</div><b>${fmt(s.close * 0.99)} – ${fmt(s.close * 1.01)}</b></div><div><div class="l">Stop (2,5×ATR)</div><b>${stop ? fmt(stop) : "–"}</b><div class="l">${stopPct ? "−%" + fmt(stopPct, 1) : ""}</div></div><div><div class="l">Hedef (2R)</div><b>${target ? fmt(target) : "–"}</b><div class="l">risk/getiri 1:2</div></div><div><div class="l">Azami pozisyon</div><b>${maxPos ? "%" + fmt(maxPos, 0) : "–"}</b><div class="l">portföyün (%1 risk)</div></div><div><div class="l">Tutma</div><b>3-20 gün</b><div class="l">haftalık skor bozulana dek</div></div>${ex != null ? `<div><div class="l">Geçmiş beklenti (20g)</div><b>${ex - cost > 0 ? "+" : ""}${fmt(ex - cost, 1)}%</b><div class="l">maliyet sonrası, piyasaya göre</div></div>` : ""}</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap"><div style="flex:1;min-width:180px"><b class="up">Lehine</b>${li(pos)}</div><div style="flex:1;min-width:180px"><b class="down">Aleyhine</b>${li(neg)}</div></div>
+    <p class="note" style="margin:8px 0 0">İsabet oranı %50 civarıdır; avantaj çok işleme yayıldığında görünür. Stop zorunludur. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p></div>`;
+}
+function renderBrief() {
+  const el = $("briefCard"); if (!el) return;
+  if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  const pill = n => `<span class="pill" data-x="${esc(n)}">${esc(n)}</span>`, liquid = UNIVERSE.filter(s => s.ok && s.tl >= 20);
+  const top = liquid.filter(s => s.mtf && s.mtf.b != null).sort((a, b) => b.mtf.b - a.mtf.b).slice(0, 6);
+  const mv = [...liquid].filter(s => s.change != null).sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 6);
+  const tav = UNIVERSE.filter(s => s.ok && s.change >= 9.5 && s.tl >= 5).length, tab = UNIVERSE.filter(s => s.ok && s.change <= -9.5 && s.tl >= 5).length;
+  const risk = liquid.map(s => ({s, d: s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null, x: s.exDiv ? (s.exDiv * 1000 - NOW) / 864e5 : null})).filter(o => (o.d != null && o.d >= -1 && o.d <= 3) || (o.x != null && o.x >= 0 && o.x <= 3)).slice(0, 8);
+  const D = (MLOG && MLOG.days) || [], last = D[D.length - 1], prev = D[D.length - 2], isL = c => c === "uyumlu" || c === "hlider";
+  const joined = last && prev ? (() => { const pm = new Map(prev.r.map(r => [r[0], r])); return last.r.filter(r => isL(r[5]) && pm.get(r[0]) && !isL(pm.get(r[0])[5]) && liquid.some(s => s.name === r[0])).slice(0, 6).map(r => r[0]); })() : [];
+  const lead = liquid.filter(s => { const t = mtfTier(s); return t && (t.id === "uyumlu" || t.id === "hlider"); }).length, weak = liquid.filter(s => { const t = mtfTier(s); return t && t.id === "zayif"; }).length;
+  const Z = PORT && PORT.p && PORT.p.zaman, nb = Z ? Z.orders.filter(o => o.side === "buy").length : null, ns = Z ? Z.orders.filter(o => o.side === "sell").length : null;
+  const rg = REGIME ? `${REGIME.label} (SMA50 üstü %${fmt(REGIME.a50, 0)})` : "–";
+  el.innerHTML = `<div class="card-h"><span class="badge">${ico("clipboard")}</span><h2>Günlük Brifing <span class="sub">${DATA && DATA.generated ? DATA.generated : ""}</span></h2></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+      <div><div class="mute">Piyasa</div><b class="${REGIME && REGIME.trend === "bear" ? "down" : REGIME && REGIME.trend === "bull" ? "up" : ""}">${rg}</b><div class="note" style="margin:4px 0">Lider kurulum: <b>${lead}</b> · zayıf: <b>${weak}</b> (likit hisselerde) · Tavan <b class="up">${tav}</b> / Taban <b class="down">${tab}</b></div><div class="note" style="margin:0">${REGIME && REGIME.trend === "bear" ? "Ayı rejiminde skor avantajı piyasaya göredir; pozisyonu küçük, stop'u hazır tutun." : "Trend lehine; yine de stop'suz pozisyon taşımayın."}</div></div>
+      <div><div class="mute">En güçlü skorlar (birleşik)</div><div>${top.map(s => pill(s.name)).join("")}</div>${joined.length ? `<div class="note" style="margin:6px 0 0"><b class="up">Yeni lider:</b> ${joined.map(pill).join("")}</div>` : ""}</div>
+      <div><div class="mute">En büyük hareketler</div><div>${mv.map(s => `<span class="pill ${s.change >= 0 ? "up" : "down"}" data-x="${esc(s.name)}">${esc(s.name)} ${s.change > 0 ? "+" : ""}${fmt(s.change, 1)}%</span>`).join("")}</div></div>
+      <div><div class="mute">Risk takvimi (3 gün)</div>${risk.length ? risk.map(o => `<div class="note" style="margin:2px 0">${pill(o.s.name)} ${o.d != null && o.d >= -1 && o.d <= 3 ? "bilanço " + (o.d < 1 ? "bugün/yarın" : fmt(o.d, 0) + " gün") : ""}${o.x != null && o.x >= 0 && o.x <= 3 ? " · temettü kesim " + fmt(o.x, 0) + " gün" : ""}</div>`).join("") : '<div class="note" style="margin:2px 0">Yakın bilanço/temettü yok.</div>'}</div>
+      <div><div class="mute">Zaman Modeli</div><div class="note" style="margin:2px 0">${Z ? `Yarın açılışta: <b class="up">${nb} alım</b> · <b class="down">${ns} satım</b>` : "Henüz başlamadı"}</div><button data-go="gunici" class="kpi-link"><span>Günlük planı aç</span><i data-ico="arrow"></i></button></div>
+    </div>`;
+  paintIcons(el);
+  if (!PORT) loadPort().then(() => { if (PORT && view === "dashboard") renderBrief(); });
+}
+let heatMode = store.get("heatMode", "chg");
+function renderHeat() {
+  const el = $("heatCard"); if (!el) return;
+  if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  const rows = UNIVERSE.filter(s => s.ok && s.tl >= 15 && s.change != null).sort((a, b) => b.tl - a.tl).slice(0, 70);
+  const col = s => {
+    if (heatMode === "chg") { const x = Math.max(-5, Math.min(5, s.change)) / 5; return x >= 0 ? `hsl(152,${35 + 40 * x}%,${34 - 6 * x}%)` : `hsl(0,${35 + 40 * -x}%,${38 - 6 * -x}%)`; }
+    const w = s.mtf && s.mtf.w != null ? s.mtf.w : null; if (w == null) return "#64748b";
+    const x = (w - 50) / 50; return x >= 0 ? `hsl(152,${25 + 50 * x}%,${34 - 6 * x}%)` : `hsl(0,${25 + 50 * -x}%,${38 - 6 * -x}%)`;
+  };
+  el.innerHTML = `<div class="card-h"><span class="badge">${ico("grid")}</span><h2>Piyasa Isı Haritası <span class="sub">en hacimli ${rows.length} hisse · kutu büyüklüğü = hacim</span></h2>
+    <span style="margin-left:auto" class="tabs"><button class="tab ${heatMode === "chg" ? "on" : ""}" data-heat="chg">Gün %</button><button class="tab ${heatMode === "w" ? "on" : ""}" data-heat="w">Haftalık skor</button></span></div>
+    <div class="heat">${rows.map(s => { const w = Math.round(Math.max(54, Math.min(150, Math.sqrt(s.tl) * 5.2))); return `<div class="ht" data-x="${esc(s.name)}" style="width:${w}px;background:${col(s)}" title="${esc(s.description)} · ${fmt(s.change)}% · hacim ${fmt(s.tl, 0)} mn TL · haftalık skor ${s.mtf && s.mtf.w != null ? fmt(s.mtf.w, 0) : "–"}"><b>${esc(s.name)}</b>${heatMode === "chg" ? (s.change > 0 ? "+" : "") + fmt(s.change, 1) + "%" : s.mtf && s.mtf.w != null ? fmt(s.mtf.w, 0) : "–"}</div>`; }).join("")}</div>`;
+}
+document.addEventListener("click", e => { const h = e.target.closest("[data-heat]"); if (h) { heatMode = h.dataset.heat; store.set("heatMode", heatMode); renderHeat(); } });
 function mtfBox(s) {
   const m = s.mtf, t = mtfTier(s); if (!m || !t) return "";
   const bar = (n, v, h) => `<div class="row2"><span class="mute">${n}</span><b class="${scCls(v)}">${v == null ? "–" : fmt(v, 0) + "/100"}</b></div>`;
@@ -2146,7 +2279,7 @@ function detail(name, target = "detail") {
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
-    mtfBox(s) + meetingHtml(s, r) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    decisionCard(s, r) + mtfBox(s) + meetingHtml(s, r) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="${P}cv" style="height:150px"></canvas>
@@ -2318,7 +2451,7 @@ $("statOpen").addEventListener("click", () => { const n = $("statSel").value; if
 let view = "dashboard", pendingOpen = null;
 const drawerOpen = () => $("drawer").classList.contains("open");
 function refreshView() {
-  if (view === "dashboard") renderDashboard();
+  if (view === "dashboard") { renderDashboard(); renderBrief(); renderHeat(); }
   else if (view === "haberler") renderNews();
   else if (view === "geritest") renderBacktest();
   else if (view === "ekranlar") renderScreens();
@@ -2332,6 +2465,7 @@ function refreshView() {
   else if (view === "rapor") renderReport();
   else if (view === "tarayici") renderScreener();
   else if (view === "zaman") renderZaman();
+  else if (view === "gunici") renderGunIci();
   else if (view === "tahmin") renderTahmin();
   else if (view === "grafik") renderChartPage();
   else if (view === "atolye") renderBacktestLab();
@@ -2418,6 +2552,8 @@ async function loadAux() {
   if (!MTFS) { const m = await getJson("mtf_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFS = m; }
   if (!MTFW) { const m = await getJson("mtf_walkforward.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.core) MTFW = m; }
   { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
+  if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
+  if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
     if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
@@ -2511,7 +2647,7 @@ if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(esc
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "grafik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "grafik", "gunici", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>
