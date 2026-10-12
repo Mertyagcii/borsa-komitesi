@@ -223,7 +223,9 @@ function computeSectorStats(uni) {
   const g = {};
   uni.filter(s => s.ok && s.rs != null && s.tl >= 10).forEach(s => { (g[s.sector || "Diğer"] = g[s.sector || "Diğer"] || []).push(s); });
   const med = a => { const b = a.filter(x => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
-  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length, rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
+  const ratio = (a, fn) => { const r = a.map(fn).filter(x => x != null && Number.isFinite(x) && x > 0.05 && x < 20); return r.length >= 5 ? med(r) : null; };
+  const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length,
+    kEps: ratio(a, s => { const f = intrinsic(s).fvEps; return f > 0 ? s.close / f : null; }), kRoe: ratio(a, s => { const q = roePbValue(s, intrinsic(s)); return q ? s.close / q.v : null; }), rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
   rows.sort((x, y) => y.rs - x.rs); rows.forEach((r, i) => { r.rank = i + 1; });
   SECTOR_STATS = Object.fromEntries(rows.map(r => [r.name, {...r, total: rows.length}]));
   return rows;
@@ -252,6 +254,11 @@ function intrinsic(s) {
   return out;
 }
 /* Duyarlılık: adil değer iskonto oranı ve büyümeye çok duyarlıdır; ±2 puanlık değişimle kazanç değeri nasıl oynuyor? */
+function roePbValue(s, iv) { // gerekçeli PD/DD: sürdürülebilir ROE (TMS 29 sonrası reel kabul; yarı yarıya iskonto oranına sönümlü)
+  const book = s.bvps > 0 ? s.bvps : null; if (!(book && s.roe != null && s.roe > 0 && s.roe < 200)) return null;
+  const roeS = 0.5 * s.roe / 100 + 0.5 * iv.r, pbJ = Math.max(0.2, Math.min(4, (roeS - iv.g) / (iv.r - iv.g)));
+  return {v: pbJ * book, roeS, pbJ};
+}
 function valSens(s) {
   const iv = intrinsic(s); if (!(s.eps > 0)) return null;
   const rows = [-0.02, 0, 0.02].map(dg => [-0.02, 0, 0.02].map(dr => { const g = iv.g + dg, r = iv.r + dr, k = r - g > 0.01 ? Math.max(3, Math.min(20, (1 + g) / (r - g))) : 20; return s.eps * k; }));
@@ -522,10 +529,11 @@ function valuation(s) {
   const iv = intrinsic(s), gn = graham(s), st = SECTOR_STATS[s.sector || "Diğer"], book = s.bvps > 0 ? s.bvps : null, m = [];
   if (iv.fvEps != null) m.push({id: "eps", l: `Kazanç değeri (EPS × adil çarpan ${fmt(iv.mult, 1)}; reel iskonto %${fmt(iv.r * 100, 1)}, reel büyüme %${fmt(iv.g * 100, 1)})`, v: iv.fvEps});
   if (iv.fvOe != null) m.push({id: "fcf", l: `Nakit akışı değeri (serbest nakit akışı/hisse × ${fmt(iv.mult, 1)})`, v: iv.fvOe});
-  if (s.roe != null && s.roe > 0 && s.roe < 200 && book) { // gerekçeli PD/DD: sürdürülebilir reel ROE iskonto oranını aşıyorsa defter değerinin üstünde, aşmıyorsa altında işlem görmeli
-    const roeS = 0.5 * s.roe / 100 + 0.5 * iv.r, pbJ = Math.max(0.2, Math.min(4, (roeS - iv.g) / (iv.r - iv.g))); // ROE (TMS 29 sonrası reel kabul) yarı yarıya iskonto oranına doğru sönümlenir: yüksek getiriler kalıcı değildir
-    m.push({id: "roepb", l: `Gerekçeli PD/DD (sürdürülebilir ROE %${fmt(roeS * 100, 1)}; ${fmt(pbJ, 2)}x) × defter değeri`, v: pbJ * book});
-  }
+  const rp = roePbValue(s, iv);
+  if (rp) m.push({id: "roepb", l: `Gerekçeli PD/DD (sürdürülebilir ROE %${fmt(rp.roeS * 100, 1)}; ${fmt(rp.pbJ, 2)}x) × defter değeri`, v: rp.v});
+  // Sektör kalibreli yöntemler: piyasa bu sektöre mutlak modelin kaç katını ödüyor? Hisse, sektörünün seviyesine büyüme/kârlılık farkıyla ayarlanarak değerlenir.
+  if (st && st.kEps && iv.fvEps != null) m.push({id: "sec_eps", l: `Sektör kalibreli kazanç değeri (piyasa bu sektöre modelin ${fmt(st.kEps, 2)} katını ödüyor)`, v: iv.fvEps * st.kEps});
+  if (st && st.kRoe && rp) m.push({id: "sec_roe", l: `Sektör kalibreli gerekçeli PD/DD (piyasa modelin ${fmt(st.kRoe, 2)} katını ödüyor)`, v: rp.v * st.kRoe});
   if (gn != null) m.push({id: "graham", l: "Graham sayısı (√(22,5 × EPS × defter değeri))", v: gn});
   if (st && st.medPe > 0 && s.eps > 0) m.push({id: "pe", l: `Sektör medyan F/K (${fmt(st.medPe, 1)}) × EPS`, v: st.medPe * s.eps});
   if (st && st.medPb > 0 && book) m.push({id: "pb", l: `Sektör medyan PD/DD (${fmt(st.medPb, 2)}) × defter değeri`, v: st.medPb * book});
