@@ -14,3 +14,7 @@ Telegram uyarisi (istege bagli, en sona birakildi): GitHub deposunda Settings > 
   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID  -> tanimlaninca her kapanista yeni "guclu aday" varsa mesaj gelir.
 
 Yerel: python server.py -> http://localhost:8765 ; research.py ilk kez 6-8 dk surer (3 yillik gunluk veri ceker, cache/ icinde saklanir).
+
+## Testler
+- Yerelde: python build_site.py ; python tests/run_tests.py   (hizli: --quick). GitHub Actions'ta her push'ta calisir (zamanlanmis calismalarda atlanir); basarisizsa yayin durur.
+- Kapsam: statik kontroller, cekirdek mantik (tests/core_test.js), tum sayfalar (tarayici), islevsel testler (tests/inject_func.js).

@@ -50,6 +50,9 @@ jobs:
         with:
           node-version: "20"
       - run: python build_site.py
+      - name: Testler (yalnizca kod degisikliginde; bir kez yeniden denenir)
+        if: github.event_name == 'push'
+        run: python tests/run_tests.py --site site || python tests/run_tests.py --site site
       - name: Komite karnesi kaydi ve uyarilar (gunde bir kez, kapanistan sonra)
         run: node signals.js
       - name: Gun ici 15 dakikalik cubuklar (yalnizca islenecek yeni islem gunu varsa)

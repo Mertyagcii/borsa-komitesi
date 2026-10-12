@@ -225,6 +225,7 @@ function computeSectorStats(uni) {
   const med = a => { const b = a.filter(x => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
   const ratio = (a, fn) => { const r = a.map(fn).filter(x => x != null && Number.isFinite(x) && x > 0.05 && x < 20); return r.length >= 5 ? med(r) : null; };
   const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length,
+    peArr: a.map(s => s.pe > 0 ? s.pe : null).filter(x => x != null).sort((x, y) => x - y), pbArr: a.map(s => s.pb > 0 ? s.pb : null).filter(x => x != null).sort((x, y) => x - y),
     kEps: ratio(a, s => { const f = intrinsic(s).fvEps; return f > 0 ? s.close / f : null; }), kRoe: ratio(a, s => { const q = roePbValue(s, intrinsic(s)); return q ? s.close / q.v : null; }), rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
   rows.sort((x, y) => y.rs - x.rs); rows.forEach((r, i) => { r.rank = i + 1; });
   SECTOR_STATS = Object.fromEntries(rows.map(r => [r.name, {...r, total: rows.length}]));
@@ -520,6 +521,51 @@ function strengthList(uni, n, minTl) {
   const lead = s => { const t = mtfTier(s); return t && (t.id === "uyumlu" || t.id === "hlider"); };
   const key = s => 0.5 * s.rs + 0.5 * (s.mtf && s.mtf.b != null ? s.mtf.b : s.rs);
   return uni.filter(s => s.ok && s.rs != null && s.tl >= (minTl ?? 5) && (trendUp(s) || lead(s))).sort((a, b) => key(b) - key(a)).slice(0, n);
+}
+
+/* ---------- Ucuz / pahalı göstergesi ----------
+   UCUZ %X: fiyat adil değerin %X ALTINDA (iskonto); PAHALI %X: fiyat adil değerin %X ÜSTÜNDE (prim). |fark| < %15 ise ADİL.
+   Güven, yöntemlerin birbirine yakınlığıdır (düşükse işaret kesin değil). Sektör içi yüzdelik: F/K ve PD/DD bakımından sektördeki hisselerin kaçından ucuz. */
+function cheapness(s) {
+  const v = valuation(s); if (v.fair == null || !(v.fair > 0)) return null;
+  const disc = (1 - s.close / v.fair) * 100, prem = (s.close / v.fair - 1) * 100;
+  const lab = disc >= 15 ? "UCUZ" : prem >= 15 ? "PAHALI" : "ADİL", st = SECTOR_STATS[s.sector || "Diğer"];
+  const rk = (arr, x) => arr && arr.length >= 5 && x > 0 ? arr.filter(y => y > x).length / arr.length * 100 : null; // x'ten pahalı hisselerin oranı = x'in ucuzluk yüzdeliği
+  const conf = v.confidence, sure = conf === "yüksek" || conf === "orta";
+  return {lab, pct: lab === "UCUZ" ? disc : lab === "PAHALI" ? prem : Math.abs(disc), disc, prem, upside: v.upside, conf, sure, fair: v.fair, lo: v.lo, hi: v.hi, secPe: st ? rk(st.peArr, s.pe) : null, secPb: st ? rk(st.pbArr, s.pb) : null,
+    text: lab === "ADİL" ? "Adil değere yakın" : lab === "UCUZ" ? `Fiyat adil değerin %${fmt(disc, 0)} altında` : `Fiyat adil değerin %${fmt(prem, 0)} üstünde`};
+}
+/* ---------- Benzer hisseler: sektör, skor, boyut, oynaklık ve (varsa) 60 günlük fiyat korelasyonu ---------- */
+function retsOf(name) { const h = HIST && HIST.stocks[name]; if (!h || !h.closes || h.closes.length < 62) return null; const c = h.closes.slice(-61); return c.slice(1).map((v, i) => v / c[i] - 1); }
+function corr2(a, b) { const n = a.length; let ma = 0, mb = 0; for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; } ma /= n; mb /= n; let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; } return sab / Math.sqrt(saa * sbb || 1); }
+function similarStocks(s, n) {
+  const ra = retsOf(s.name), cs = cheapness(s), out = [];
+  for (const x of UNIVERSE) {
+    if (x.name === s.name || !x.ok || x.tl < 10 || !x.mtf || !s.mtf || s.mtf.w == null || x.mtf.w == null) continue;
+    let d = (x.sector === s.sector ? 0 : 1.0) + Math.abs(x.mtf.w - s.mtf.w) / 100 + 0.5 * Math.abs((x.mtf.d ?? 50) - (s.mtf.d ?? 50)) / 100 + 0.5 * Math.abs((x.mtf.m ?? 50) - (s.mtf.m ?? 50)) / 100;
+    if (x.mcap > 0 && s.mcap > 0) d += Math.abs(Math.log10(x.mcap / s.mcap)) / 2;
+    if (x.atrPct != null && s.atrPct != null) d += Math.abs(x.atrPct - s.atrPct) / 8;
+    const rb = ra ? retsOf(x.name) : null, c = ra && rb ? corr2(ra, rb) : null; d += c == null ? 0.35 : (1 - c) * 0.7;
+    out.push({s: x, d, corr: c, ch: cheapness(x)});
+  }
+  out.sort((a, b) => a.d - b.d);
+  const top = out.slice(0, n || 6);
+  const cheaper = cs ? out.slice(0, 40).filter(o => o.ch && o.ch.sure && o.ch.disc >= cs.disc + 15 && o.s.mtf.w >= s.mtf.w - 10).slice(0, 4) : [];
+  return {top, cheaper};
+}
+/* ---------- Veri sağlığı: eksik veri skoru bozar; kapsama düşükse uyarı verilir ---------- */
+function dataHealth(ageMin) {
+  const act = UNIVERSE.filter(s => s.close > 0 && s.volume > 0), okN = act.filter(s => s.ok).length, el = act.filter(s => s.ok && s.tl >= 5);
+  const mtfCov = el.length ? el.filter(s => s.mtf && s.mtf.w != null).length / el.length : 0, cmfCov = el.length ? el.filter(s => s.cmf != null).length / el.length : 0;
+  const hist = HIST && HIST.stocks ? Object.keys(HIST.stocks).length : 0;
+  let score = 100; const issues = [];
+  if (act.length < 400) { score -= 30; issues.push(`yalnızca ${act.length} aktif hisse (beklenen > 500)`); }
+  if (okN / (act.length || 1) < 0.9) { score -= 15; issues.push(`${act.length - okN} hisse eksik veri nedeniyle dışarıda`); }
+  if (mtfCov < 0.85) { score -= 25; issues.push(`çok zamanlı skor kapsaması %${Math.round(mtfCov * 100)} (haftalık/aylık göstergeler eksik)`); }
+  if (cmfCov < 0.85) { score -= 10; issues.push(`para akışı kapsaması %${Math.round(cmfCov * 100)}`); }
+  if (ageMin != null && ageMin > 60) { score -= 20; issues.push(`veri ${Math.round(ageMin)} dk önce çekildi`); }
+  if (!hist) { score -= 10; issues.push("fiyat geçmişi yok"); }
+  return {score: Math.max(0, score), label: score >= 85 ? "İYİ" : score >= 60 ? "DİKKAT" : "KÖTÜ", issues, mtfCov, cmfCov, n: act.length};
 }
 
 /* ---------- Değer tablosu: defter değeri, şu anki değer, olması gereken değer ----------

@@ -66,7 +66,8 @@ Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n)
   liquid: UNI.filter(s => s.close > 0 && s.volume).map(s => [s.name, s.close, s.tl]).sort((a, b) => b[2] - a[2]).slice(0, 150).map(([n, c]) => [n, c]),
   fund: liquid300.map(s => ${JSON.stringify(FUND_COLS)}.map(c => { const v = s[c]; return typeof v === "number" ? Math.round(v * 1e4) / 1e4 : v ?? null; })),
   events,
-  mtf: UNI.filter(s => s.ok && s.mtf && s.mtf.w != null && s.close > 0).map(s => [s.name, s.mtf.d == null ? null : Math.round(s.mtf.d), Math.round(s.mtf.w), s.mtf.m == null ? null : Math.round(s.mtf.m), s.close, tierId(s.mtf.d, s.mtf.w, s.mtf.m)]),
+  mtf: UNI.filter(s => s.ok && s.mtf && s.mtf.w != null && s.close > 0).map(s => [s.name, s.mtf.d == null ? null : Math.round(s.mtf.d), Math.round(s.mtf.w), s.mtf.m == null ? null : Math.round(s.mtf.m), s.close, tierId(s.mtf.d, s.mtf.w, s.mtf.m), Math.round(s.tl), s.atrPct == null ? null : +s.atrPct.toFixed(1), s.nextEarn ? Math.round((s.nextEarn * 1000 - NOW) / 864e5) : null, s.sector || null]),
+  mtfEligible: UNI.filter(s => s.ok && s.tl >= 5).length,
 })`, ctx);
 
 const nowClose = Object.fromEntries(data.stocks.filter(s => s.close > 0).map(s => [s.name, s.close]));
@@ -116,7 +117,8 @@ nlog.updated = date;
    Sonuçlar (5/10/20 gün sonrası, piyasa ortalamasına göre) tarayıcıda bu kayıttan hesaplanır: kalibrasyon ve isabet. */
 const prevDay = mlog.days.filter(x => x.d < date).slice(-1)[0];
 mlog.days = mlog.days.filter(x => x.d !== date);
-mlog.days.push({d: date, r: out.mtf});
+// veri kalitesi koruması: skorlu hisse sayısı uygun hisselerin %70'inin altındaysa (TradingView eksik veri verdi) o günün kaydı yazılmaz
+if (out.mtf.length >= 0.7 * out.mtfEligible && out.mtf.length >= 200) mlog.days.push({d: date, r: out.mtf}); else console.log(`Skor kaydı atlandı: ${out.mtf.length}/${out.mtfEligible} hisse (veri eksik).`);
 mlog.days = mlog.days.slice(-160);
 mlog.updated = date;
 const liquidSet = new Set(out.liquid.slice(0, 100).map(x => x[0])), prevT = prevDay ? Object.fromEntries(prevDay.r.map(x => [x[0], x[5]])) : {};
