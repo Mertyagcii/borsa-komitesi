@@ -265,6 +265,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="grafik"><i data-ico="bars"></i>Grafik &amp; Göstergeler</a>
       <a data-view="zaman"><i data-ico="compass"></i>Zaman Taraması</a>
+      <a data-view="tahmin"><i data-ico="award"></i>Tahmin Karnesi</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
       <a data-view="tarayici"><i data-ico="filter"></i>Tarayıcı (tüm göstergeler)</a>
       <a data-view="ekranlar"><i data-ico="filter"></i>Efsane Ekranları</a>
@@ -392,6 +393,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-karsilastir"><section class="card" id="cmpView"></section></div>
 
     <!-- TARAYICI -->
+    <div class="view" id="v-tahmin"><section class="card" id="thView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
     <div class="view" id="v-tarayici"><section class="card" id="scrView"></section></div>
@@ -791,18 +793,21 @@ function flowHtml(s) {
 
 /* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
 let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
+let MTFW = null, MLOG = null; // mtf_walkforward.json: ileri doğrulama; mtf_log.json: canlı skor kaydı
 let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
 const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
 const ZINFO = {
-  uyum: ["Günlük, haftalık ve aylık skorun üçü de ilk %40'ta, haftalık ≥ 70. Geçmişte (2023-26) bu grup 20 günde piyasa ortalamasının ~%1,8 üstünde, diğerleri ~%0,2 altında kaldı; iki yarıda da aynı yönde.", "uyum"],
-  hafta: ["Haftalık skor: haftalık trend, 6 aylık zirveye yakınlık, haftalık SMA50, DI+/DI−, RSI, CMF, 6 ay getiri. En tutarlı bulgu: en iyi %10 dilimi 20 günde ~%2,8 fazla getirdi; boğada ve ayıda pozitif.", "haftalik"],
-  gun: ["Günlük skor: CMF, RSI (momentum), DI+/DI−, fiyat/SMA20. Kısa vadede (5 gün) avantaj küçük ve kararsız; bunu tek başına değil, haftalık güçlü hissede giriş zamanlaması için kullanın.", "gunluk"],
+  uyum: ["Günlük (RS), haftalık ve aylık skorun üçü de ilk %40'ta ve haftalık ≥ 70: üç zaman dilimi aynı yönü gösteriyor.", "uyum"],
+  hafta: ["Haftalık skor: haftalık trend, 6 aylık zirveye yakınlık, haftalık SMA50, DI+/DI−, RSI, CMF, 6 ay getiri (yarı ağırlık) + göreceli güç RS (yarı ağırlık). Araştırmanın en tutarlı bulgusu.", "haftalik"],
+  gun: ["Günlük skor = göreceli güç (RS). Çok göstergeli günlük bileşik ileri doğrulamada (görülmemiş dönem) işe yaramadığı için kaldırıldı; CMF, RSI, DI aşağıda bilgi olarak duruyor.", "gunluk"],
   ay: ["Aylık skor: uzun trend, 52h yakınlık, aylık CMF, 6 ay ve 1 yıl getiri. 60 günlük ufukta bu örneklemde istatistiksel olarak anlamlı bir ayrışma bulunamadı (yalnızca ~25 bağımsız dönem); bağlam içindir, sinyal sayılmaz.", "aylik"],
   akis: ["Para girişi: günlük ve haftalık CMF pozitif, hacim ortalamanın üstünde. CMF günlük göstergeler içinde en tutarlı olanıydı (iki yarıda ve boğa/ayıda pozitif) ama etkisi küçüktür.", "gunluk"],
   topar: ["Haftalık orta, günlük güçlü, para girişi var: dipten dönüş adayları. TEST EDİLDİ ve kanıt çıkmadı: 20 günde +%1,0 (t = 1,4), ilk yarıda ≈ 0, ayı rejiminde negatif. Fırsat değil, yalnızca izleme listesidir; bu gruba alım yapmayın.", null],
 };
 /* ---- Göstergeler: ne ölçer, neden bakıyoruz, kanıtı ne ---- */
 const FEAT_INFO = {
+  "Göreceli güç (RS: 52h yakınlık + 6 ay + 1 ay)": ["52 hafta zirvesine yakınlık, 6 aylık ve 1 aylık getirinin evren içindeki yüzdelik sıralarının ortalaması (0-100).", "Sistemin en sağlam ölçütü: görülmemiş dönemde (ileri doğrulama) çok göstergeli günlük skorların hiçbiri bu sade ölçütü geçemedi. Bu yüzden günlük skorun tamamı, haftalık skorun yarısı RS'dir.", ["wf", "gunluk", "rs"]],
+  "Göreceli güç (RS: 52h yakınlık + 6 ay + 1 ay) (ağırlık %50)": ["Aynı RS; haftalık skorda tek başına bileşiğin yarısı kadar ağırlık taşır.", "Haftalık göstergeler (trend, DI, RSI, CMF...) tek başına da RS kadar iyi çalıştı (fark istatistiksel gürültü içinde); ikisini yarı yarıya birleştirmek tek bir yönteme bağımlılığı azaltır.", ["wf", "haftalik", "ens_rs"]],
   "CMF (para akışı)": ["Chaikin Para Akışı (20 gün): kapanışın günlük aralıktaki yeri × hacim. + ise alıcı, − ise satıcı baskın.", "Fiyatın hareketini hacmin yönü doğrular. Günlük göstergeler içinde en tutarlı olanıydı.", ["gunluk", "cmf20"]],
   "RSI (momentum, aşırı satım değil)": ["14 günlük RSI: yükselen günlerin gücü / düşenlerin gücü.", "BIST'te yüksek RSI (momentum) düşük RSI'dan (aşırı satım) daha iyi sonuç verdi; 'RSI < 30'da al' kaybettirdi. Bu yüzden RSI yüksek = iyi.", ["gunluk", "rsi14"]],
   "DI+ − DI− (yön)": ["ADX sisteminde yukarı yönlü ile aşağı yönlü hareketin farkı.", "Trendin yönünü ölçer (ADX gücü, DI yönü). Pozitif fark yükseliş baskısı demektir.", ["gunluk", "dmi14"]],
@@ -821,17 +826,22 @@ const FEAT_INFO = {
 };
 const ZTF = {d: ["Günlük", "1-5 gün", "zamanlama", "%25"], w: ["Haftalık", "2-4 hafta", "ana skor", "%50"], m: ["Aylık", "2-3 ay", "bağlam", "%25"]};
 function evText(key) {
+  if (key && key[0] === "wf") { // ileri doğrulama (görülmemiş dönem) kanıtı
+    const e = MTFW && MTFW.core && MTFW.core.tests[key[1]] && MTFW.core.tests[key[1]][key[2]]; if (!e) return '<span class="mute">test edilmedi</span>';
+    return `<span class="${e.t >= 2 ? "up" : "mute"}">${e.t >= 2 ? "ileri doğrulamada kanıtlı" : "ileri doğrulamada zayıf"}</span> <span class="mute">görülmemiş dönemde en iyi %10: ${e.top10 > 0 ? "+" : ""}${fmt(e.top10, 2)}% · t ${fmt(e.t, 1)} · n ${e.n}</span>`;
+  }
   if (!key || !MTFS) return '<span class="mute">test edilmedi</span>';
   const e = MTFS.tests[key[0]] && MTFS.tests[key[0]][key[1]]; if (!e) return '<span class="mute">test edilmedi</span>';
   const ok = e.t >= 2 && e.ic1 * e.ic2 > 0;
   return `<span class="${ok ? "up" : "mute"}">${ok ? "kanıtlı" : "kanıtsız"}</span> <span class="mute">IC ${e.ic} · t ${fmt(e.t, 1)} · yarılar ${e.ic1}/${e.ic2}${e.ic_bull != null ? ` · boğa ${e.ic_bull}/ayı ${e.ic_bear ?? "–"}` : ""}</span>`;
 }
 function zExplainHtml() {
+  const auxT = (zTab === "gun" || zTab === "uyum" || zTab === "akis") ? `<h3 style="margin:10px 0 4px">Bilgi amaçlı günlük göstergeler <span class="mute" style="font-weight:400">· skora GİRMEZ</span></h3><p class="note">Bunlar ilk testte (tüm örneklemde) anlamlı görünüyordu; ancak ileri doğrulamada (görülmemiş dönem) çok göstergeli günlük skoru iyileştirmedi, sade RS daha iyiydi. Bu yüzden skordan çıkarıldı; ayrıntıyı ve para akışını görmek için burada duruyorlar.</p><div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th style="text-align:left">Ne ölçer?</th><th style="text-align:left">Kanıt (tüm örneklem, kendi başına)</th></tr></thead><tbody>${MTF_AUX.d.map(([n]) => { const i = FEAT_INFO[n] || ["", "", null]; return `<tr><td style="text-align:left;white-space:normal"><b>${esc(n)}</b></td><td style="text-align:left;white-space:normal">${esc(i[0])}</td><td style="text-align:left;white-space:normal">${evText(i[2])}</td></tr>`; }).join("")}</tbody></table></div>` : "";
   const tfs = zTab === "gun" ? ["d"] : zTab === "hafta" ? ["w"] : zTab === "ay" ? ["m"] : zTab === "akis" ? ["d", "w"] : ["d", "w", "m"];
   const why = {uyum: "Üç zaman dilimi aynı yönü gösterince geçmişte en iyi ayrışma görüldü; her dilimin gösterge setini aşağıda görebilirsiniz.", hafta: "Haftalık skor araştırmanın en tutarlı bulgusu olduğu için ana skordur.", gun: "Günlük skor kısa vadeli zamanlama içindir; tek başına zayıftır.", ay: "Aylık skor uzun vadeli bağlam verir; bağımsız sinyal sayılmaz.", akis: "Para akışı sekmesi günlük ve haftalık CMF'ye ve hacme dayanır.", topar: "Haftalık orta + günlük güçlü + CMF pozitif: dönüş denemesi; kanıtsız."}[zTab] || "";
   return `<details class="meet" style="margin-top:10px" open><summary>🔎 Bu sekmede neye bakılıyor ve neden?</summary><p class="note">${why}</p>${tfs.map(k => `<h3 style="margin:10px 0 4px">${ZTF[k][0]} skor <span class="mute" style="font-weight:400">· ufuk ${ZTF[k][1]} · rol: ${ZTF[k][2]} · birleşik skordaki ağırlık ${ZTF[k][3]}</span></h3>
-    <div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th style="text-align:left">Ne ölçer?</th><th style="text-align:left">Neden bakıyoruz?</th><th style="text-align:left">Kanıt (BIST 2023-26)</th></tr></thead><tbody>${MTF_FEATS[k].map(([n]) => { const i = FEAT_INFO[n] || ["", "", null]; return `<tr><td style="text-align:left;white-space:normal"><b>${esc(n)}</b></td><td style="text-align:left;white-space:normal">${esc(i[0])}</td><td style="text-align:left;white-space:normal">${esc(i[1])}</td><td style="text-align:left;white-space:normal">${evText(i[2])}</td></tr>`; }).join("")}</tbody></table></div>`).join("")}
-    <p class="note">Skor = bu göstergelerin evren içindeki yüzdelik sıralarının ortalaması (0-100). Göstergelerin tek tek değerlerini hisse detayındaki "Bu skor neden böyle?" bölümünde görürsünüz. IC: gösterge sıralaması ile sonraki dönem fazla getirisi arasındaki korelasyon; "kanıtlı" = t ≥ 2 ve iki yarıda aynı yön.</p></details>`;
+    <div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th style="text-align:left">Ne ölçer?</th><th style="text-align:left">Neden bakıyoruz?</th><th style="text-align:left">Kanıt (BIST 2023-26)</th></tr></thead><tbody>${MTF_FEATS[k].map(([n, , , w]) => { const i = FEAT_INFO[w > 1 ? n + " (ağırlık %50)" : n] || ["", "", null]; return `<tr><td style="text-align:left;white-space:normal"><b>${esc(n)}</b></td><td style="text-align:left;white-space:normal">${esc(i[0])}</td><td style="text-align:left;white-space:normal">${esc(i[1])}</td><td style="text-align:left;white-space:normal">${evText(i[2])}</td></tr>`; }).join("")}</tbody></table></div>`).join("")}
+    ${auxT}<p class="note">Skor = bu göstergelerin evren içindeki yüzdelik sıralarının (ağırlıklı) ortalaması (0-100). Göstergelerin tek tek değerlerini hisse detayındaki "Bu skor neden böyle?" bölümünde görürsünüz. IC: gösterge sıralaması ile sonraki dönem fazla getirisi arasındaki korelasyon; "kanıtlı" = t ≥ 2 ve iki yarıda aynı yön.</p></details>`;
 }
 
 /* ---- Kendi filtrelerim: koşullar (hepsi birlikte sağlanmalı), kaydedilir, istenildiği kadar eklenir ---- */
@@ -857,18 +867,26 @@ const ZFIELDS = [ // [id, ad, grup, işlev, biçim, kanıt anahtarı]
   ["rvol", "Göreceli hacim (seans düzeltmeli)", "Hacim", s => s.rvol, 2, ["gunluk", "rvol"]], ["tl", "Günlük hacim (mn TL)", "Hacim", s => s.tl, 0, null],
   ["vtr", "Hacim eğilimi (10g/60g)", "Hacim", s => s.av10 > 0 && s.av60 > 0 ? s.av10 / s.av60 : null, 2, null], ["ff", "Halka açıklık %", "Hacim", s => s.ff, 0, null],
   ["atrp", "ATR % (oynaklık)", "Risk", s => s.atrPct, 1, null], ["beta", "Beta", "Risk", s => s.beta, 2, null],
+  ["earn", "Bilançoya kalan gün", "Risk", s => s.nextEarn ? (s.nextEarn * 1000 - Date.now()) / 864e5 : null, 0, null],
   ["pe", "F/K", "Temel", s => s.pe > 0 ? s.pe : null, 1, null], ["pb", "PD/DD", "Temel", s => s.pb, 2, null], ["roe", "ROE %", "Temel", s => s.roe, 1, null], ["dy", "Temettü verimi %", "Temel", s => s.dy, 2, null],
   ["epsg", "EPS büyümesi %", "Temel", s => s.epsg, 0, null], ["upside", "Adil değere uzaklık % (+ ucuz)", "Temel", s => { const v = valuation(s); return v.upside; }, 0, null], ["mcap", "Piyasa değeri (milyar TL)", "Temel", s => s.mcap > 0 ? s.mcap / 1e9 : null, 1, null],
   ["rec", "TradingView teknik tavsiye günlük (−1..+1)", "Tavsiye", s => s.rec, 2, null], ["rec_w", "TradingView tavsiye haftalık", "Tavsiye", s => s.rec_w, 2, null], ["rec_m", "TradingView tavsiye aylık", "Tavsiye", s => s.rec_m, 2, null],
   ["tier", "Kurulum", "Kategori", s => { const x = mtfTier(s); return x ? x.id : null; }, "cat", null], ["sector", "Sektör", "Kategori", s => trSector(s.sector), "cat", null],
 ];
 const ZFD = Object.fromEntries(ZFIELDS.map(([id, name, grp, get, dec, ev]) => [id, {id, name, grp, get, dec, ev, cat: dec === "cat"}]));
-const ZTPL = [
-  ["Sağlam lider", "Haftalık lider, para girişi var, likit, zirveden uzak değil", [["mtf_w", ">=", 80], ["cmf", ">=", 0], ["tl", ">=", 15], ["dist6", ">=", -10]], "mtf_w"],
-  ["Para girişi + hacim", "Alıcı baskın, hacim canlı, günlük skor iyi", [["cmf", ">=", 0.1], ["cmf_w", ">=", 0], ["rvol", ">=", 1.5], ["mtf_d", ">=", 60]], "cmf"],
-  ["Güçlü ve ucuz", "Haftalık skor iyi, adil değerin altında, makul F/K", [["mtf_w", ">=", 70], ["upside", ">=", 20], ["pe", "<=", 15], ["tl", ">=", 10]], "upside"],
-  ["Sakin trend", "Haftalık trend yukarı, oynaklık düşük", [["trend_w", "=", 1], ["atrp", "<=", 3], ["mtf_w", ">=", 70], ["tl", ">=", 10]], "mtf_w"],
+const ZTPL = [ // [ad, açıklama, koşullar, sıralama, geçmiş test anahtarı (mtf_composite.json events)]
+  ["Haftalık lider (sade)", "Haftalık skor ≥ 80, likit: en tutarlı bulgu", [["mtf_w", ">=", 80], ["tl", ">=", 15]], "mtf_w", "haftalik_lider_likit"],
+  ["Uyumlu lider", "Günlük, haftalık, aylık skorlar birlikte güçlü", [["mtf_d", ">=", 60], ["mtf_w", ">=", 70], ["mtf_m", ">=", 60], ["tl", ">=", 10]], "mtf_b", "uyumlu"],
+  ["Sağlam lider", "Haftalık lider, para girişi var, likit, zirveden uzak değil", [["mtf_w", ">=", 80], ["cmf", ">=", 0], ["tl", ">=", 15], ["dist6", ">=", -10]], "mtf_w", "tpl_saglam_lider"],
+  ["Para girişi + hacim", "Alıcı baskın, hacim canlı, günlük skor iyi", [["cmf", ">=", 0.1], ["cmf_w", ">=", 0], ["rvol", ">=", 1.5], ["mtf_d", ">=", 60]], "cmf", "tpl_para_girisi"],
+  ["Güçlü ve ucuz", "Haftalık skor iyi, adil değerin altında, makul F/K", [["mtf_w", ">=", 70], ["upside", ">=", 20], ["pe", "<=", 15], ["tl", ">=", 10]], "upside", null],
 ];
+function tplEv(key) {
+  if (!key) return '<span class="mute">geçmişte test edilemez (temel veri geçmişi yok)</span>';
+  const e = MTFR && MTFR.events && MTFR.events[key] && MTFR.events[key]["20"]; if (!e) return "";
+  const ok = e.t >= 2 && e.h1 * e.h2 > 0;
+  return `<span class="${ok ? "up" : "mute"}">${ok ? "kanıtlı" : "kanıtsız"}</span> <span class="mute">20g maliyet sonrası ${e.net > 0 ? "+" : ""}${fmt(e.net, 2)}% · t ${fmt(e.t, 1)} · n ${e.n}</span>`;
+}
 let zNewOpen = false;
 const zFilters = () => store.get("zFilters", []);
 const zSaveF = a => store.set("zFilters", a);
@@ -881,7 +899,7 @@ function zPass(s, c) {
 }
 const zFmt = (F, v) => v == null || Number.isNaN(v) ? "–" : F.cat ? (F.id === "tier" ? (MTF_TIERS[v] ? MTF_TIERS[v].label : v) : String(v)) : fmt(v, F.dec);
 function zNewFilter(tpl) {
-  const a = zFilters(), id = Date.now().toString(36), t = tpl ? ZTPL[tpl] : null;
+  const a = zFilters(), id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t = tpl != null ? ZTPL[tpl] : null;
   a.push({id, name: t ? t[0] : `Filtre ${a.length + 1}`, conds: (t ? t[2] : [["mtf_w", ">=", 70]]).map(([f, op, v]) => ({f, op, v})), sort: {f: t ? t[3] : "mtf_b", dir: -1}});
   zSaveF(a); zTab = "f:" + id; store.set("zTab", zTab); renderZaman();
 }
@@ -941,19 +959,20 @@ function renderZaman() {
   $("zView").innerHTML = `<h2>Zaman Taraması <span class="sub">günlük · haftalık · aylık</span></h2>
     <p class="note">Her hisse üç zaman diliminde, TradingView göstergeleriyle puanlanır (0-100; evrendeki yüzdelik sıra ortalaması). Göstergeler önce BIST geçmişinde ufuklarında test edilip seçildi; ağırlık en tutarlı olan haftalık skorda.</p>
     ${regime}
+    <p class="note">Skorların ne kadar doğru olduğunu canlı ve geçmiş sonuçlarıyla <a href="#tahmin" data-go="tahmin" style="color:var(--accent2)">Tahmin Karnesi</a> sayfasında görün.</p>
     <div class="tabs">${ZTABS.map(([k, n]) => `<button class="tab ${zTab === k ? "on" : ""}" data-ztab="${k}">${n}${k === zTab ? ` (${rows.length})` : ""}</button>`).join("")}${zFilters().map(f => `<button class="tab ${zTab === "f:" + f.id ? "on" : ""}" data-ztab="f:${f.id}">★ ${esc(f.name)}${zTab === "f:" + f.id ? ` (${rows.length})` : ""}</button>`).join("")}<button class="tab" data-zadd="1" title="Kendi filtreni oluştur ve kaydet">＋ Filtre</button></div>
-    ${zNewOpen ? `<div class="card" style="background:var(--panel2);margin:8px 0"><b>Yeni filtre: nasıl başlayalım?</b><div class="tabs"><button class="tab" data-ztpl="-1">Boş filtre</button>${ZTPL.map((x, i) => `<button class="tab" data-ztpl="${i}" title="${esc(x[1])}">${esc(x[0])}</button>`).join("")}</div><p class="note">Şablonlar yalnızca başlangıç noktasıdır; her koşulun eşiğini ve göstergesini değiştirebilirsiniz.</p></div>` : ""}
+    ${zNewOpen ? `<div class="card" style="background:var(--panel2);margin:8px 0"><b>Yeni filtre: nasıl başlayalım?</b><div class="tabs"><button class="tab" data-ztpl="-1">Boş filtre</button></div>${ZTPL.map((x, i) => `<div style="margin:6px 0"><button class="tab" data-ztpl="${i}" title="${esc(x[1])}">${esc(x[0])}</button> <span class="mute" style="font-size:12.5px">${esc(x[1])} · ${tplEv(x[4])}</span></div>`).join("")}<p class="note">Şablonlar yalnızca başlangıç noktasıdır; geçmiş test etiketi şablonun ilk halini ölçer (yaklaşık eşleşme), eşikleri değiştirirseniz geçerli değildir.</p></div>` : ""}
     <p class="note">${info}</p>${cf ? zEditorHtml(cf) : zExplainHtml()}${cf ? "" : evLine + evLine2 + zNote}
     <div class="controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">
       <label>Min. hacim (mn TL)<select id="zMin">${[1, 5, 10, 30, 100].map(v => `<option value="${v}" ${zMin === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label>Sektör<select id="zSec"><option value="">Hepsi</option>${secs.map(n => `<option ${zSec === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
       <label>Göster<select id="zTop">${[20, 40, 100, 300].map(v => `<option value="${v}" ${zTop === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <span class="mute">Evren: ${Object.entries(cnt).map(([k, v]) => `${T(k)} ${v}`).join(" · ")}</span></div>
-    ${shown.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük skor">G</th><th title="Haftalık skor">H</th><th title="Aylık skor">A</th><th title="0,25 G + 0,5 H + 0,25 A">Birleşik</th><th>Kurulum</th><th title="Haftalık skorun geçmişte 20 günde verdiği piyasa üstü getiri">Geçmiş 20g beklenti</th><th title="Chaikin Para Akışı (günlük)">CMF</th>${xcols.map(F => `<th title="Filtrenizdeki gösterge">${esc(F.name)}</th>`).join("")}<th>Efsaneler</th><th>Komite</th></tr></thead><tbody>${shown.map(s => {
+    ${shown.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük skor">G</th><th title="Haftalık skor">H</th><th title="Aylık skor">A</th><th title="0,25 G + 0,5 H + 0,25 A">Birleşik</th><th>Kurulum</th><th title="Haftalık skorun geçmişte 20 günde verdiği piyasa üstü getiri">Geçmiş 20g beklenti</th><th title="Chaikin Para Akışı (günlük)">CMF</th><th title="Yaklaşan bilanço (tahmini tarih): sürpriz riski">Bilanço</th>${xcols.map(F => `<th title="Filtrenizdeki gösterge">${esc(F.name)}</th>`).join("")}<th>Efsaneler</th><th>Komite</th></tr></thead><tbody>${shown.map(s => {
       const r = committee(s), t = mtfTier(s), ex = mtfExpect(s), m = s.mtf;
       return `<tr data-x="${esc(s.name)}"><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td>
         <td class="${scCls(m.d)}">${fmt(m.d, 0)}</td><td class="${scCls(m.w)}"><b>${fmt(m.w, 0)}</b></td><td class="${scCls(m.m)}">${fmt(m.m, 0)}</td><td><b>${fmt(m.b, 0)}</b></td>
-        <td><span class="vt ${t.cls || "mute"}" title="${esc(t.tip)}">${t.label}</span></td><td class="${sign(ex)}">${ex == null ? "–" : (ex > 0 ? "+" : "") + fmt(ex, 1) + "%"}</td><td class="${sign(s.cmf)}">${s.cmf == null ? "–" : fmt(s.cmf, 2)}</td>
+        <td><span class="vt ${t.cls || "mute"}" title="${esc(t.tip)}">${t.label}</span></td><td class="${sign(ex)}">${ex == null ? "–" : (ex > 0 ? "+" : "") + fmt(ex, 1) + "%"}</td><td class="${sign(s.cmf)}">${s.cmf == null ? "–" : fmt(s.cmf, 2)}</td><td>${s.nextEarn && (s.nextEarn * 1000 - Date.now()) / 864e5 >= -1 && (s.nextEarn * 1000 - Date.now()) / 864e5 <= 7 ? `<span class="down" title="Bilanço yakın">⚠ ${fmt(Math.max(0, (s.nextEarn * 1000 - Date.now()) / 864e5), 0)} gün</span>` : ""}</td>
         ${xcols.map(F => `<td>${zFmt(F, F.get(s))}</td>`).join("")}<td>${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`; }).join("")}</tbody></table></div>`
       : `<p class="mute">Bu süzgeçle hisse yok. Minimum hacmi düşürmeyi ya da başka bir sekmeyi deneyin.</p>`}
     <details style="margin-top:12px"><summary><b>Hangi göstergeler kanıtlandı?</b> (BIST 2023-26 testi)</summary>${evidenceTable()}</details>
@@ -976,7 +995,7 @@ document.addEventListener("click", e => {
   const cf = zCustom(); if (!cf) return; const all = zFilters(), cur = all.find(f => f.id === cf.id);
   if (e.target.closest("[data-zcadd]")) { cur.conds.push({f: "mtf_w", op: ">=", v: 70}); zSaveF(all); renderZaman(); return; }
   const cd = e.target.closest("[data-zcdel]"); if (cd) { cur.conds.splice(+cd.dataset.zcdel, 1); zSaveF(all); renderZaman(); return; }
-  if (e.target.closest("[data-zdup]")) { const id = Date.now().toString(36); all.push({...JSON.parse(JSON.stringify(cur)), id, name: cur.name + " (kopya)"}); zSaveF(all); zTab = "f:" + id; store.set("zTab", zTab); renderZaman(); toast("Kopyalandı"); return; }
+  if (e.target.closest("[data-zdup]")) { const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); all.push({...JSON.parse(JSON.stringify(cur)), id, name: cur.name + " (kopya)"}); zSaveF(all); zTab = "f:" + id; store.set("zTab", zTab); renderZaman(); toast("Kopyalandı"); return; }
   if (e.target.closest("[data-zdel]")) { if (!window.confirm(`"${cur.name}" filtresi silinsin mi?`)) return; zSaveF(all.filter(f => f.id !== cur.id)); zTab = "uyum"; store.set("zTab", zTab); renderZaman(); return; }
   if (e.target.closest("[data-zexp]")) { const j = JSON.stringify(all); (navigator.clipboard ? navigator.clipboard.writeText(j) : Promise.reject()).then(() => toast("Filtreleriniz panoya kopyalandı"), () => window.prompt("Kopyalayın:", j)); return; }
   if (e.target.closest("[data-zimp]")) { const j = window.prompt("Dışa aktardığınız filtre metnini yapıştırın:"); if (!j) return; try { const o = JSON.parse(j); if (!Array.isArray(o)) throw 0; const ids = new Set(all.map(f => f.id)); o.filter(f => f && f.id && Array.isArray(f.conds) && !ids.has(f.id)).forEach(f => all.push(f)); zSaveF(all); renderZaman(); toast("İçe aktarıldı"); } catch (err) { toast("Geçersiz metin"); } }
@@ -992,6 +1011,82 @@ document.addEventListener("change", e => {
   zSaveF(all); renderZaman();
 });
 
+/* ---------- Tahmin Karnesi & Doğrulama: canlı sonuçlar, kalibrasyon, ileri doğrulama, maliyet, dayanıklılık ---------- */
+const sgn = (v, d = 2, suf = "%") => v == null || Number.isNaN(v) ? "–" : `<span class="${v > 0 ? "up" : v < 0 ? "down" : ""}">${v > 0 ? "+" : ""}${fmt(v, d)}${suf}</span>`;
+function liveEval() { // mtf_log.json: her gün kaydedilen [ad, günlük, haftalık, aylık, kapanış, kurulum]; sonuçlar kapanıştan kapanışa, piyasa ortalamasına göre
+  const D = (MLOG && MLOG.days) || [], out = {days: D.length, H: {}};
+  for (const h of [5, 10, 20]) {
+    const g = {}; let used = 0;
+    for (let i = 0; i + h < D.length; i++) {
+      const B = new Map(D[i + h].r.map(x => [x[0], x[4]])), rets = [];
+      D[i].r.forEach(x => { const c1 = B.get(x[0]); if (c1) { const r = c1 / x[4] - 1; if (Math.abs(r) < 0.6) rets.push([x, r]); } }); // bedelsiz/bölünme uç değerlerini at
+      if (rets.length < 50) continue; used++;
+      const mean = rets.reduce((a, [, r]) => a + r, 0) / rets.length, ws = rets.map(([x]) => x[2]).sort((a, b) => a - b), p90 = ws[Math.floor(ws.length * 0.9)];
+      rets.forEach(([x, r]) => { const ex = (r - mean) * 100, add = k => { (g[k] = g[k] || []).push(ex); };
+        add("all"); add("tier:" + (x[5] || "notr")); if (x[2] >= p90) add("top10"); add("dec:" + Math.min(9, Math.floor(x[2] / 10))); });
+    }
+    out.H[h] = {used, g};
+  }
+  return out;
+}
+const liveCell = (a) => a && a.length >= 5 ? `${sgn(a.reduce((x, y) => x + y, 0) / a.length)} <span class="mute">· isabet %${fmt(a.filter(v => v > 0).length / a.length * 100, 0)} · n ${a.length}</span>` : '<span class="mute">bekliyor</span>';
+function calibHtml() {
+  const e = MTFR && MTFR.tests && MTFR.tests.haftalik && MTFR.tests.haftalik["20"]; if (!e) return "";
+  const live = liveEval().H[20].g, mx = Math.max(...e.dec.map(Math.abs), 1);
+  return `<div class="tw"><table><thead><tr><th>Haftalık skor dilimi</th><th>Geçmiş: 20g fazla getiri</th><th style="text-align:left;width:240px"></th><th>Geçmiş isabet</th><th>Canlı (20g)</th></tr></thead><tbody>${e.dec.map((v, i) => `<tr><td>${i * 10}-${i * 10 + 10}</td><td>${sgn(v)}</td><td style="text-align:left"><div style="height:10px;border-radius:5px;background:${v >= 0 ? "var(--up)" : "var(--down)"};width:${Math.abs(v) / mx * 100}%;opacity:.8"></div></td><td>%${fmt(e.dhit[i], 0)}</td><td>${liveCell(live["dec:" + i])}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">İyi bir skor yukarı doğru tırmanan çubuklar verir (yüksek dilim = yüksek fazla getiri). Dilimlerin isabeti (piyasayı yenme oranı) %50 civarında kalır: avantaj büyüklükte, isabette değil.</p>`;
+}
+const WFN = {wf: "Her katlamada yeniden seçilen göstergeler", fixed: "Sabit liste (tüm örneklemle seçildi: SIZINTILI)", naive: "Tüm göstergelerin ortalaması", rs: "Sade RS (günlük skor)", rs_cmf: "RS + CMF", ens_rs: "Bileşik + RS (haftalık skor)", ens_rs_w: "RS + haftalık bileşik"};
+function wfHtml(w, title) {
+  if (!w) return "";
+  const rows = Object.entries(w.tests).map(([tf, o]) => { const best = Object.entries(o).filter(([k, v]) => v && k !== "horizon").sort((a, b) => b[1].top10 - a[1].top10)[0];
+    return `<tr><td colspan="6" style="text-align:left;background:var(--panel2)"><b>${{gunluk: "Günlük (ufuk 5 gün)", haftalik: "Haftalık (20 gün)", aylik: "Aylık (60 gün)"}[tf]}</b> <span class="mute">· en iyi: ${best ? WFN[best[0]] : "–"}</span></td></tr>` +
+      Object.entries(o).filter(([k, v]) => v && k !== "horizon").map(([k, v]) => `<tr><td style="text-align:left;white-space:normal">${WFN[k] || k}</td><td>${v.n}</td><td>${sgn(v.top10)}</td><td>%${fmt(v.hit, 0)}</td><td>${fmt(v.t, 1)}</td><td>%${fmt(v.pos, 0)}</td></tr>`).join(""); }).join("");
+  return `<h3 style="margin:10px 0 4px">${title} <span class="mute" style="font-weight:400">· ${w.stocks} hisse · ${w.folds.length} katlama × ${w.test_len} gün test</span></h3><div class="tw"><table><thead><tr><th style="text-align:left">Yöntem</th><th>Gözlem</th><th>En iyi %10 fazla getiri</th><th>İsabet</th><th>t</th><th>Pozitif dönem</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function eventsHtml2() {
+  const E = MTFR && MTFR.events; if (!E) return "";
+  const NAMES = {haftalik_lider: "Haftalık lider (skor ≥ 80)", haftalik_lider_likit: "Haftalık lider + likit (≥ 15 mn TL)", uyumlu: "Uyumlu lider (3 dilim)", uyumlu_cmf: "Uyumlu lider + CMF > 0", toparlanan: "Toparlanan (deneysel)", zayif: "Zayıf (skor ≤ 30)", tpl_saglam_lider: "Şablon: Sağlam lider", tpl_para_girisi: "Şablon: Para girişi + hacim", tpl_sakin_trend: "Şablon: Sakin trend"};
+  return `<div class="tw"><table><thead><tr><th style="text-align:left">Kurulum</th><th>Gözlem</th><th>20g fazla (brüt)</th><th title="Gidiş-dönüş %${MTFR.cost || 0.5} maliyet düşüldü">Maliyet sonrası</th><th>İsabet</th><th>t</th><th>İlk / ikinci yarı</th><th>Boğa / ayı</th></tr></thead><tbody>${Object.entries(NAMES).map(([k, n]) => { const e = E[k] && E[k]["20"]; return e ? `<tr><td style="text-align:left">${n}</td><td>${e.n}</td><td>${sgn(e.excess)}</td><td><b>${sgn(e.net)}</b></td><td>%${fmt(e.win, 0)}</td><td>${fmt(e.t, 1)}</td><td>${fmt(e.h1, 1)} / ${fmt(e.h2, 1)}</td><td>${e.bull == null ? "–" : fmt(e.bull, 1)} / ${e.bear == null ? "–" : fmt(e.bear, 1)}</td></tr>` : ""; }).join("")}</tbody></table></div>`;
+}
+function wideHtml() {
+  const c = MTFR && MTFR.tests, w = MTFR && MTFR.wide; if (!w) return '<p class="mute">Geniş evren testi henüz yok (haftalık çalışmada üretilir).</p>';
+  const row = (n, a, b) => a && b ? `<tr><td style="text-align:left">${n}</td><td>${sgn(a.top10 ?? a.excess)}</td><td>${fmt(a.t, 1)}</td><td>${sgn(b.top10 ?? b.excess)}</td><td>${fmt(b.t, 1)}</td></tr>` : "";
+  return `<div class="tw"><table><thead><tr><th style="text-align:left">20 günlük ufuk</th><th>Çekirdek (${MTFR.stocks} hisse): fazla</th><th>t</th><th>Geniş evren (${w.stocks} hisse): fazla</th><th>t</th></tr></thead><tbody>
+    ${row("Haftalık skor (en iyi %10)", c.haftalik["20"], w.tests.haftalik["20"])}${row("Sade RS (en iyi %10)", c.rs_baz["20"], w.tests.rs_baz["20"])}${row("Birleşik skor (en iyi %10)", c.birlesik["20"], w.tests.birlesik["20"])}
+    ${["haftalik_lider", "uyumlu", "zayif"].map(k => row({haftalik_lider: "Haftalık lider olayı", uyumlu: "Uyumlu lider olayı", zayif: "Zayıf olayı"}[k], MTFR.events[k]["20"], w.events[k] && w.events[k]["20"])).join("")}</tbody></table></div>
+    <p class="note">Geniş evren düşük hacimli hisseleri de içerir; sonuçlar çekirdekle aynı yöndeyse bulgu yalnızca büyük hisselere özgü değildir. İkisi de bugünün listesidir (hayatta kalma yanlılığı sürer).</p>`;
+}
+function regimeHtml() {
+  const r = MTFR && MTFR.regime; if (!r) return "";
+  const L = {bull: "Boğa", mixed: "Karışık", bear: "Ayı"};
+  return `<div class="tw"><table><thead><tr><th>Rejim</th><th>Bağımsız dönem</th><th>Günlük (RS)</th><th>Haftalık</th><th>Aylık</th></tr></thead><tbody>${Object.entries(r).map(([k, o]) => `<tr><td>${L[k]}</td><td>${o.n}</td><td>${sgn(o.top10.gunluk)}</td><td>${sgn(o.top10.haftalik)}</td><td>${sgn(o.top10.aylik)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note"><b>Sonuç: rejime göre ağırlık değiştirmiyoruz.</b> Her rejimde yalnızca 6-13 bağımsız 20 günlük dönem var; bu kadar az veriyle rejim bazlı ağırlık aşırı uyum olur. Haftalık skor üç rejimde de pozitif kaldığı için sabit ağırlıklar (%25 / %50 / %25) korunuyor. Veri biriktikçe (canlı kayıt) yeniden denenecek.</p>`;
+}
+async function renderTahmin() {
+  const el = $("thView");
+  el.innerHTML = "<h2>Tahmin Karnesi &amp; Doğrulama</h2><p class='mute'>Yükleniyor…</p>";
+  if (!MTFW || !MLOG || !MTFR) await loadAux();
+  const L = liveEval(), have = L.H[5].used + L.H[10].used + L.H[20].used > 0;
+  const rowsL = [["Uyumlu lider", "tier:uyumlu"], ["Haftalık lider", "tier:hlider"], ["Haftalık skor en iyi %10", "top10"], ["Nötr", "tier:notr"], ["Zayıf", "tier:zayif"], ["Tüm skorlu hisseler (tabanı)", "all"]];
+  const hs = [5, 10, 20];
+  el.innerHTML = `<h2>Tahmin Karnesi &amp; Doğrulama</h2>
+    <p class="note">Bu sayfa "tahminlerimiz ne kadar doğru?" sorusunu <b>dört bağımsız şekilde</b> ölçer: (1) canlı kayıt, (2) geçmiş testin kalibrasyonu, (3) ileri doğrulama (görülmemiş dönem), (4) işlem maliyeti ve geniş evrenle dayanıklılık. Ölçüt her yerde <b>piyasa ortalamasına göre fazla getiri</b> ve <b>isabet</b> (piyasayı yenme oranı). Garanti yoktur; yatırım tavsiyesi değildir.</p>
+    <h2 style="margin-top:14px">1) Canlı sonuçlar <span class="sub">(her gün kaydedilen skorlar; ${L.days} işlem günü birikti)</span></h2>
+    ${have ? `<div class="tw"><table><thead><tr><th style="text-align:left">Grup (kayıt gününde)</th>${hs.map(h => `<th>${h} gün sonra <span class="mute" style="font-weight:400">(${L.H[h].used} kayıt günü)</span></th>`).join("")}</tr></thead><tbody>${rowsL.map(([n, k]) => `<tr><td style="text-align:left">${n}</td>${hs.map(h => `<td>${liveCell(L.H[h].g[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="note">Kapanıştan kapanışa, piyasa ortalamasına göre; örtüşen gözlemler olduğundan n büyük görünür (bağımsız karar sayısı daha azdır). Küçük n'e güvenmeyin: en az 20-30 bağımsız gün biriksin.</p>`
+      : `<p class="mute">Canlı kayıt başladı (${L.days} gün). İlk 5 günlük sonuçlar için en az 6 işlem günü gerekir; her gün kapanıştan sonra otomatik eklenir ve sonuçlar bu tabloda kendiliğinden belirir.</p>`}
+    <h2 style="margin-top:14px">2) Kalibrasyon <span class="sub">(skor yükseldikçe sonuç gerçekten iyileşiyor mu?)</span></h2>${calibHtml()}
+    <h2 style="margin-top:14px">3) İleri doğrulama <span class="sub">(göstergeler yalnızca eğitim döneminde seçilip görülmemiş dönemde sınandı)</span></h2>
+    <p class="note">Aynı geçmişte seçip aynı geçmişte sınamak iyimserdir. Burada her katlamada göstergeler yalnızca eğitim verisiyle seçilir, ardından hiç görülmemiş 60 günde ölçülür. <b>Bulgu:</b> sade göreceli güç (RS) her evrende ve her ufukta tutarlı biçimde güçlü çıktı. Çok göstergeli günlük bileşik görülmemiş dönemde RS'nin gerisinde kaldı (çekirdek evrende hiç işe yaramadı); haftalıkta bileşik ile RS birbirine yakın (fark gürültü içinde). Bu yüzden günlük skor artık RS, haftalık skor ise bileşik + RS birleşimidir. "Sabit liste" satırı sızıntılı olduğu için yalnızca referanstır.</p>
+    ${wfHtml(MTFW && MTFW.core, "Çekirdek evren")}${MTFW && MTFW.wide ? wfHtml(MTFW.wide, "Geniş evren") : ""}
+    <h2 style="margin-top:14px">4) İşlem maliyeti ve kurulumlar <span class="sub">(20 günlük ufuk)</span></h2>${eventsHtml2()}
+    <p class="note">Maliyet: komisyon+BSMV %0,15 ve kayma %0,10, alış ve satış için; gidiş-dönüş %${MTFR ? MTFR.cost : 0.5}. "Zayıf" grubu elemek en az seçmek kadar değerlidir. Birden çok koşullu şablonlar çoğu zaman sade "haftalık lider"den daha iyi değildir: koşul eklemek otomatik olarak daha iyi demek değildir.</p>
+    <h2 style="margin-top:14px">5) Dayanıklılık: geniş evren</h2>${wideHtml()}
+    <h2 style="margin-top:14px">6) Rejime göre</h2>${regimeHtml()}
+    <h2 style="margin-top:14px">Sınırlar (dürüst okuma)</h2>
+    <ul class="note"><li>Veri ~3 yıl ve tek rejim (yüksek enflasyonlu nominal TL); sonuçlar kanıt değil ipucudur.</li><li>Evren bugünün hisseleridir: kapanmış/çıkarılmış hisseler yok (hayatta kalma yanlılığı), sonuçlar iyimser olabilir.</li><li>İsabet oranı %50 civarında: avantaj, kazananların kaybedenlerden daha çok kazanmasından gelir. Tek bir tahminin tutma olasılığı yüksek değildir; avantaj çok işleme yayıldığında görünür.</li><li>Skor tanımları (günlük = RS, haftalık = bileşik + RS) ileri doğrulama sonucuna bakılarak güncellendi; bu hafif bir seçim yanlılığıdır. Asıl hakem canlı kayıttır.</li><li>Temel veriler (F/K, adil değer) geçmişe dönük elimizde olmadığından geçmişte test edilemez; PIT (noktasal) kayıtlar biriktikçe ayrıca sınanacak.</li><li>Bilanço/haber etkisi geçmişte test edilemedi (geçmiş tarih verisi yok); haber olayları canlı kaydediliyor (Komite Karnesi).</li></ul>`;
+}
 /* ---------- Grafik & Göstergeler: TradingView gelişmiş grafik (kendi göstergeni ekleyebilirsin) ---------- */
 let chSym = store.get("chSym", "THYAO"), chIv = store.get("chIv", "D"), chSt = store.get("chSt", ["Volume@tv-basicstudies"]), chLoaded = false;
 const CH_IV = [["15", "15 dk"], ["60", "1 saat"], ["240", "4 saat"], ["D", "Günlük"], ["W", "Haftalık"], ["M", "Aylık"]];
@@ -2237,6 +2332,7 @@ function refreshView() {
   else if (view === "rapor") renderReport();
   else if (view === "tarayici") renderScreener();
   else if (view === "zaman") renderZaman();
+  else if (view === "tahmin") renderTahmin();
   else if (view === "grafik") renderChartPage();
   else if (view === "atolye") renderBacktestLab();
   else if (view === "portfoyum") renderMyPort();
@@ -2320,6 +2416,8 @@ async function loadAux() {
   if (!RESEARCH) { const rs = await getJson("research.json?t=" + Math.floor(Date.now() / 36e5)); if (rs && rs.signals) { RESEARCH = rs; screenCache = null; } }
   if (!MTFR) { const m = await getJson("mtf_composite.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFR = m; }
   if (!MTFS) { const m = await getJson("mtf_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFS = m; }
+  if (!MTFW) { const m = await getJson("mtf_walkforward.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.core) MTFW = m; }
+  { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
     if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
@@ -2413,7 +2511,7 @@ if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(esc
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "grafik", "zaman", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "grafik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

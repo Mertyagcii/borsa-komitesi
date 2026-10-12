@@ -25,7 +25,7 @@ function istanbul() {
   return {date: `${p.year}-${p.month}-${p.day}`, wd: p.weekday, min: (+p.hour % 24) * 60 + +p.minute};
 }
 const now = istanbul(), date = opt("date", now.date);
-const store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
+const mlog = read("mtf_log.json", {days: []}), store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
 const afterClose = !["Sat", "Sun"].includes(now.wd) && now.min >= 18 * 60 + 45;
 
 function publish() {
@@ -33,6 +33,7 @@ function publish() {
   fs.writeFileSync(path.join(SITE, "picks.json"), JSON.stringify(store));
   fs.writeFileSync(path.join(SITE, "news_log.json"), JSON.stringify(nlog));
   fs.writeFileSync(path.join(SITE, "snapshots.json"), JSON.stringify(snaps));
+  fs.writeFileSync(path.join(SITE, "mtf_log.json"), JSON.stringify(mlog));
 }
 if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
   console.log(!afterClose ? "Seans kapanışı değil; kayıt atlandı." : `${date} zaten kaydedildi.`);
@@ -64,6 +65,7 @@ Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n)
   liquid: UNI.filter(s => s.close > 0 && s.volume).map(s => [s.name, s.close, s.tl]).sort((a, b) => b[2] - a[2]).slice(0, 150).map(([n, c]) => [n, c]),
   fund: liquid300.map(s => ${JSON.stringify(FUND_COLS)}.map(c => { const v = s[c]; return typeof v === "number" ? Math.round(v * 1e4) / 1e4 : v ?? null; })),
   events,
+  mtf: UNI.filter(s => s.ok && s.mtf && s.mtf.w != null && s.close > 0).map(s => [s.name, s.mtf.d == null ? null : Math.round(s.mtf.d), Math.round(s.mtf.w), s.mtf.m == null ? null : Math.round(s.mtf.m), s.close, tierId(s.mtf.d, s.mtf.w, s.mtf.m)]),
 })`, ctx);
 
 const nowClose = Object.fromEntries(data.stocks.filter(s => s.close > 0).map(s => [s.name, s.close]));
@@ -109,6 +111,16 @@ for (const ev of out.events) if (!seen.has(ev.k)) { nlog.events.push({k: ev.k, d
 nlog.events = nlog.events.filter(e => bdays(e.d, date) <= 60 || !e.r).slice(-4000);
 nlog.updated = date;
 
+/* canlı tahmin karnesi: her gün TÜM skorlu hisselerin [ad, günlük, haftalık, aylık skor, kapanış, kurulum] kaydı.
+   Sonuçlar (5/10/20 gün sonrası, piyasa ortalamasına göre) tarayıcıda bu kayıttan hesaplanır: kalibrasyon ve isabet. */
+const prevDay = mlog.days.filter(x => x.d < date).slice(-1)[0];
+mlog.days = mlog.days.filter(x => x.d !== date);
+mlog.days.push({d: date, r: out.mtf});
+mlog.days = mlog.days.slice(-160);
+mlog.updated = date;
+const liquidSet = new Set(out.liquid.slice(0, 100).map(x => x[0])), prevT = prevDay ? Object.fromEntries(prevDay.r.map(x => [x[0], x[5]])) : {};
+const isLead = t => t === "uyumlu" || t === "hlider";
+const newLeaders = out.mtf.filter(x => isLead(x[5]) && !isLead(prevT[x[0]]) && liquidSet.has(x[0]) && prevDay).map(x => x[0]).slice(0, 12);
 snaps[date] = todaySnap;
 const keep = Object.keys(snaps).sort().slice(-45);
 for (const k of Object.keys(snaps)) if (!keep.includes(k)) delete snaps[k];
@@ -125,8 +137,12 @@ if (!fdates.length || bdays(fdates[fdates.length - 1], date) >= 5) {
 fs.writeFileSync("picks.json", JSON.stringify(store));
 fs.writeFileSync("snapshots.json", JSON.stringify(snaps));
 fs.writeFileSync("news_log.json", JSON.stringify(nlog));
+fs.writeFileSync("mtf_log.json", JSON.stringify(mlog));
 publish();
 
 const strong = out.committee.filter(c => c.sc >= 3).map(c => c.n);
-if (strong.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: güçlü aday → ${strong.join(", ")}`);
-console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, rejim: ${out.regime && out.regime.label}${fundNote}`);
+const alertLines = [];
+if (strong.length) alertLines.push(`güçlü aday → ${strong.join(", ")}`);
+if (newLeaders.length) alertLines.push(`yeni lider kurulum (haftalık skor) → ${newLeaders.join(", ")}`);
+if (alertLines.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: ` + alertLines.join(" | ") + " (yatırım tavsiyesi değildir)");
+console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}`);

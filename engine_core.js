@@ -228,7 +228,8 @@ function signalsZaman(p, stocks, by, date, nav) {
   }
   const slots = 12 - p.pos.length - pendingBuys(p); if (slots <= 0) return;
   const c = stocks.filter(s => s.ok && s.tl >= 15 && s.mtf && s.mtf.w != null && s.mtf.w >= 80 && s.atr && !heldOrOrdered(p, s.name))
-    .filter(s => { const d = devil(s, null); return !d.veto; }).sort((a, b) => b.mtf.w - a.mtf.w);
+    .filter(s => { const d = devil(s, null); const ed = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null; return !d.veto && !(ed != null && ed >= -1 && ed <= 5); }) // bilanço ≤ 5 gün: sürpriz riski, alım yok
+    .sort((a, b) => b.mtf.w - a.mtf.w);
   if (!c.length) say(p, date, "Haftalık skoru 80 üstü, vetosuz hisse yok; bekliyorum.");
   for (const s of c) {
     if (p.pos.length + pendingBuys(p) >= 12) break;

@@ -66,7 +66,6 @@ function computeRegime(universe, hist) {
 }
 /* Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getirinin yüzdelik ortalaması (research.py ile aynı bileşim) */
 function rankUniverse(uni) {
-  rankMtf(uni);
   const el = uni.filter(s => s.ok && s.tl >= 5 && s.h52 > 0);
   el.forEach(s => { s._rk = []; });
   for (const key of ["dist52", "p6m", "p1m"]) {
@@ -76,6 +75,7 @@ function rankUniverse(uni) {
   el.forEach(s => { s.rs = s._rk.length >= 2 ? s._rk.reduce((a, b) => a + b, 0) / s._rk.length : null; delete s._rk; });
   const inEl = new Set(el);
   uni.forEach(s => { if (!inEl.has(s)) s.rs = null; });
+  rankMtf(uni); // çok zamanlı skor RS'ye dayanır
 }
 /* ---------- Çok zamanlı skor (günlük / haftalık / aylık) ----------
    mtf_research.py: göstergeler zaman diliminin ufkunda test edildi (günlük→5g, haftalık→20g, aylık→60g); mtf_composite.py bileşikleri sınadı.
@@ -90,21 +90,31 @@ function pctRankMap(el, fn) {
   return m;
 }
 const dmi = (a, b) => a != null && b != null ? a - b : null;
-const MTF_FEATS = { // [ad, işlev, biçim]: pct = yüzde (×100), num = sayı, bool = evet/hayır
-  d: [["CMF (para akışı)", s => s.cmf, "num"], ["RSI (momentum, aşırı satım değil)", s => s.rsi, "num"], ["DI+ − DI− (yön)", s => dmi(s.pdi, s.mdi), "num"], ["Fiyat/SMA20 farkı", s => s.sma20 > 0 ? s.close / s.sma20 - 1 : null, "pct"]],
+const RS_FEAT = ["Göreceli güç (RS: 52h yakınlık + 6 ay + 1 ay)", s => s.rs, "num"];
+const MTF_FEATS = { // [ad, işlev, biçim, ağırlık]: pct = yüzde (×100), num = sayı, bool = evet/hayır
+  d: [[...RS_FEAT, 1]],
   w: [["Haftalık trend (fiyat > SMA20 > SMA50)", s => s.sma20_w > 0 && s.sma50_w > 0 ? (s.close > s.sma20_w && s.sma20_w > s.sma50_w ? 1 : 0) : null, "bool"],
       ["6 aylık zirveye uzaklık", s => s.h6m > 0 ? s.close / s.h6m - 1 : null, "pct"], ["Fiyat/haftalık SMA50 farkı", s => s.sma50_w > 0 ? s.close / s.sma50_w - 1 : null, "pct"],
-      ["Haftalık DI+ − DI−", s => dmi(s.pdi_w, s.mdi_w), "num"], ["Haftalık RSI", s => s.rsi_w, "num"], ["Haftalık CMF", s => s.cmf_w, "num"], ["6 ay getiri", s => s.p6m, "pct0"]],
+      ["Haftalık DI+ − DI−", s => dmi(s.pdi_w, s.mdi_w), "num"], ["Haftalık RSI", s => s.rsi_w, "num"], ["Haftalık CMF", s => s.cmf_w, "num"], ["6 ay getiri", s => s.p6m, "pct0"],
+      [...RS_FEAT, 7]], // RS tek başına bileşiğin %50'si
   m: [["Uzun trend (SMA50 > SMA200)", s => trendUp(s) == null ? null : trendUp(s) ? 1 : 0, "bool"], ["52 hafta zirvesine uzaklık", s => s.dist52, "pct0"], ["Aylık CMF", s => s.cmf_m, "num"], ["6 ay getiri", s => s.p6m, "pct0"], ["1 yıl getiri", s => s.py, "pct0"]],
+};
+const MTF_AUX = { // yalnızca bilgi: günlük göstergeler ileri doğrulamada skoru iyileştirmediği için skora GİRMEZ
+  d: [["CMF (para akışı)", s => s.cmf, "num"], ["RSI", s => s.rsi, "num"], ["DI+ − DI− (yön)", s => dmi(s.pdi, s.mdi), "num"], ["Fiyat/SMA20 farkı", s => s.sma20 > 0 ? s.close / s.sma20 - 1 : null, "pct"]],
 };
 const fmtFeat = (v, k) => v == null ? "–" : k === "bool" ? (v ? "evet" : "hayır") : k === "pct" ? "%" + fmt(v * 100, 1) : k === "pct0" ? "%" + fmt(v, 1) : fmt(v, 2);
 function rankMtf(uni) {
   const el = uni.filter(s => s.ok && s.tl >= 5);
   const sc = {};
   for (const tf of ["d", "w", "m"]) {
-    const maps = MTF_FEATS[tf].map(([, fn]) => pctRankMap(el, fn));
-    sc[tf] = new Map(el.map(s => { const v = maps.map(m => m.get(s)).filter(x => x != null); return [s, v.length >= Math.ceil(maps.length / 2) ? v.reduce((a, b) => a + b, 0) / v.length : null]; }));
-    sc[tf + "P"] = new Map(el.map(s => [s, MTF_FEATS[tf].map(([n, fn, k], i) => [n, fmtFeat(fn(s), k), maps[i].get(s) ?? null])]));
+    const F = MTF_FEATS[tf], maps = F.map(([, fn]) => pctRankMap(el, fn)), wts = F.map(f => f[3] || 1);
+    sc[tf] = new Map(el.map(s => {
+      let sum = 0, wsum = 0, n = 0; maps.forEach((m, i) => { const v = m.get(s); if (v != null) { sum += v * wts[i]; wsum += wts[i]; n++; } });
+      return [s, n >= Math.ceil(F.length / 2) ? sum / wsum : null];
+    }));
+    const aux = (MTF_AUX[tf] || []), amaps = aux.map(([, fn]) => pctRankMap(el, fn));
+    sc[tf + "P"] = new Map(el.map(s => [s, [...F.map(([n, fn, k, w], i) => [n + (w > 1 ? " (ağırlık %50)" : ""), fmtFeat(fn(s), k), maps[i].get(s) ?? null]),
+      ...aux.map(([n, fn, k], i) => [n + " · bilgi (skora girmez)", fmtFeat(fn(s), k), amaps[i].get(s) ?? null])]]));
   }
   const inEl = new Set(el);
   uni.forEach(s => {
@@ -126,6 +136,10 @@ const MTF_TIERS = {
   zayif: {label: "Zayıf", cls: "down", tip: "Haftalık skor ≤ 30: geçmişte piyasanın altında kalan grup."},
   notr: {label: "Nötr", cls: "", tip: "Belirgin bir üstünlük yok."},
 };
+function tierId(d, w, m) { // canlı tahmin karnesi için: yalnızca skorlardan kurulum kimliği
+  if (w == null) return null; d = d ?? 50; m = m ?? 50;
+  return w >= 70 && d >= 60 && m >= 60 ? "uyumlu" : w >= 80 ? "hlider" : w <= 30 ? "zayif" : "notr";
+}
 function mtfTier(s) {
   const m = s.mtf; if (!m || m.w == null) return null;
   const d = m.d ?? 50, w = m.w, mo = m.m ?? 50;
