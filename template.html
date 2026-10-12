@@ -217,6 +217,15 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .corr{border-collapse:collapse;font-size:12px}.corr td,.corr th{padding:4px 8px;text-align:center;border:1px solid var(--line);cursor:default}
 .wbar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin:6px 0}.wbar i{display:block}
 .secbar{height:8px;border-radius:99px;background:var(--panel2);overflow:hidden;min-width:90px}.secbar i{display:block;height:100%;background:var(--accent)}
+.sumcard{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr) minmax(0,1.2fr);gap:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 14%,var(--panel)),var(--panel) 60%)}
+.sumcard h3{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);font-weight:600;margin:0 0 6px}
+.sumcard ul{margin:0;padding-left:16px;font-size:13px}.sumcard li{margin:4px 0}
+.bigv{font-size:22px;font-weight:800;margin:6px 0}
+.scen summary{cursor:pointer}.scen input[type=range]{width:100%;padding:0}
+.cmpv td,.cmpv th{padding:4px 10px;white-space:nowrap}
+.hscore{font-size:34px;font-weight:800}
+textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:8px;font:inherit}
+@media(max-width:1100px){.sumcard{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -226,10 +235,12 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
+      <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
       <a data-view="ekranlar"><i data-ico="filter"></i>Efsane Ekranları</a>
       <a data-view="sektorler"><i data-ico="compass"></i>Sektörler</a>
       <a data-view="portfoyler"><i data-ico="wallet"></i>Portföyler</a>
+      <a data-view="portfoyum"><i data-ico="award"></i>Portföyüm</a>
       <a data-view="favoriler"><i data-ico="star"></i>Favoriler</a>
       <a data-view="karsilastir"><i data-ico="columns"></i>Karşılaştır</a>
       <a data-view="haberler"><i data-ico="news"></i>Haberler</a>
@@ -346,6 +357,17 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
     <!-- KARŞILAŞTIR -->
     <div class="view" id="v-karsilastir"><section class="card" id="cmpView"></section></div>
 
+    <!-- ANALİZ MASASI -->
+    <div class="view" id="v-analiz"><section class="card">
+      <h2>🔎 Analiz Masası</h2>
+      <p class="note">Herhangi bir BIST hissesini yazın; efsaneler masaya oturur, kendi ölçütleriyle analiz eder. Varsayımları (enflasyon, risk primi, güvenlik marjı) kendiniz değiştirip kararın nasıl değiştiğini görebilirsiniz. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+      <div class="controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="anIn" list="tickers" placeholder="Hisse kodu (örn. THYAO)" style="min-width:220px" autocomplete="off"><button id="anGo" class="pbtn">Analiz et</button><span id="anRecent"></span></div>
+      <div id="anBody" style="margin-top:14px"></div>
+    </section></div>
+
+    <!-- PORTFÖYÜM -->
+    <div class="view" id="v-portfoyum"><section class="card" id="myView"></section></div>
+
     <!-- SEKTÖRLER -->
     <div class="view" id="v-sektorler"><section class="card" id="sectorView"></section></div>
 
@@ -399,6 +421,8 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
         <h2 style="margin-top:18px">Sayfalar</h2>
         <ul>
           <li><b>Efsane Ekranları:</b> Her efsane tüm likit hisseleri kendi kontrol listesiyle tarar; Şeytanın Avukatı "risk radarı" verir.</li>
+          <li><b>Analiz Masası:</b> Herhangi bir hisseyi yazın; masa kararı, nedenler/riskler, plan, senaryo (enflasyon, risk primi, güvenlik marjını kendiniz değiştirin), sektör arkadaşları, notlarınız ve fiyat alarmı tek sayfada.</li>
+          <li><b>Portföyüm:</b> Elinizdeki hisseleri ve maliyetleri girin; her biri için masanın görüşü, stop seviyesi ve portföy sağlığı (yoğunlaşma, stop riski) çıkar. Veriler yalnızca bu tarayıcıda saklanır.</li>
           <li><b>Sektörler:</b> Sektörlerin göreceli gücü ve rotasyonu (hangi sektör ivme kazanıyor/kaybediyor). Livermore, sektörü güçlü hisseleri tercih eder.</li>
           <li><b>Ofis Fonu:</b> Portföyler sayfasında dört efsanenin birleşik portföyü: eşit, performansa ya da rejime göre ağırlık; korelasyon, aynı hisseyi tutanlar ve sektör dağılımı.</li>
           <li><b>Sinyal yaşlanması:</b> Araştırma her hafta yenilenir; bir sinyal son 1 yılda avantajını kaybederse ilgili kurallar yeni pozisyon açmaz ve uyarı çıkar.</li>
@@ -751,6 +775,146 @@ function drawCompare(stocks) {
   stocks.forEach((s, k) => { g.fillStyle = cols[k]; g.fillText(s.name, w - 60 - k * 0 , 14 + k * 14); });
 }
 
+/* ---------- Analiz Masası: kullanıcı kendi hissesini analiz eder ---------- */
+let anName = store.get("anLast", null);
+const firstSentence = txt => { const i = txt.indexOf(". "); return i > 0 ? txt.slice(0, i + 1) : txt; };
+function renderAnaliz() {
+  const body = $("anBody"); if (!body) return;
+  const recent = store.get("anRecent", []);
+  $("anRecent").innerHTML = recent.map(n => `<span class="pill" data-an="${esc(n)}">${esc(n)}</span>`).join("");
+  if (!UNIVERSE.length) { body.innerHTML = ""; return; }
+  const s = anName && UNIVERSE.find(x => x.name === anName);
+  if (!s) { body.innerHTML = `<p class="mute">Bir hisse kodu yazıp “Analiz et”e basın. BIST'teki ${UNIVERSE.length} hissenin hepsi aranabilir.</p>`; return; }
+  $("anIn").value = s.name;
+  const r = committee(s);
+  body.innerHTML = `${anSummary(s, r)}<div id="anScen"></div><div id="anPeers"></div><div id="anNote"></div><div id="anDetail" style="margin-top:12px"></div>`;
+  anScenario(s); anPeers(s); anNote(s); detail(s.name, "anDetail");
+}
+function openAnalysis(name) {
+  if (!UNIVERSE.some(x => x.name === name)) { toast("Hisse bulunamadı: " + name); return; }
+  anName = name; store.set("anLast", name);
+  const rc = [name, ...store.get("anRecent", []).filter(x => x !== name)].slice(0, 6); store.set("anRecent", rc);
+  if (view !== "analiz") { closeDetail(); show("analiz"); } else renderAnaliz();
+}
+function anSummary(s, r) {
+  const L = r.l, pos = PERSONAS.filter(([k]) => L[k].v > 0), neg = PERSONAS.filter(([k]) => L[k].v < 0);
+  const li = ([k, n]) => `<li><b>${n}:</b> ${esc(firstSentence(L[k].t))}</li>`;
+  const plans = pos.map(([k, n]) => `<li><b>${n}:</b> ${esc(L[k].plan)}</li>`).join("") || (r.score >= 0 ? `<li class="mute">Şu an net bir giriş planı yok: ★ ile izleme listesine alın ve aşağıdan fiyat alarmı kurun.</li>` : `<li class="mute">Masa olumsuz: giriş planı yok. Pozisyonunuz varsa stop'unuzu belirleyin.</li>`);
+  return `<div class="card sumcard">
+    <div><h3>${esc(s.name)} · ${esc(trSector(s.sector))}</h3><div class="bigv">${badge(r.score)}</div>
+      <div class="mute" style="font-size:12.5px">Fiyat <b>${fmt(s.close)}</b> TL (${fmt(s.change)}%) · RS ${fmt(s.rs, 0)} · rejim ${REGIME ? REGIME.label : "–"}</div>
+      <div style="margin:8px 0">${chipsOf(r)}</div>
+      <div class="actions" style="margin:6px 0 0"><button data-fav="${esc(s.name)}">${FAVS.has(s.name) ? "★ Favoride" : "☆ Favoriye ekle"}</button><button data-cmp="${esc(s.name)}">⇄ Karşılaştır</button><button data-my-quick="${esc(s.name)}">+ Portföyüme ekle</button></div></div>
+    <div><h3>Neden? (olumlu görüşler)</h3><ul>${pos.map(li).join("") || "<li class='mute'>Olumlu oy veren efsane yok.</li>"}</ul><h3 style="margin-top:10px">Riskler (olumsuz görüşler)</h3><ul>${neg.map(li).join("") || "<li class='mute'>Olumsuz oy veren efsane yok.</li>"}</ul></div>
+    <div><h3>Ne yapardık?</h3><ul>${plans}</ul>${L.seytan.maxPos ? `<p class="note">Şeytanın Avukatı: stop mesafesine göre azami pozisyon ≈ portföyün %${fmt(L.seytan.maxPos, 1)}.</p>` : ""}</div></div>`;
+}
+function scenCompute(s, over) {
+  const saved = {}; Object.keys(over).forEach(k => { saved[k] = R[k]; R[k] = over[k]; });
+  try { return {r: committee(s), iv: intrinsic(s)}; } finally { Object.keys(saved).forEach(k => { R[k] = saved[k]; }); }
+}
+function anScenario(s) {
+  const base = {infl: R.infl, erp: R.erp, bMos: R.bMos, lRs: R.lRs};
+  $("anScen").innerHTML = `<details class="scen card" open style="margin-top:12px;background:var(--panel2)"><summary><b>🧪 Senaryo: varsayımları sen belirle</b> <span class="sub">(kaydırınca karar nasıl değişir?)</span></summary>
+    <div class="calcgrid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:10px">
+    ${[["infl", "Enflasyon beklentisi %", 5, 80, 1], ["erp", "Hisse risk primi %", 0, 15, 0.5], ["bMos", "Buffett güvenlik marjı %", 0, 60, 1], ["lRs", "Livermore lider RS eşiği", 40, 98, 1]].map(([k, l, mn, mx, st]) => `<label>${l}: <b id="sv_${k}">${base[k]}</b><input type="range" data-scen="${k}" min="${mn}" max="${mx}" step="${st}" value="${base[k]}"></label>`).join("")}</div>
+    <div id="anScenOut"></div></details>`;
+  scenOut(s);
+}
+function scenOut(s) {
+  const out = $("anScenOut"); if (!out) return;
+  const over = {}; document.querySelectorAll("[data-scen]").forEach(i => { over[i.dataset.scen] = +i.value; const sv = $("sv_" + i.dataset.scen); if (sv) sv.textContent = i.value; });
+  const a = scenCompute(s, {}), b = scenCompute(s, over), vt = v => v > 0 ? "<span class='up'>olumlu</span>" : v < 0 ? "<span class='down'>olumsuz</span>" : "<span class='mute'>nötr</span>";
+  const row = (lab, x, y) => `<tr><td style="text-align:left">${lab}</td><td>${x}</td><td><b>${y}</b></td></tr>`;
+  out.innerHTML = `<div class="tw"><table class="cmpv"><thead><tr><th style="text-align:left"></th><th>Mevcut ayarlar</th><th>Senin senaryon</th></tr></thead><tbody>
+    ${row("Komite", `${badge(a.r.score)} (${a.r.score})`, `${badge(b.r.score)} (${b.r.score})`)}
+    ${row("Buffett oyu", vt(a.r.l.buffett.v), vt(b.r.l.buffett.v))}
+    ${row("Adil değer (TL)", a.iv.fv ? fmt(a.iv.fv) : "–", b.iv.fv ? fmt(b.iv.fv) : "–")}
+    ${row("Güvenlik marjı", a.iv.mos == null ? "–" : pc(a.iv.mos), b.iv.mos == null ? "–" : pc(b.iv.mos))}
+    ${row("Buffett'ın alım üst sınırı (TL)", a.r.l.buffett.cap ? fmt(a.r.l.buffett.cap) : "–", b.r.l.buffett.cap ? fmt(b.r.l.buffett.cap) : "–")}
+    ${row("Livermore oyu", vt(a.r.l.livermore.v), vt(b.r.l.livermore.v))}</tbody></table></div>
+    <p class="note">Enflasyon ve risk primi Buffett'ın adil değerini, RS eşiği Livermore'un lider tanımını etkiler. Simons modelinin beklentisi araştırma verisinden gelir, senaryoyla değişmez.</p>`;
+}
+document.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.scen) { const s = UNIVERSE.find(x => x.name === anName); if (s) scenOut(s); } });
+function anPeers(s) {
+  const med = k => { const a = UNIVERSE.filter(x => x.ok && x.sector === s.sector && x.tl >= 10 && x[k] != null && !Number.isNaN(x[k])).map(x => x[k]).sort((x, y) => x - y); return a.length ? a[Math.floor((a.length - 1) / 2)] : null; };
+  const peers = UNIVERSE.filter(x => x.ok && x.sector === s.sector && x.tl >= 5 && x.name !== s.name && x.rs != null).sort((a, b) => b.rs - a.rs).slice(0, 6);
+  const cols = [["F/K", "pe", 1], ["PD/DD", "pb", 2], ["ROE %", "roe", 1], ["Net marj %", "nm", 1], ["1 ay %", "p1m", 1], ["RS", "rs", 0]];
+  $("anPeers").innerHTML = `<div class="card" style="margin-top:12px;background:var(--panel2)"><b>🏭 Sektör arkadaşları</b> <span class="sub">(${esc(trSector(s.sector))}: RS'e göre ilk 6)</span>
+    <div class="tw" style="margin-top:8px"><table class="cmpv"><thead><tr><th style="text-align:left">Hisse</th>${cols.map(c => `<th>${c[0]}</th>`).join("")}<th>Komite</th></tr></thead><tbody>
+    <tr><td style="text-align:left"><b>${esc(s.name)}</b> <span class="mute">(bu hisse)</span></td>${cols.map(([, k, d]) => `<td><b>${fmt(s[k], d)}</b></td>`).join("")}<td>${badge(committee(s).score)}</td></tr>
+    <tr class="mute"><td style="text-align:left">Sektör medyanı</td>${cols.map(([, k, d]) => `<td>${fmt(med(k), d)}</td>`).join("")}<td></td></tr>
+    ${peers.map(x => `<tr data-an="${esc(x.name)}" style="cursor:pointer"><td style="text-align:left"><b>${esc(x.name)}</b></td>${cols.map(([, k, d]) => `<td>${fmt(x[k], d)}</td>`).join("")}<td>${badge(committee(x).score)}</td></tr>`).join("")}</tbody></table></div></div>`;
+}
+function anNote(s) {
+  const nt = store.get("notes", {}), al = store.get("alarms", []).filter(a => a.n === s.name);
+  $("anNote").innerHTML = `<div class="card" style="margin-top:12px;background:var(--panel2)"><b>📝 Notlarım ve fiyat alarmları</b>
+    <textarea id="anNoteTxt" rows="3" placeholder="Bu hisse için kendi notların…" style="width:100%;margin-top:8px">${esc(nt[s.name] || "")}</textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="alDir"><option value="above">Fiyat şunun ÜSTÜNE çıkarsa</option><option value="below">Fiyat şunun ALTINA inerse</option></select>
+      <input id="alPx" type="number" step="any" placeholder="TL" style="width:110px" value="${s.close}"><button data-al-add="1">Alarm kur</button></div>
+    ${al.length ? `<ul>${al.map(a => `<li>${a.dir === "above" ? "üstüne çıkarsa" : "altına inerse"} <b>${fmt(a.px)} TL</b> ${a.done ? '<span class="mute">(tetiklendi)</span>' : ""} <button data-al-del="${a.id}" style="padding:0 6px">✕</button></li>`).join("")}</ul>` : ""}
+    <p class="note">Notlar ve alarmlar bu tarayıcıda saklanır; sayfa açıkken veri yenilendiğinde alarmlar kontrol edilir.</p></div>`;
+}
+document.addEventListener("input", e => { if (e.target.id === "anNoteTxt") { const nt = store.get("notes", {}); nt[anName] = e.target.value; store.set("notes", nt); } });
+function checkAlarms() {
+  const al = store.get("alarms", []); let ch = false;
+  al.forEach(a => { if (a.done) return; const s = UNIVERSE.find(x => x.name === a.n); if (!s) return;
+    if ((a.dir === "above" && s.close >= a.px) || (a.dir === "below" && s.close <= a.px)) {
+      a.done = true; ch = true; const msg = `${a.n} ${fmt(s.close)} TL: ${a.dir === "above" ? "üstüne çıktı" : "altına indi"} (alarm ${fmt(a.px)})`;
+      toast("🔔 " + msg); if (notifyOn()) new Notification("Fiyat alarmı", {body: msg}); } });
+  if (ch) store.set("alarms", al);
+}
+
+/* ---------- Portföyüm: kendi hisselerini efsanelere sor ---------- */
+let MY = store.get("my", {pos: [], cash: 0});
+const saveMy = () => store.set("my", MY);
+function adviceFor(s, r, p) {
+  const L = r.l, pnl = (s.close / p.cost - 1) * 100;
+  if (L.seytan.veto) return ["⚠ Veto: " + L.seytan.severe.join(", ") + ". Riski küçültmeyi düşünün.", "down"];
+  if (r.score <= -1 && s.close < s.sma50) return ["Masa olumsuz ve trend bozuk (SMA50 altı): azaltma/çıkış planı yapın; stop seviyenizi netleştirin.", "down"];
+  if (r.score <= -1) return ["Masa olumsuz: pozisyonu küçük tutun, stop'a sadık kalın.", "down"];
+  if (r.score >= 2) return [pnl > 0 ? "Masa olumlu ve pozisyon kazanıyor: tutun. Livermore'a göre ekleme ancak kazanırken ve pivot üstünde mümkün (kaybedene asla)." : "Masa olumlu: tutun; zarardaki pozisyona ekleme yapmayın.", "up"];
+  return ["Masa nötr: planınıza (stop) sadık kalın; yeni bir neden oluşana dek ekleme yapmayın.", "mute"];
+}
+function myAdd(n, sh, cost) {
+  n = String(n || "").trim().toUpperCase();
+  if (!UNIVERSE.some(s => s.name === n)) { toast("Hisse bulunamadı: " + n); return false; }
+  if (!(sh > 0) || !(cost > 0)) { toast("Adet ve maliyet pozitif olmalı"); return false; }
+  const ex = MY.pos.find(p => p.n === n);
+  if (ex) { ex.cost = (ex.cost * ex.sh + cost * sh) / (ex.sh + sh); ex.sh += sh; } else MY.pos.push({n, sh, cost});
+  saveMy(); return true;
+}
+function renderMyPort() {
+  const el = $("myView"); if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  const rows = MY.pos.map(p => { const s = UNIVERSE.find(x => x.name === p.n); if (!s) return {p, s: null}; const r = committee(s); return {p, s, r, val: s.close * p.sh, pnl: (s.close / p.cost - 1) * 100, adv: adviceFor(s, r, p)}; });
+  const live = rows.filter(x => x.s), invested = live.reduce((a, x) => a + x.val, 0), tot = invested + (MY.cash || 0), costTot = live.reduce((a, x) => a + x.p.cost * x.p.sh, 0);
+  const sec = {}; live.forEach(x => { const k = trSector(x.s.sector); sec[k] = (sec[k] || 0) + x.val; });
+  const secs = Object.entries(sec).sort((a, b) => b[1] - a[1]), topSec = secs.length ? secs[0][1] / tot * 100 : 0, topPos = live.length ? Math.max(...live.map(x => x.val)) / tot * 100 : 0;
+  const stopRisk = tot ? live.reduce((a, x) => a + x.val * ((x.r.l.seytan.stopPct || 8) / 100), 0) / tot * 100 : 0;
+  const issues = []; let score = 100;
+  if (topPos > 25) { const d = Math.min(25, topPos - 25); score -= d; issues.push(`Tek hissede yoğunlaşma: en büyük pozisyon portföyün %${fmt(topPos, 0)}'i.`); }
+  if (topSec > 40 && secs.length) { const d = Math.min(20, topSec - 40); score -= d; issues.push(`Sektör yoğunlaşması: ${secs[0][0]} %${fmt(topSec, 0)}.`); }
+  if (stopRisk > 6) { const d = Math.min(25, (stopRisk - 6) * 4); score -= d; issues.push(`Tüm stop'lar (2×ATR) çalışırsa kayıp ≈ portföyün %${fmt(stopRisk, 1)}'i: yüksek.`); }
+  live.forEach(x => { if (x.r.l.seytan.veto) { score -= 8; issues.push(`${x.s.name}: Şeytanın Avukatı veto etti (${x.r.l.seytan.severe.join(", ")}).`); } else if (x.r.score <= -2) { score -= 6; issues.push(`${x.s.name}: masa çok olumsuz (skor ${x.r.score}).`); } });
+  if (MY.cash > 0 && tot && MY.cash / tot < 0.05 && live.length) issues.push("Nakit payı %5'in altında: fırsat/riskte esneklik az.");
+  score = Math.max(0, Math.round(score));
+  el.innerHTML = `<h2>💼 Portföyüm <span class="sub">(kendi hisselerini efsanelere sor · veriler bu tarayıcıda saklanır)</span></h2>
+    <p class="note">Elinizdeki hisseleri ve maliyetlerini girin; masa her biri için güncel görüşünü, stop seviyesini ve portföyün genel risk durumunu söyler. Kurallara dayalı bilgilendirmedir; yatırım tavsiyesi değildir.</p>
+    <div class="controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:10px 0">
+      <label>Hisse<input id="myN" list="tickers" style="width:120px" autocomplete="off"></label><label>Adet<input id="mySh" type="number" min="0" step="1" style="width:100px"></label>
+      <label>Maliyet (TL)<input id="myCost" type="number" min="0" step="any" style="width:110px"></label><button data-my-add="1" class="pbtn">Ekle</button>
+      <label style="margin-left:12px">Nakit (TL)<input id="myCash" type="number" min="0" step="any" value="${MY.cash || 0}" style="width:130px"></label>
+      <button data-my-export="1">Dışa aktar</button><button data-my-import="1">İçe aktar</button><button data-my-clear="1">Temizle</button></div>
+    ${live.length ? `<div class="sumcard card" style="margin-bottom:14px"><div><h3>Portföy sağlığı</h3><div class="hscore ${score >= 75 ? "up" : score >= 50 ? "" : "down"}">${score}/100</div>
+        <div class="mute" style="font-size:12.5px">Değer ${fmt(tot, 0)} TL · K/Z <span class="${sign(invested - costTot)}">${invested - costTot > 0 ? "+" : ""}${fmt(invested - costTot, 0)} TL (${fmt(costTot ? (invested / costTot - 1) * 100 : 0, 1)}%)</span></div></div>
+      <div><h3>Dikkat edilecekler</h3><ul>${issues.length ? issues.map(i => `<li>${esc(i)}</li>`).join("") : "<li class='up'>Belirgin bir yoğunlaşma ya da risk uyarısı yok.</li>"}</ul></div>
+      <div><h3>Sektör dağılımı</h3>${secs.map(([k, v]) => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px"><span style="width:120px">${esc(k)}</span><span class="secbar" style="flex:1"><i style="width:${v / tot * 100}%"></i></span>%${fmt(v / tot * 100, 0)}</div>`).join("")}</div></div>` : ""}
+    ${rows.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Hisse</th><th>Adet</th><th>Maliyet</th><th>Son</th><th>K/Z</th><th>Ağırlık</th><th>Komite</th><th>Stop (2×ATR)</th><th style="text-align:left">Masanın görüşü</th><th></th></tr></thead><tbody>
+      ${rows.map(x => x.s ? `<tr><td style="text-align:left"><b class="pill" data-an="${esc(x.s.name)}" style="cursor:pointer">${esc(x.s.name)}</b></td><td>${fmt(x.p.sh, 0)}</td><td>${fmt(x.p.cost)}</td><td>${fmt(x.s.close)}</td><td>${pcell(x.pnl)}</td><td>%${fmt(x.val / tot * 100, 0)}</td><td>${badge(x.r.score)} ${chipsOf(x.r)}</td>
+        <td>${x.r.l.seytan.stopPct ? fmt(x.s.close * (1 - x.r.l.seytan.stopPct / 100)) + ` (−%${fmt(x.r.l.seytan.stopPct, 1)})` : "–"}</td><td style="text-align:left;white-space:normal;max-width:380px" class="${x.adv[1]}">${esc(x.adv[0])}</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`
+        : `<tr><td style="text-align:left">${esc(x.p.n)}</td><td colspan="8" class="mute">Veri bulunamadı</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz hisse eklemediniz. Yukarıdan ekleyin ya da Analiz Masası'nda “+ Portföyüme ekle”ye basın.</p>"}`;
+}
+document.addEventListener("input", e => { if (e.target.id === "myCash") { MY.cash = +e.target.value || 0; saveMy(); } });
+
 /* ---------- Sektörler: RS sıralaması ve rotasyon ---------- */
 let SNAPS = null, snapsAt = 0;
 async function loadSnaps() { if (SNAPS && Date.now() - snapsAt < 3600e3) return; const s = await getJson("snapshots.json?t=" + Math.floor(Date.now() / 36e5)); if (s) { SNAPS = s; snapsAt = Date.now(); } }
@@ -887,7 +1051,7 @@ function renderPortfolios() {
       <p class="note">${esc(STRAT[portSel])}</p>
       <h2>Açık pozisyonlar <span class="sub">(nakit ${fmt(sel.cash, 0)} TL)</span></h2>
       ${pos.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Hisse</th><th>Adet</th><th>Maliyet</th><th>Son</th><th>K/Z</th><th>Stop</th><th>Gün</th><th style="text-align:left">Neden aldı</th></tr></thead><tbody>${pos.map(x => `<tr data-x="${esc(x.n)}"><td style="text-align:left"><b>${esc(x.n)}</b></td><td>${fmt(x.sh, 0)}</td><td>${fmt(x.avg)}</td><td>${fmt(x.px)}</td><td>${pcell(x.pnl)}</td><td>${x.stop ? fmt(x.stop) : "–"}</td><td>${x.days}</td><td style="text-align:left;white-space:normal;max-width:360px" class="mute">${esc(x.why || "")}</td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Açık pozisyon yok.</p>"}
-      <h2 style="margin-top:14px">Yarın açılışta verilecek emirler</h2>
+      <h2 style="margin-top:14px">Bekleyen emirler <span class="sub">(bir sonraki seans açılışında dolar; seans içinde açılış belli olunca otomatik doldurulur)</span></h2>
       ${sel.orders.length ? `<ul>${sel.orders.map(o => `<li><b>${o.side === "buy" ? "AL" : "SAT"}</b> ${esc(o.n)} ${o.amount ? "(~" + fmt(o.amount, 0) + " TL)" : ""} <span class="mute">${esc(o.reason || "")}</span></li>`).join("")}</ul>` : "<p class='mute'>Bekleyen emir yok.</p>"}
       <h2 style="margin-top:14px">Masa günlüğü <span class="sub">(${LNAMES[portSel]})</span></h2>
       ${sel.log.length ? sel.log.slice(-30).reverse().map(l => `<div class="logl"><time>${l.d}</time><span>${l.n ? `<span class="pill" data-x="${esc(l.n)}">${esc(l.n)}</span> ` : ""}${esc(l.text)}</span></div>`).join("") : "<p class='mute'>Henüz işlem yok.</p>"}
@@ -1014,7 +1178,7 @@ function renderCalendar() {
 
 /* ---------- Pozisyon hesaplayıcı, detay yardımcıları ---------- */
 function actionsHtml(name) {
-  return `<div class="actions"><button data-cmp="${esc(name)}">⇄ ${CMP.includes(name) ? "Karşılaştırmadan çıkar" : "Karşılaştır"}</button><button data-share="${esc(name)}">🔗 Bağlantıyı kopyala</button><button data-print="1">🖨 PDF / Yazdır</button></div>`;
+  return `<div class="actions"><button data-cmp="${esc(name)}">⇄ ${CMP.includes(name) ? "Karşılaştırmadan çıkar" : "Karşılaştır"}</button><button data-share="${esc(name)}">🔗 Bağlantıyı kopyala</button><button data-print="1">🖨 PDF / Yazdır</button><button data-an="${esc(name)}">🔎 Tam analiz</button></div>`;
 }
 function eventsHtml(s) {
   const bits = [];
@@ -1023,16 +1187,16 @@ function eventsHtml(s) {
   if (s.dy) bits.push(`Temettü verimi %${fmt(s.dy)}`);
   return bits.length ? `<div class="note" style="margin-top:4px">📅 ${bits.join(" · ")}</div>` : "";
 }
-function calcHtml() {
+function calcHtml(P = "") {
   return `<details class="calc" open><summary>🧮 Pozisyon hesaplayıcı</summary>
-    <div class="calcgrid"><label>Sermaye (TL)<input id="cCap" type="number" min="0" value="${store.get("cap", 100000)}"></label>
-    <label>İşlem başına risk (%)<input id="cRisk" type="number" step="0.25" min="0.1" value="${store.get("riskpct", 1)}"></label>
-    <label>Stop türü<select id="cType"><option value="atr">2 × ATR</option><option value="liv">Livermore: pivotun %3 altı</option><option value="kel">Kellogg: gün içi dip</option><option value="pct">Özel yüzde</option></select></label>
-    <label>Özel stop (%)<input id="cPct" type="number" value="${store.get("stoppct", 8)}"></label></div><div id="calcOut"></div></details>`;
+    <div class="calcgrid"><label>Sermaye (TL)<input id="${P}cCap" type="number" min="0" value="${store.get("cap", 100000)}"></label>
+    <label>İşlem başına risk (%)<input id="${P}cRisk" type="number" step="0.25" min="0.1" value="${store.get("riskpct", 1)}"></label>
+    <label>Stop türü<select id="${P}cType"><option value="atr">2 × ATR</option><option value="liv">Livermore: pivotun %3 altı</option><option value="kel">Kellogg: gün içi dip</option><option value="pct">Özel yüzde</option></select></label>
+    <label>Özel stop (%)<input id="${P}cPct" type="number" value="${store.get("stoppct", 8)}"></label></div><div id="${P}calcOut"></div></details>`;
 }
-function calcUpdate() {
-  const s = UNIVERSE.find(x => x.name === selected), out = $("calcOut"); if (!s || !out) return;
-  const cap = +$("cCap").value || 0, rk = +$("cRisk").value || 0, type = $("cType").value, pct = +$("cPct").value || 0;
+function calcUpdate(P = "", name = selected) {
+  const s = UNIVERSE.find(x => x.name === name), out = $(P + "calcOut"); if (!s || !out) return;
+  const cap = +$(P + "cCap").value || 0, rk = +$(P + "cRisk").value || 0, type = $(P + "cType").value, pct = +$(P + "cPct").value || 0;
   store.set("cap", cap); store.set("riskpct", rk); store.set("stoptype", type); store.set("stoppct", pct);
   const e = s.close, stop = type === "atr" ? (s.atr ? e - 2 * s.atr : null) : type === "liv" ? (s.h1m ? s.h1m * 0.97 : null) : type === "kel" ? s.lo : e * (1 - pct / 100);
   if (stop == null || !(stop < e)) { out.innerHTML = "<p class='mute'>Bu stop türü için geçerli bir seviye yok (stop fiyatın altında olmalı). Başka bir stop türü seçin.</p>"; return; }
@@ -1054,7 +1218,7 @@ function calcUpdate() {
     (warn.length ? `<p class="down" style="margin:8px 0 0;font-size:12.5px">${warn.join(" ")}</p>` : "") +
     `<p class="note" style="margin-top:6px">Simülasyondur; komisyon ve kayma yoktur. Yatırım tavsiyesi değildir.</p>`;
 }
-$("detail").addEventListener("input", e => { if (e.target.closest(".calc")) calcUpdate(); });
+document.addEventListener("input", e => { const c = e.target.closest(".calc"); if (!c) return; const inAn = !!e.target.closest("#anBody"); calcUpdate(inAn ? "an_" : "", inAn ? anName : selected); });
 
 /* ---------- Bildirimler ---------- */
 const notifyOn = () => store.get("notifOn", false) && "Notification" in window && Notification.permission === "granted";
@@ -1083,33 +1247,34 @@ function meetingHtml(s, r) {
   return `<details class="meet" open><summary>🗣 Masa toplantısı</summary>${m.lines.map(l => `<div class="say"><span class="av av-${l.who}">${WHO[l.who][1]}</span><div><b>${WHO[l.who][0]}</b><div>${esc(l.text)}</div></div></div>`).join("")}<div class="verdict">${esc(m.verdict)}</div></details>`;
 }
 /* ---------- Detay paneli (sağdan açılan çekmece) ---------- */
-function detail(name) {
+function detail(name, target = "detail") {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
+  const T = $(target), P = target === "detail" ? "" : "an_";
   const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s);
   const info = (t, b) => `<div class="persona pi"><b>${t}</b><span>${b}</span></div>`;
-  $("detail").innerHTML = `<h2 style="padding-right:8px"><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}" title="Favori">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
+  T.innerHTML = `<h2 style="padding-right:8px"><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}" title="Favori">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
     <div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
-    ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
+    ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
     meetingHtml(s, r) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
-    (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
+    (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="${P}cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
-  $("detail").insertAdjacentHTML("afterbegin", actionsHtml(name));
-  const ev = eventsHtml(s); if (ev) $("detail").querySelector("h2").insertAdjacentHTML("afterend", ev);
-  $("detail").insertAdjacentHTML("beforeend", calcHtml());
-  $("cType").value = store.get("stoptype", "atr"); calcUpdate();
-  if (h) priceChart(h);
-  if (mc) hist(mc);
+  T.insertAdjacentHTML("afterbegin", actionsHtml(name));
+  const ev = eventsHtml(s); if (ev) T.querySelector("h2").insertAdjacentHTML("afterend", ev);
+  T.insertAdjacentHTML("beforeend", calcHtml(P));
+  $(P + "cType").value = store.get("stoptype", "atr"); calcUpdate(P, name);
+  if (h) priceChart(h, P + "pc");
+  if (mc) hist(mc, P + "cv");
 }
 function setupCanvas(cv, h) {
   const dpr = devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = h * dpr;
   const g = cv.getContext("2d"); g.scale(dpr, dpr); return {g, w};
 }
-function priceChart(h) {
-  const cv = $("pc"), H = 170, {g, w} = setupCanvas(cv, H), all = h.closes, b = bands(all), N = Math.min(120, all.length), off = all.length - N;
+function priceChart(h, id = "pc") {
+  const cv = $(id), H = 170, {g, w} = setupCanvas(cv, H), all = h.closes, b = bands(all), N = Math.min(120, all.length), off = all.length - N;
   const pts = all.slice(off), bb = b.slice(off);
   const vals = [...pts, ...bb.flatMap(x => [x.u, x.l, x.s50]).filter(v => v != null)];
   const lo = Math.min(...vals), hi = Math.max(...vals), X = i => 4 + i / (N - 1) * (w - 8), Y = v => H - 14 - (v - lo) / (hi - lo) * (H - 22);
@@ -1119,8 +1284,8 @@ function priceChart(h) {
   line(bb.map(x => x.s50), css("--warn")); g.lineWidth = 1.6; line(pts, css("--accent2"));
   g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.fillText(fmt(hi), 4, 10); g.fillText(fmt(lo), 4, H - 3);
 }
-function hist(mc) {
-  const cv = $("cv"), h = 150, {g, w} = setupCanvas(cv, h), up = css("--up"), down = css("--down"), mute = css("--mute");
+function hist(mc, id = "cv") {
+  const cv = $(id), h = 150, {g, w} = setupCanvas(cv, h), up = css("--up"), down = css("--down"), mute = css("--mute");
   const lo = mc.finals[Math.floor(.01 * mc.finals.length)] * 100, hi = mc.finals[Math.floor(.99 * mc.finals.length)] * 100, B = 40, bw = (hi - lo) / B;
   const bins = new Array(B).fill(0);
   mc.finals.forEach(f => { const i = Math.floor((f * 100 - lo) / bw); if (i >= 0 && i < B) bins[i]++; });
@@ -1271,6 +1436,8 @@ function refreshView() {
   else if (view === "karne") renderKarne();
   else if (view === "portfoyler") renderPortfolios();
   else if (view === "sektorler") renderSectors();
+  else if (view === "analiz") renderAnaliz();
+  else if (view === "portfoyum") renderMyPort();
   else if (view === "arastirma") renderResearch();
   if (selected && drawerOpen()) detail(selected);
 }
@@ -1300,6 +1467,7 @@ $("gsearch").addEventListener("change", e => {
   const n = e.target.value.trim().toUpperCase(); e.target.value = "";
   if (UNIVERSE.some(s => s.name === n)) openDetail(n);
 });
+$("anIn").addEventListener("keydown", e => { if (e.key === "Enter") openAnalysis(e.target.value.trim().toUpperCase()); });
 
 /* ---------- İlk açılış turu ---------- */
 const TOUR = [
@@ -1308,6 +1476,7 @@ const TOUR = [
   ["Oyları okumak", "Her hissenin yanında B S L K Ş harfleri var: Buffett, Simons, Livermore, Kellogg ve Şeytanın Avukatı. Yeşil = olumlu, gri = nötr, kırmızı = olumsuz. Toplam oy 'Komite' sütunundadır."],
   ["Detay ve favori", "Bir hisseye tıklayınca sağdan detay paneli açılır: grafik, haberler, her efsanenin gerekçesi, Monte Carlo. ★ ile favoriye ekleyin. Eşikleri 'Efsane Kuralları' sayfasından değiştirebilirsiniz. Eğitim amaçlıdır, yatırım tavsiyesi değildir."],
   ["Sanal portföyler", "Efsaneler kâğıt üstünde gerçekten işlem yapar: her biri 1 milyon TL ile başladı, emirler ertesi gün açılışta dolar, stop'lar gün içi fiyatla kontrol edilir. Portföyler ve Komite Karnesi sayfalarında günlük, haftalık ve aylık gelişimi, açık pozisyonları ve masa günlüğünü görürsünüz."],
+  ["Sen de analiz et", "Analiz Masası'nda herhangi bir hisseyi yazarak efsanelere sorabilir, varsayımları değiştirip kararın nasıl değiştiğini görebilirsiniz. Portföyüm sayfasına kendi hisselerinizi girerseniz masa her biri için görüş ve stop seviyesi verir."],
   ["Sistem Araştırması", "Kurallar sezgiyle değil, 3 yıllık BIST verisiyle test edildi: güç liderleri kazandırdı, aşırı satım alımı kaybettirdi. Sistem Araştırması sayfası hangi sinyalde kanıt olduğunu gösterir. Detay panelinde efsanelerin masa toplantısını okuyabilirsiniz."],
 ];
 let tourI = 0;
@@ -1367,7 +1536,7 @@ async function loadData(refresh) {
     const d = await res.json();
     const changed = applyData(d);
     if (changed || refresh || !HIST) {
-      await loadAux(); mcCache = {}; screenCache = null; render(); checkAlerts();
+      await loadAux(); mcCache = {}; screenCache = null; render(); checkAlerts(); checkAlarms();
       if (pendingOpen && UNIVERSE.some(s => s.name === pendingOpen)) { openDetail(pendingOpen); pendingOpen = null; }
     }
     banner(d.error ? "Son veri çekme denemesi başarısız (" + d.error + "). Önceki veri gösteriliyor." : "");
@@ -1388,6 +1557,16 @@ document.addEventListener("click", e => {
   const x = e.target.closest("[data-x]"); if (x) { openDetail(x.dataset.x); return; }
   const sc = e.target.closest("[data-sector]"); if (sc) { $("lab").value = ""; fillSectors(); $("sec").value = sc.dataset.sector; show("adaylar"); return; }
   const lb = e.target.closest("[data-lab]"); if (lb) { $("sec").value = ""; $("lab").value = lb.dataset.lab; show("adaylar"); return; }
+  const an = e.target.closest("[data-an]"); if (an) { openAnalysis(an.dataset.an); return; }
+  if (e.target.closest("#anGo")) { openAnalysis(($("anIn").value || "").trim().toUpperCase()); return; }
+  const mq = e.target.closest("[data-my-quick]"); if (mq) { const n = mq.dataset.myQuick, s = UNIVERSE.find(x => x.name === n); const sh = parseFloat(window.prompt(`${n} kaç adet?`, "100")); if (!(sh > 0)) return; const c = parseFloat(window.prompt(`${n} ortalama maliyetiniz (TL)?`, String(s ? s.close : ""))); if (myAdd(n, sh, c)) { toast(n + " portföyüne eklendi"); show("portfoyum"); } return; }
+  if (e.target.closest("[data-my-add]")) { if (myAdd($("myN").value, parseFloat($("mySh").value), parseFloat($("myCost").value))) renderMyPort(); return; }
+  const md = e.target.closest("[data-my-del]"); if (md) { MY.pos = MY.pos.filter(p => p.n !== md.dataset.myDel); saveMy(); renderMyPort(); return; }
+  if (e.target.closest("[data-my-clear]")) { if (window.confirm("Tüm portföyünüz silinsin mi?")) { MY = {pos: [], cash: 0}; saveMy(); renderMyPort(); } return; }
+  if (e.target.closest("[data-my-export]")) { const j = JSON.stringify(MY); (navigator.clipboard ? navigator.clipboard.writeText(j) : Promise.reject()).then(() => toast("Portföy panoya kopyalandı"), () => window.prompt("Kopyalayın:", j)); return; }
+  if (e.target.closest("[data-my-import]")) { const j = window.prompt("Dışa aktardığınız portföy metnini yapıştırın:"); if (j) { try { const o = JSON.parse(j); if (Array.isArray(o.pos)) { MY = {pos: o.pos.filter(p => p.n && p.sh > 0 && p.cost > 0), cash: +o.cash || 0}; saveMy(); renderMyPort(); toast("İçe aktarıldı"); } } catch (err) { toast("Geçersiz metin"); } } return; }
+  const aa = e.target.closest("[data-al-add]"); if (aa) { const px = parseFloat($("alPx").value); if (!(px > 0)) { toast("Geçerli bir fiyat girin"); return; } const al = store.get("alarms", []); al.push({id: Date.now(), n: anName, dir: $("alDir").value, px, done: false}); store.set("alarms", al); toast("Alarm kuruldu"); anNote(UNIVERSE.find(x => x.name === anName)); return; }
+  const ad = e.target.closest("[data-al-del]"); if (ad) { store.set("alarms", store.get("alarms", []).filter(a => String(a.id) !== ad.dataset.alDel)); anNote(UNIVERSE.find(x => x.name === anName)); return; }
   const cm = e.target.closest("[data-cmp]"); if (cm) { toggleCmp(cm.dataset.cmp); return; }
   const sh = e.target.closest("[data-share]"); if (sh) { const url = location.origin + location.pathname + "#h=" + encodeURIComponent(sh.dataset.share); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast("Bağlantı kopyalandı"), () => window.prompt("Bağlantı:", url)); return; }
   if (e.target.closest("[data-print]")) { document.body.classList.add("printing"); window.print(); setTimeout(() => document.body.classList.remove("printing"), 800); return; }
@@ -1425,7 +1604,7 @@ applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matche
 let first = location.hash.slice(1);
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "adaylar", "ekranlar", "sektorler", "portfoyler", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "adaylar", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

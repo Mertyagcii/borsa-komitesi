@@ -226,7 +226,7 @@ function runDay(st, data, date, idx) {
     const p = st.p[lg];
     if (prevDate) {
       p.cash += p.cash * cy * days / 365; // nakit faizi
-      fillOrders(p, by, date, lg);
+      if (st.fillDate !== date) fillOrders(p, by, date, lg); // seans içinde (açılışta) zaten doldurulduysa tekrar etme
       manageDay(p, by, date, lg);
     }
     const nav = navOf(p, by);
@@ -239,4 +239,13 @@ function runDay(st, data, date, idx) {
   st.bench.push({d: date, xu: idx ?? (last ? last.xu : null), ew: r2((last ? last.ew : 100) * (prevDate ? 1 + mean / 100 : 1))});
   st.lastDate = date;
   return st;
+}
+
+/* ======== Seans içi doldurma: önceki kapanışta verilen emirler bugünün AÇILIŞ fiyatından, açılış belli olunca hemen doldurulur ======== */
+function fillOnly(st, data, date) {
+  const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s]));
+  let n = 0;
+  for (const lg of LEGENDS) { const p = st.p[lg], before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
+  st.fillDate = date;
+  return n;
 }
