@@ -54,6 +54,7 @@ for _tf, _sfx in (("", ""), ("|1W", "_w"), ("|1M", "_m")):
             continue  # günlükte zaten var
         COLUMNS.append(_b + _tf)
         RENAME[_b + _tf] = _k + _sfx
+MTF_EXTRA.update({"first_bar_time": "fbt", "ipo_offer_price": "ipop", "ipo_offer_price_performance": "ipoperf", "ipo_market_cap": "ipomc"})  # bebek hisse (yeni halka arz) alanları
 for _b, _k in MTF_EXTRA.items():
     COLUMNS.append(_b)
     RENAME[_b] = _k

@@ -22,6 +22,16 @@ const el = UNI.filter(s => s.ok && s.tl >= 10 && s.eps > 0), ups = el.map(s => v
 if (!(md > -40 && md < 60)) errs.push("adil değer medyan fark makul değil: " + md);
 const lead = UNI.find(s => s.mtf && mtfTier(s) && mtfTier(s).id === "uyumlu");
 if (lead) { const sm = similarStocks(lead, 5); if (sm.top.length !== 5) errs.push("benzer hisse sayısı " + sm.top.length); }
+for (const id of ["haftalik", "gunluk", "aylik", "bebek"]) {
+  const P = scanDefaults(id), r = runScan(id, P, {trace: false});
+  for (let i = 1; i < r.steps.length; i++) if (r.steps[i].n_out > r.steps[i].n_in || r.steps[i].n_in !== r.steps[i - 1].n_out) errs.push("tarama huni tutarsız: " + id + " adım " + i);
+  if (r.list.length !== r.steps[r.steps.length - 1].n_out) errs.push("tarama listesi son adımla uyuşmuyor: " + id);
+  const nm = scanNearMiss(id, P, 10); if (nm.some(o => r.list.includes(o.s))) errs.push("yaklaşanlar listede olmamalı: " + id);
+  if (id === "haftalik" && !r.list.every(s => s.mtf.w >= P.wMin && Math.abs(s.change) < 9.5 && s.tl >= P.minTl)) errs.push("haftalık tarama eşiği ihlal");
+  if (id === "bebek" && !r.list.every(s => { const a = ageDaysOf(s); return a >= P.minAge && a <= P.maxAge; })) errs.push("bebek yaş eşiği ihlal");
+  if (r.list[0]) { const tr = scanTrace(id, P, r.list[0]); if (!tr.pass && P.veto !== 1) errs.push("iz ile liste çelişiyor: " + id); }
+  stat["scan_" + id] = r.list.length;
+}
 const dh = dataHealth(5); if (!(dh.score >= 0 && dh.score <= 100)) errs.push("veri sağlığı aralık dışı");
 if (!(tierId(80, 90, 70) === "uyumlu" && tierId(10, 85, 10) === "hlider" && tierId(50, 20, 50) === "zayif" && tierId(50, 50, 50) === "notr" && tierId(null, null, null) === null)) errs.push("tierId tanımı bozuk");
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})

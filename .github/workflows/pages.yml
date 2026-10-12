@@ -61,10 +61,10 @@ jobs:
         run: node engine.js
       - name: picks/snapshots/portfolios degistiyse kaydet
         run: |
-          if [ -n "$(git status --porcelain picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json news_log.json fundamentals)" ]; then
+          if [ -n "$(git status --porcelain picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json news_log.json fundamentals)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"
-            git add picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json news_log.json fundamentals
+            git add picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json news_log.json fundamentals
             git commit -m "karne/portfoy kaydi guncellendi"
             git pull --rebase origin main
             git push

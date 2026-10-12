@@ -589,3 +589,107 @@ function valuation(s) {
   return {book, price: s.close, pbNow: book ? s.close / book : null, methods: m, lo: vals.length ? vals[0] : null, hi: vals.length ? vals[vals.length - 1] : null, fair: mid,
     upside: mid ? (mid / s.close - 1) * 100 : null, bookUpside: book ? (book / s.close - 1) * 100 : null, confidence: spread == null ? "az yöntem" : spread < 1.6 ? "yüksek" : spread < 3 ? "orta" : "düşük"};
 }
+
+
+/* =====================================================================================
+   TARAMA SENARYOLARI: "potansiyelli hisse" bulmak için adım adım eleme hattı (huni).
+   Her senaryo: evren → sıralı süzgeçler → sıralı aday listesi. Her süzgecin NEDEN'i ve kanıt durumu vardır; eşikler ayarlanabilir.
+   Hisse hangi adımda elendiyse görülebilir (iz). Komite vetosu yalnızca hayatta kalanlarda hesaplanır (pahalı).
+   Senaryolar: haftalık (ana, kanıtlı), günlük (zamanlama), aylık (kalite + değer: bağlam), bebek (yeni halka arz). */
+const ageDaysOf = s => s.fbt ? (NOW / 1000 - s.fbt) / 86400 : null;
+const earnDaysOf = s => s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null;
+const SCAN_META = {
+  haftalik: {name: "Haftalık Tarama", ufuk: "2-4 hafta (tutma 5-20 gün)", amac: "Piyasanın gerisinde kalmayan, trendi yukarı, güçlü hisseleri bulur. Sistemin ana taramasıdır: en çok kanıt bu zaman dilimindedir.", kanit: "haftalik_lider_likit"},
+  gunluk: {name: "Günlük Tarama", ufuk: "giriş zamanlaması (1-5 gün); tutma yine haftalık", amac: "Haftalık zemini sağlam hisselerden BUGÜN giriş zamanlaması iyi olanları ayıklar (güç, para girişi, aşırı uzamamış). Günlük skor tek başına yeterli kanıt taşımaz; bu yüzden haftalık zemin şarttır.", kanit: "uyumlu"},
+  aylik: {name: "Aylık Tarama", ufuk: "2-3 ay (bağlam; bağımsız sinyal sayılmaz)", amac: "Uzun trendi bozulmamış, kaliteli ve adil değere göre ucuz işletmeleri bulur (Buffett tarzı). Aylık ufukta fiyat skorları anlamlı çıkmadı, değerleme geçmişte test edilemiyor: sonuçlar KANITSIZ bağlamdır.", kanit: null},
+  bebek: {name: "Bebek Hisse Taraması", ufuk: "2-8 hafta", amac: "Son 1 yıl içinde halka arz olmuş hisselerde, çözülmemiş (zirveden fazla düşmemiş) ve momentumu pozitif olanları bulur. Halka arz hisseleri çok oynaktır; örnek küçüktür.", kanit: null},
+};
+const SCAN_PARAMS = {
+  haftalik: [["minTl", "Min. günlük hacim (mn TL)", 10], ["wMin", "Haftalık skor en az", 70], ["trendW", "Haftalık trend yukarı şart (1/0)", 1], ["align", "Üç zaman dilimi uyumu şart (1/0)", 0], ["maxAtr", "En çok ATR % (stop ≤ %10 kalsın)", 4], ["earn", "Bilançoya en az gün", 5], ["veto", "Komite vetosu olmasın (1/0)", 1]],
+  gunluk: [["minTl", "Min. günlük hacim (mn TL)", 10], ["wMin", "Haftalık zemin en az", 60], ["dMin", "Günlük skor (RS) en az", 70], ["cmf", "Para girişi (CMF > 0) şart (1/0)", 1], ["maxExt", "SMA50'nin üstünde en çok %", 25], ["rsiMax", "RSI en çok", 80], ["rvol", "Göreceli hacim en az (seans düzeltmeli)", 0.8], ["earn", "Bilançoya en az gün", 3], ["veto", "Komite vetosu olmasın (1/0)", 1]],
+  aylik: [["minTl", "Min. günlük hacim (mn TL)", 10], ["mMin", "Aylık skor en az", 60], ["qMin", "Buffett kalite skoru en az", 60], ["cheap", "Adil değere göre UCUZ şart (1/0)", 1], ["minDisc", "Min. iskonto %", 15], ["earn", "Bilançoya en az gün", 5], ["veto", "Komite vetosu olmasın (1/0)", 0]],
+  bebek: [["minAge", "En az yaş (gün)", 20], ["maxAge", "En çok yaş (gün)", 365], ["minTl", "Min. günlük hacim (mn TL)", 5], ["ddMax", "Zirveden en çok düşüş %", 20], ["mom", "1 ay getiri > 0 şart (1/0)", 1], ["maxAtr", "En çok ATR %", 8], ["earn", "Bilançoya en az gün", 3]],
+};
+const scanDefaults = id => Object.fromEntries(SCAN_PARAMS[id].map(([k, , v]) => [k, v]));
+const fp = (v, d = 1) => v == null || Number.isNaN(v) ? "–" : fmt(v, d);
+const T_ = (ok, txt) => [ok, txt];
+const S_COMMON = [
+  {id: "veri", name: "Veri tam", why: "Skor ve göstergeler hesaplanabilmeli; eksik veride tarama yanıltır.", test: s => T_(!!(s.ok && s.mtf && s.mtf.w != null), s.ok ? (s.mtf && s.mtf.w != null ? "tam" : "skor yok") : "eksik veri")},
+  {id: "likit", name: "Yeterince likit", why: "Çıkış kolay olmalı; düşük hacimde spread ve kayma avantajı yer.", pk: "minTl", test: (s, P) => T_(s.tl >= P.minTl, fp(s.tl, 0) + " mn TL")},
+  {id: "limit", name: "Tavan/taban değil", why: "Tavandaki hisse kuyrukta olduğundan alınamaz; tabandaki hisse ertesi gün ortalama %2,5 daha düşük kapanıyor.", note: "limit_research.json", test: s => T_(s.change != null && Math.abs(s.change) < 9.5, fp(s.change) + "%")},
+  {id: "bilanco", name: "Bilanço yakın değil", why: "Bilançoya birkaç gün kala sürpriz riski, skorun avantajından büyük olabilir.", pk: "earn", test: (s, P) => { const d = earnDaysOf(s); return T_(d == null || d < -1 || d > P.earn, d == null ? "tarih yok" : fp(d, 0) + " gün"); }},
+];
+const S_VETO = {id: "veto", name: "Komite vetosu yok", why: "Şeytanın Avukatı bilanço, çıkış likiditesi ya da aşırı stop olasılığı gibi ağır bir nedenle işlemi durdurmamalı.", pk: "veto", lazy: true, test: (s, P) => { if (!P.veto) return T_(true, "kapalı"); const r = committee(s); return T_(!r.veto, r.veto ? r.l.seytan.severe.join(", ") : "veto yok"); }};
+const SCAN_STEPS = {
+  haftalik: [...S_COMMON,
+    {id: "wmin", name: "Haftalık lider", why: "Haftalık çok göstergeli skor (haftalık trend, 6 ay zirve, DI, RSI, CMF + göreceli güç) araştırmanın en tutarlı bulgusudur; ≥ 80 iken en iyi sonuç.", pk: "wMin", ev: "haftalik_lider_likit", test: (s, P) => T_(s.mtf && s.mtf.w >= P.wMin, "H " + fp(s.mtf && s.mtf.w, 0))},
+    {id: "trendw", name: "Haftalık trend yukarı", why: "Fiyat > haftalık SMA20 > SMA50: araştırmada tek başına en güçlü gösterge (iki yarıda ve boğa/ayıda tutarlı).", pk: "trendW", ev: "gosterge:haftalik:w_trend", test: (s, P) => { const ok = s.sma20_w > 0 && s.sma50_w > 0 ? s.close > s.sma20_w && s.sma20_w > s.sma50_w : null; return T_(!P.trendW || ok === true, ok == null ? "veri yok" : ok ? "yukarı" : "yukarı değil"); }},
+    {id: "align", name: "Üç zaman dilimi uyumlu", why: "Günlük (RS), haftalık, aylık skorların üçü de güçlüyse avantaj tutarlıydı; zorunlu değil, kapalıysa atlanır.", pk: "align", ev: "uyumlu", test: (s, P) => T_(!P.align || (s.mtf.d >= 60 && s.mtf.w >= 70 && s.mtf.m >= 60), `${fp(s.mtf && s.mtf.d, 0)}/${fp(s.mtf && s.mtf.w, 0)}/${fp(s.mtf && s.mtf.m, 0)}`)},
+    {id: "stop", name: "Stop mesafesi makul", why: "Stop = 2,5×ATR; %10'dan geniş stop gerektiren hisse pozisyon boyutunu küçültür, risk/getiri bozulur.", pk: "maxAtr", test: (s, P) => T_(s.atrPct != null && s.atrPct <= P.maxAtr, "ATR %" + fp(s.atrPct))},
+    S_VETO],
+  gunluk: [...S_COMMON,
+    {id: "wzemin", name: "Haftalık zemin sağlam", why: "Günlük sinyaller tek başına kanıtsız; giriş zamanlaması yalnızca haftalık olarak güçlü hissede aranır.", pk: "wMin", ev: "haftalik_lider_likit", test: (s, P) => T_(s.mtf && s.mtf.w >= P.wMin, "H " + fp(s.mtf && s.mtf.w, 0))},
+    {id: "dgus", name: "Günlük göreceli güç", why: "Günlük skor = göreceli güç (RS): ileri doğrulamada her evrende en tutarlı kısa vadeli ölçüt.", pk: "dMin", ev: "wf:gunluk:rs", test: (s, P) => T_(s.mtf && s.mtf.d >= P.dMin, "G " + fp(s.mtf && s.mtf.d, 0))},
+    {id: "cmf", name: "Para girişi", why: "Chaikin Para Akışı > 0: kapanışlar günün üst yarısında, alıcı baskın (günlük göstergeler içinde en tutarlısı).", pk: "cmf", ev: "gosterge:gunluk:cmf20", test: (s, P) => T_(!P.cmf || (s.cmf != null && s.cmf > 0), "CMF " + fp(s.cmf, 2))},
+    {id: "sma20", name: "Kısa trend yukarı", why: "Fiyat 20 günlük ortalamanın üstünde: düşen bıçak değil.", test: s => T_(s.sma20 > 0 && s.close > s.sma20, "SMA20'ye " + fp(s.sma20 > 0 ? (s.close / s.sma20 - 1) * 100 : null) + "%")},
+    {id: "uzama", name: "Aşırı uzamamış", why: "SMA50'nin çok üstünde ya da RSI aşırı yüksek hisseyi kovalamak riskli (Şeytanın Avukatı: FOMO).", pk: "maxExt", test: (s, P) => T_(s.smaDist != null && s.smaDist <= P.maxExt && (s.rsi == null || s.rsi <= P.rsiMax), `SMA50 +%${fp(s.smaDist)}, RSI ${fp(s.rsi, 0)}`)},
+    {id: "hacim", name: "Hacim canlı", why: "Seans düzeltmeli göreceli hacim: ilgi görmeyen hissede hareket kalıcı olmaz.", pk: "rvol", ev: "gosterge:gunluk:rvol", test: (s, P) => T_(s.rvol != null && s.rvol >= P.rvol, fp(s.rvol, 1) + "x")},
+    S_VETO],
+  aylik: [...S_COMMON,
+    {id: "mskor", name: "Uzun trend sağlam", why: "Aylık skor (uzun trend, 52h yakınlık, aylık CMF, 6-12 ay getiri) ve SMA50 > SMA200. Aylık ufukta kanıt zayıf: bağlam verir.", pk: "mMin", test: (s, P) => T_(s.mtf && s.mtf.m >= P.mMin && trendUp(s) === true, `A ${fp(s.mtf && s.mtf.m, 0)}, ${trendUp(s) ? "SMA50>SMA200" : "uzun trend zayıf"}`)},
+    {id: "kalite", name: "İşletme kalitesi", why: "Buffett'ın kalite ölçütleri (reel ROE, marj, borç, serbest nakit akışı, kazanç büyümesi) tutan şirketler.", pk: "qMin", lazy: true, test: (s, P) => { const b = buffett(s); return T_(b.quality != null && b.quality >= P.qMin, "kalite " + fp(b.quality, 0) + "/100"); }},
+    {id: "ucuz", name: "Adil değere göre ucuz", why: "Fiyat adil değerin en az %15 altında ve yöntemler birbirine yakın (güven orta/yüksek). Değerleme geçmişte test EDİLEMİYOR: kanıtsız bağlam.", pk: "minDisc", lazy: true, test: (s, P) => { if (!P.cheap) return T_(true, "kapalı"); const c = cheapness(s); return T_(!!(c && c.sure && c.disc >= P.minDisc), c ? `${c.lab} %${fp(c.lab === "UCUZ" ? c.disc : c.prem, 0)}, güven ${c.conf}` : "hesaplanamadı"); }},
+    S_VETO],
+  bebek: [
+    {id: "veri", name: "Veri tam", why: "Fiyat ve halka arz bilgisi olmalı.", test: s => T_(!!(s.ok && s.fbt), s.fbt ? "tam" : "listeleme tarihi yok")},
+    {id: "yas", name: "Bebek yaşında", why: "İlk işlem gününden bu yana geçen süre. İlk haftalar tavan serisiyle geçer (alınamaz); 20. günden sonra fiyat serbest oluşmaya başlar.", pk: "minAge", test: (s, P) => { const a = ageDaysOf(s); return T_(a != null && a >= P.minAge && a <= P.maxAge, "yaş " + fp(a, 0) + " gün"); }},
+    S_COMMON[1], S_COMMON[2], S_COMMON[3],
+    {id: "dd", name: "Çözülmemiş (zirveden uzak değil)", why: "Halka arz hisselerinde zirveden ≥ %40 düşmüş olanlar 20 günde piyasanın ~%1,6 gerisinde kaldı; zirveye %20 içinde olanlar ~%3 önde (60 halka arzlık örnek).", pk: "ddMax", ev: "ipo:Zirveden < %20 düşmüş", test: (s, P) => { const dd = s.h52 > 0 ? (1 - s.close / s.h52) * 100 : null; return T_(dd != null && dd <= P.ddMax, "zirveden -%" + fp(dd, 0)); }},
+    {id: "mom", name: "Momentum pozitif", why: "Aylık getirisi pozitif halka arzlar 20 günde piyasayı geçti; negatif olanlar ~%1,2 geride kaldı.", pk: "mom", ev: "ipo:Aylık momentum > 0", test: (s, P) => T_(!P.mom || (s.p1m != null && s.p1m > 0), "1 ay " + fp(s.p1m) + "%")},
+    {id: "atr", name: "Oynaklık kabul edilebilir", why: "Halka arz hisseleri çok oynaktır; stop mesafesi çok genişse pozisyon küçülür.", pk: "maxAtr", test: (s, P) => T_(s.atrPct != null && s.atrPct <= P.maxAtr, "ATR %" + fp(s.atrPct))}],
+};
+const SCAN_RANK = {
+  haftalik: (a, b) => (b.mtf.b - a.mtf.b), gunluk: (a, b) => (b.mtf.d - a.mtf.d) || ((b.cmf ?? 0) - (a.cmf ?? 0)),
+  aylik: (a, b) => { const x = cheapness(a), y = cheapness(b); return ((y ? y.disc : -99) - (x ? x.disc : -99)); },
+  bebek: (a, b) => (b.rs ?? 0) - (a.rs ?? 0),
+};
+/* skipLazy: pahalı adımlar (komite vetosu, kalite, değerleme) atlanır; yalnızca hızlı sayım için */
+function runScan(id, P, opt) {
+  const steps = SCAN_STEPS[id], skipLazy = !!(opt && opt.skipLazy), res = [], trace = new Map();
+  let alive = UNIVERSE.slice();
+  res.push({id: "evren", name: "Evren (tüm BIST hisseleri)", why: "Borsa İstanbul'daki bütün hisseler (TradingView taraması).", n_in: alive.length, n_out: alive.length});
+  const need = !!(opt && opt.trace);
+  if (need) UNIVERSE.forEach(s => trace.set(s.name, []));
+  for (const st of steps) {
+    const n_in = alive.length, out = [];
+    if (skipLazy && st.lazy) { res.push({...stepInfo(st, P), n_in, n_out: n_in, skipped: true}); continue; }
+    for (const s of alive) { let r; try { r = st.test(s, P); } catch (e) { r = [false, "hata"]; } if (need) trace.get(s.name).push({step: st.id, name: st.name, ok: r[0], txt: r[1]}); if (r[0]) out.push(s); }
+    res.push({...stepInfo(st, P), n_in, n_out: out.length}); alive = out;
+  }
+  alive.sort(SCAN_RANK[id]);
+  return {steps: res, list: alive, trace};
+}
+const stepInfo = (st, P) => ({id: st.id, name: st.name, why: st.why, pk: st.pk || null, ev: st.ev || null, val: st.pk ? P[st.pk] : null});
+/* tek hisse için tüm adımların değerleri (elendiği ilk adım işaretlenir) */
+function scanTrace(id, P, s) {
+  const out = []; let dead = false;
+  for (const st of SCAN_STEPS[id]) { let r; try { r = st.test(s, P); } catch (e) { r = [false, "hata"]; } out.push({id: st.id, name: st.name, why: st.why, ok: r[0], txt: r[1], first: !r[0] && !dead}); if (!r[0]) dead = true; }
+  return {steps: out, pass: !dead};
+}
+function scanPlan(s) { // ortak işlem planı: stop 2,5×ATR (en çok %10), hedef 2R, %1 risk kuralı
+  const atr = s.atr, stop = atr ? Math.max(s.close - 2.5 * atr, s.close * 0.9) : null, risk = stop ? s.close - stop : null;
+  return {entry: s.close, stop, target: risk ? s.close + 2 * risk : null, stopPct: risk ? risk / s.close * 100 : null, maxPos: risk ? Math.min(33, 100 / (risk / s.close * 100)) : null};
+}
+
+/* Yaklaşanlar: sert süzgeçleri (veri, likidite, tavan/taban) geçen ve yalnızca BİR hızlı adımda elenen hisseler.
+   Eşiğe yakın olduğu için "potansiyel" sayılır: bir sonraki gün/hafta listeye girebilir. Pahalı (lazy) adımlar atlanır. */
+function scanNearMiss(id, P, limit) {
+  const steps = SCAN_STEPS[id].filter(st => !st.lazy), hard = new Set(["veri", "likit", "limit", "yas"]), out = [];
+  for (const s of UNIVERSE) {
+    let bad = null, nb = 0, okHard = true;
+    for (const st of steps) { let r; try { r = st.test(s, P); } catch (e) { r = [false, "hata"]; } if (!r[0]) { if (hard.has(st.id)) { okHard = false; break; } nb++; bad = {id: st.id, name: st.name, txt: r[1]}; if (nb > 1) break; } }
+    if (okHard && nb === 1) out.push({s, miss: bad});
+  }
+  out.sort((a, b) => SCAN_RANK[id](a.s, b.s));
+  return out.slice(0, limit || 25);
+}

@@ -31,8 +31,10 @@ except Exception as e:
 try:
     import limit_research
     limit_research.main()
+    import ipo_research
+    ipo_research.main()
 except Exception as e:
-    print("tavan/taban araştırması başarısız:", e)
+    print("tavan/taban ya da halka arz araştırması başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward

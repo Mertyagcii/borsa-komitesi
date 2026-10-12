@@ -58,6 +58,14 @@ setTimeout(async function () {
     show("takvim"); ok("takvim_acilir", $("clView").innerHTML.length > 200);
     $("calT").value = "Test olayi"; $("calD").value = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10); document.querySelector("[data-caladd]").click(); ok("takvim_olay_eklendi", CE().length === 1);
     document.querySelector("[data-caldel]").click(); ok("takvim_olay_silindi", CE().length === 0);
+    /* ---- Tarama senaryolari ---- */
+    store.set("scanTab", "haftalik"); show("tarama"); var sh0 = $("scnView").innerHTML; ok("tarama_acilir", sh0.indexOf("Eleme hatt") >= 0 && sh0.indexOf("Yaklaşanlar") >= 0);
+    var P0 = scanP("haftalik"), r0 = runScan("haftalik", P0, { skipLazy: true }); ok("tarama_huni", r0.steps.length >= 8 && r0.steps[0].n_out === UNIVERSE.length);
+    var all = {}; all.haftalik = { wMin: 99 }; store.set("scanP", all); var r1 = runScan("haftalik", scanP("haftalik"), { skipLazy: true }); ok("tarama_esik_etkili", r1.list.length <= r0.list.length); store.set("scanP", {});
+    ["gunluk", "aylik", "bebek", "nasil"].forEach(function (t) { store.set("scanTab", t); renderScan(); ok("tarama_sekme_" + t, $("scnView").innerHTML.length > 500); });
+    store.set("scanTab", "haftalik"); renderScan(); var anyS = UNIVERSE.filter(function (s) { return s.mtf; })[0]; $("scanQ").value = anyS.name; document.querySelector("[data-scanq]").click(); ok("tarama_sorgu", $("scanTrace").innerHTML.indexOf("Ad") >= 0 && $("scanTrace").innerHTML.indexOf(anyS.name) >= 0);
+    var bb = UNIVERSE.filter(function (s) { return s.fbt; }); ok("bebek_veri_var", bb.length > 100 && bb.some(function (s) { return ageDaysOf(s) < 365; }));
+    show("dashboard"); ok("brifing_tarama_sayilari", ($("briefCard").innerHTML || "").indexOf("data-scanopen") >= 0);
     /* ---- Gun ici / tahmin karnesi ---- */
     show("gunici"); await new Promise(function (r) { setTimeout(r, 2500); }); ok("gunici_radar", $("giView").innerHTML.indexOf("Tavan / Taban radar") >= 0); ok("gunici_lim_yuklendi", !!LIM && LIM.tavan.by_streak["1"].n > 100);
     show("tahmin"); await new Promise(function (r) { setTimeout(r, 2500); }); ok("tahmin_acilir", $("thView").innerHTML.indexOf("Skor sa") >= 0 && $("thView").innerHTML.indexOf("Hata analizi") >= 0);

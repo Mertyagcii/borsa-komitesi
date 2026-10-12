@@ -266,6 +266,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
+      <a data-view="tarama"><i data-ico="filter"></i>Tarama Senaryoları</a>
       <a data-view="grafik"><i data-ico="bars"></i>Grafik &amp; Göstergeler</a>
       <a data-view="gunici"><i data-ico="bars"></i>Günlük Plan &amp; Gün İçi</a>
       <a data-view="zaman"><i data-ico="compass"></i>Zaman Taraması</a>
@@ -412,6 +413,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-senaryo"><section class="card" id="scView"></section></div>
     <div class="view" id="v-aylik"><section class="card" id="mnView"></section></div>
     <div class="view" id="v-takvim"><section class="card" id="clView"></section></div>
+    <div class="view" id="v-tarama"><section class="card" id="scnView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -814,7 +816,7 @@ function flowHtml(s) {
 
 /* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
 let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
-let GDT = null, GON = null, LIM = null; // + limit_research.json (tavan/taban) // daytrade_research.json, overnight_research.json
+let GDT = null, GON = null, LIM = null, IPOR = null; // + limit_research.json (tavan/taban) // daytrade_research.json, overnight_research.json
 let MTFW = null, MLOG = null; // mtf_walkforward.json: ileri doğrulama; mtf_log.json: canlı skor kaydı
 let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
 const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
@@ -1132,6 +1134,98 @@ function renderRisk() {
       : '<p class="mute">Açık pozisyon yok. İşlem Günlüğüm\'e işlem ekleyin ya da "Portföyüm\'ü de say" kutusunu işaretleyin.</p>'}`;
 }
 document.addEventListener("change", e => { const id = e.target.id; if (view === "risk" && ["rkCap", "rkDay", "rkPer", "rkTot"].includes(id)) { store.set(id, +e.target.value); renderRisk(); } else if (id === "rkMy") { store.set("rkMy", e.target.checked); renderRisk(); } });
+
+/* ---------- Tarama Senaryoları ---------- */
+let scanTab = store.get("scanTab", "haftalik");
+const SCAN_TABS = [["haftalik", "Haftalık Tarama"], ["gunluk", "Günlük Tarama"], ["aylik", "Aylık Tarama"], ["bebek", "Bebek Hisseler"], ["nasil", "Sistem nasıl çalışıyor?"]];
+const scanP = id => ({...scanDefaults(id), ...((store.get("scanP", {}) || {})[id] || {})});
+function scanEv(key) {
+  if (!key) return '<span class="mute">mantıksal koşul (geçmişte ayrıca test edilmedi)</span>';
+  if (key.startsWith("gosterge:")) { const [, tf, n] = key.split(":"); return evText([tf, n]); }
+  if (key.startsWith("wf:")) { const [, tf, n] = key.split(":"); return evText(["wf", tf, n]); }
+  if (key.startsWith("ipo:")) { const e = IPOR && IPOR.cond && IPOR.cond[key.slice(4)]; return e && e.excess != null ? `<span class="${e.t >= 2 ? "up" : "mute"}">${e.t >= 2 ? "ipucu" : "belirsiz"}</span> <span class="mute">20g piyasa üstü ${sgnTxt(e.excess)} (maliyet sonrası ${sgnTxt(e.net)}), ${e.hisse} halka arz; örtüşen gözlem: t abartılı olabilir</span>` : '<span class="mute">test edilmedi</span>'; }
+  return tplEv(key);
+}
+function scanParamsHtml(id, P) {
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">${SCAN_PARAMS[id].map(([k, n]) => `<label>${esc(n)}<input data-scp="${k}" type="number" step="any" value="${P[k]}" style="width:92px"></label>`).join("")}<button data-scpreset="1">Varsayılana dön</button></div>`;
+}
+function scanRowHtml(id, s, i) {
+  const r = committee(s), pl = scanPlan(s), dd = s.h52 > 0 ? (1 - s.close / s.h52) * 100 : null;
+  const extra = id === "bebek" ? `<td>${fp(ageDaysOf(s), 0)}</td><td>${s.ipop ? fmt(s.ipop) : "–"}${s.ipop ? ` <span class="${sign(s.close / s.ipop - 1)}">(${fmt((s.close / s.ipop - 1) * 100, 0)}%)</span>` : ""}</td><td>−%${fp(dd, 0)}</td><td class="${sign(s.p1m)}">${fp(s.p1m)}%</td><td>${s.ff != null ? "%" + fp(s.ff, 0) : "–"}</td>` : "";
+  return `<tr data-x="${esc(s.name)}"><td>${i + 1}</td><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td><td>${mtfCell(s)}</td><td>${cheapBadge(s)}</td>${extra}<td style="white-space:nowrap">${pl.stop ? fmt(pl.entry) + " / " + fmt(pl.stop) + " / " + fmt(pl.target) : "–"}</td><td>${chipsOf(r)} ${badge(r.score)}</td></tr>`;
+}
+function renderScan() {
+  const el = $("scnView");
+  if (!UNIVERSE.length) { el.innerHTML = "<h2>Tarama Senaryoları</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  if ((!IPOR || !MTFS) && !renderScan.tried) { renderScan.tried = true; loadAux().then(() => { if (view === "tarama") renderScan(); }); }
+  const tabs = `<div class="tabs">${SCAN_TABS.map(([k, n]) => `<button class="tab ${scanTab === k ? "on" : ""}" data-scantab="${k}">${n}</button>`).join("")}</div>`;
+  if (scanTab === "nasil") { el.innerHTML = `<h2>Tarama Senaryoları</h2>${tabs}${scanHowHtml()}`; return; }
+  const id = scanTab, M = SCAN_META[id], P = scanP(id), R_ = runScan(id, P, {trace: false}), list = R_.list, near = scanNearMiss(id, P, 20), n0 = R_.steps[0].n_out;
+  const head = `<th>#</th><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük · Haftalık · Aylık skor">G·H·A</th><th>Değer</th>${id === "bebek" ? '<th>Yaş (gün)</th><th>Arz fiyatı</th><th>Zirveden</th><th>1 ay</th><th>Float</th>' : ""}<th title="Giriş / stop (2,5×ATR) / hedef (2R)">Plan</th><th>Komite</th>`;
+  el.innerHTML = `<h2>Tarama Senaryoları <span class="sub">potansiyelli hisseleri adım adım eleyerek bulma</span></h2>${tabs}
+    <div class="card" style="background:var(--panel2);margin:8px 0"><b>${M.name}</b> <span class="mute">· ufuk: ${M.ufuk}</span><p class="note" style="margin:6px 0 0">${esc(M.amac)}</p></div>
+    ${id === "bebek" ? bebekInfoHtml() : ""}
+    <details ${store.get("scanParOpen", false) ? "open" : ""} id="scanParams"><summary><b>Eşikler</b> (kendinize göre ayarlayın; değişiklikler kaydedilir)</summary>${scanParamsHtml(id, P)}</details>
+    <h3 style="margin:12px 0 4px">Eleme hattı (huni)</h3>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Adım</th><th style="text-align:left">Neden bu süzgeç?</th><th>Eşik</th><th>Geçen</th><th style="text-align:left;width:160px"></th><th style="text-align:left">Kanıt durumu</th></tr></thead><tbody>${R_.steps.map((s, i) => `<tr><td style="text-align:left;white-space:normal"><b>${i}. ${esc(s.name)}</b>${s.skipped ? " (atlandı)" : ""}</td><td style="text-align:left;white-space:normal" class="mute">${esc(s.why)}</td><td>${s.pk ? fmt(s.val, s.val % 1 ? 2 : 0) : "–"}</td><td><b>${s.n_out}</b> <span class="mute">/ ${s.n_in}</span></td><td style="text-align:left"><i style="display:block;height:8px;border-radius:4px;background:var(--accent2);width:${Math.max(1, s.n_out / (n0 || 1) * 100)}%"></i></td><td style="text-align:left;white-space:normal;font-size:12.5px">${i ? scanEv(s.ev || null) : ""}</td></tr>`).join("")}</tbody></table></div>
+    <h3 style="margin:14px 0 4px">Potansiyelli hisseler <span class="mute" style="font-weight:400">(${list.length} aday${list.length > 40 ? ", ilk 40" : ""})</span></h3>
+    ${list.length ? `<div class="tw"><table><thead><tr>${head}</tr></thead><tbody>${list.slice(0, 40).map((s, i) => scanRowHtml(id, s, i)).join("")}</tbody></table></div>` : `<p class="mute">Bu eşiklerle hisse kalmadı. ${REGIME && REGIME.trend === "bear" ? "Piyasa ayı rejiminde olduğundan süzgeçler zaten sert; " : ""}aşağıdaki "Yaklaşanlar" listesine ya da eşiklere bakın.</p>`}
+    <h3 style="margin:14px 0 4px">Yaklaşanlar <span class="mute" style="font-weight:400">(yalnızca tek adımda elenenler: eşiğe yakın potansiyel)</span></h3>
+    ${near.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th title="Günlük · Haftalık · Aylık skor">G·H·A</th><th>Değer</th><th style="text-align:left">Elendiği tek adım</th><th>Değer</th></tr></thead><tbody>${near.map(o => `<tr data-x="${esc(o.s.name)}"><td style="text-align:left"><b>${esc(o.s.name)}</b><span class="nm">${esc(o.s.description)}</span></td><td>${fmt(o.s.close)}</td><td>${mtfCell(o.s)}</td><td>${cheapBadge(o.s)}</td><td style="text-align:left;white-space:normal">${esc(o.miss.name)}</td><td class="down">${esc(o.miss.txt)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="mute">Yaklaşan hisse yok.</p>'}
+    <h3 style="margin:14px 0 4px">Bu hisse bu taramadan geçer mi?</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><label>Hisse<input id="scanQ" list="tickers" style="width:120px" placeholder="THYAO" value="${esc(store.get("scanQ", ""))}"></label><button data-scanq="1" class="pbtn">Sorgula</button></div><div id="scanTrace"></div>
+    <p class="note">Bu bir tahmin değil, eleme hattıdır: listedeki her hisse seçilen eşiklerin hepsini geçti; geçmiş testler yalnızca "kanıt durumu" sütunundaki adımlar için yapılmıştır. İsabet oranı %50 civarıdır; avantaj çok işleme yayılınca görünür. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>`;
+  if (store.get("scanQ", "")) scanTraceShow(store.get("scanQ", ""));
+}
+function scanTraceShow(q) {
+  const n = String(q || "").trim().toUpperCase(), s = UNIVERSE.find(x => x.name === n), box = $("scanTrace"); if (!box) return;
+  if (!s) { box.innerHTML = '<p class="mute">Hisse bulunamadı.</p>'; return; }
+  const tr = scanTrace(scanTab, scanP(scanTab), s);
+  box.innerHTML = `<p><b>${esc(s.name)}</b> ${esc(s.description)}: ${tr.pass ? '<span class="up"><b>tüm hızlı adımları geçti</b></span>' : '<span class="down"><b>elendi</b></span>'}</p><div class="tw"><table><thead><tr><th style="text-align:left">Adım</th><th>Değer</th><th>Sonuç</th></tr></thead><tbody>${tr.steps.map(x => `<tr><td style="text-align:left;white-space:normal">${esc(x.name)}${x.first ? " <b class='down'>← ilk elendiği adım</b>" : ""}</td><td>${esc(x.txt)}</td><td>${x.ok ? '<span class="up">geçti</span>' : '<span class="down">elendi</span>'}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function bebekInfoHtml() {
+  const baby = UNIVERSE.filter(s => s.ok && s.fbt && ageDaysOf(s) <= 365), perfs = baby.map(s => s.ipoperf != null ? s.ipoperf : (s.ipop ? (s.close / s.ipop - 1) * 100 : null)).filter(x => x != null).sort((a, b) => a - b);
+  const med = perfs.length ? perfs[Math.floor(perfs.length / 2)] : null, below = perfs.filter(x => x < 0).length;
+  const pr = IPOR && IPOR.profile, ts = IPOR && IPOR.tavan_serisi;
+  return `<div class="note" style="margin:8px 0">Son 1 yılda halka arz olan <b>${baby.length}</b> hisse var${med != null ? `; arz fiyatına göre medyan <b class="${sign(med)}">${sgnTxt(med)}</b>, ${below}/${perfs.length} tanesi arz fiyatının altında` : ""}.
+    ${ts ? ` Geçmiş örnek (${IPOR.n_ipo} halka arz): ${ts.en_az_1} hissede ilk günlerde tavan serisi (ortalama ${fmt(ts.ortalama_gun, 1)} gün) görüldü; bu aşamada hisse kuyrukta olduğundan <b>alınamaz</b>.` : ""}
+    ${pr && pr["60"] ? ` İlk işlem günü kapanışına göre medyan fiyat: 20. günde ${sgnTxt(pr["20"] ? pr["20"].median : null)}, 60. günde ${sgnTxt(pr["60"].median)}.` : ""}
+    Koşullu bulgu (20 gün, piyasaya göre): zirvesine %20 içinde ve momentumu pozitif olanlar ${IPOR && IPOR.cond["Momentum > 0 ve zirveye yakın (<%20)"] ? sgnTxt(IPOR.cond["Momentum > 0 ve zirveye yakın (<%20)"].excess) : "–"}, zirveden %40+ düşenler ${IPOR && IPOR.cond["Zirveden ≥ %40 düşmüş"] ? sgnTxt(IPOR.cond["Zirveden ≥ %40 düşmüş"].excess) : "–"}. Örnek küçüktür (onlarca hisse, örtüşen gözlemler): ipucu olarak okuyun.</div>`;
+}
+function scanHowHtml() {
+  const P = k => R[k], row = (a, b, c, d) => `<tr><td style="text-align:left;white-space:normal"><b>${a}</b></td><td style="text-align:left;white-space:normal">${b}</td><td style="text-align:left;white-space:normal">${c}</td><td style="text-align:left;white-space:normal">${d}</td></tr>`;
+  return `<div class="note" style="margin:8px 0">Bu sayfa, uygulamanın bir hisseye nasıl baktığını ve komiteye ne sunduğunu açıklar. Kısaca: <b>önce taramalar aday çıkarır, sonra komite adayları yorumlar, sonunda Karar Kartı bir plan verir.</b> Hangi adımın kanıtlı, hangisinin yorum olduğu ayrıca belirtilir.</div>
+    <h3 style="margin:10px 0 4px">Akış</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0">${["1 Veri (TradingView, ~1900 alan, 15 dk gecikmeli)", "2 Zenginleştirme (RS, ATR, seans düzeltmeli hacim, haftalık/aylık göstergeler)", "3 Çok zamanlı skor (Günlük·Haftalık·Aylık, 0-100)", "4 Tarama senaryoları (eleme hattı)", "5 Komite (4 efsane + Şeytanın Avukatı)", "6 Karar Kartı (plan: giriş/stop/hedef)", "7 Karne (canlı doğrulama)"].map((x, i, a) => `<span class="pill" style="white-space:normal">${x}</span>${i < a.length - 1 ? "→" : ""}`).join("")}</div>
+    <h3 style="margin:12px 0 4px">Neye göre skor veriyoruz? <span class="mute" style="font-weight:400">(kanıta dayalı kısım)</span></h3>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Skor</th><th style="text-align:left">Hangi göstergeler</th><th style="text-align:left">Ufuk / rol</th><th style="text-align:left">Kanıt</th></tr></thead><tbody>
+      ${row("Günlük (G)", "Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getiri sıralaması", "1-5 gün · zamanlama", scanEv("wf:gunluk:rs"))}
+      ${row("Haftalık (H)", "Haftalık trend (fiyat > SMA20 > SMA50), 6 ay zirveye yakınlık, haftalık SMA50 uzaklığı, DI+/DI−, RSI, CMF, 6 ay getiri; yarı ağırlıkla RS", "2-4 hafta · ana skor", scanEv("haftalik_lider_likit"))}
+      ${row("Aylık (A)", "Uzun trend (SMA50 > SMA200), 52h yakınlık, aylık CMF, 6-12 ay getiri", "2-3 ay · bağlam", '<span class="mute">anlamlı çıkmadı: sinyal sayılmaz</span>')}</tbody></table></div>
+    <p class="note">Skor = ilgili göstergelerin evrendeki yüzdelik sıralarının ortalaması. Birleşik skor = 0,25 G + 0,5 H + 0,25 A. Ayrıntılı kanıt: Zaman Taraması ve Tahmin Karnesi sayfaları.</p>
+    <h3 style="margin:12px 0 4px">Komite ne yapar? <span class="mute" style="font-weight:400">(kural + yorum kısmı)</span></h3>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Efsane</th><th style="text-align:left">Neye bakar (aldığı veri)</th><th style="text-align:left">Olumlu oy için (güncel eşikler)</th><th style="text-align:left">Not</th></tr></thead><tbody>
+      ${row("Warren Buffett", "Kalite (reel ROE, marj, borç, serbest nakit akışı, kazanç büyümesi) + adil değer (reel iskontolu)", `piyasa değeri ≥ ${P("bMcap")} mlr TL, kalite ≥ %65 ve güvenlik marjı ≥ %${P("bMos")}`, "Değerleme geçmişte test edilemiyor; kanıtsız")}
+      ${row("Jim Simons", "Göreceli güç (RS) dilimine göre beklenen fazla getiri (research.json) + haftalık skor", `beklenen 10g fazla getiri ≥ %${P("sEdge")} ve RS ≥ ${P("sRs")} (ya da haftalık skor ≥ 80)`, "Modelin kendisi araştırmaya dayanır")}
+      ${row("Jesse Livermore", "Trend (fiyat > SMA50 > SMA200), lider hisse, 1 aylık pivot kırılımı, hacim teyidi, haftalık trend", `RS ≥ ${P("lRs")}, pivotun %${P("lPiv")} içinde, hacim ≥ ${P("lVol")}x`, "Ayı rejiminde yalnızca RS ≥ 90 liderler")}
+      ${row("Jack Kellogg", "Olağandışı hacim, güçlü gün içi itiş, kırılım, likidite, para girişi", `hacim ≥ ${P("kRvol")}x, gün içi ≥ %${P("kChg")}, ATR ≥ %${P("kAtr")}`, "Ayı rejiminde devre dışı (araştırma: ayıda kırılımlar tutmuyor)")}
+      ${row("Şeytanın Avukatı", "Risk: stop olasılığı (Monte Carlo), oynaklık, likidite, bilanço yakınlığı, FOMO, sektör yoğunlaşması, rejim", `bayrak sayısı < ${P("dFlags")}; veto: bilanço ≤ 2 gün, çıkış likiditesi zayıf, stop olasılığı ≥ %65`, "Oy hakkı yalnızca olumsuz/veto")}</tbody></table></div>
+    <p class="note"><b>Komite skoru</b> = dört efsanenin oylarının toplamı (+1/0/−1) ve Şeytan'ın olumsuz oyu. ≥ 3 GÜÇLÜ ADAY, 2 ADAY, 1 İZLE, 0/−1 NÖTR, ≤ −2 UZAK DUR; veto varsa güçlü aday olamaz. Efsane kurallarının eşikleri <b>Efsane Kuralları</b> sayfasından değişir. Komite, taramaların yerine geçmez: tarama "kim potansiyelli", komite "neden/neden değil ve nasıl riskleneriz" sorusunu yanıtlar.</p>
+    <h3 style="margin:12px 0 4px">Hangi kısım ne kadar güvenilir?</h3>
+    <ul class="note"><li><b>En sağlam:</b> haftalık skor ve zayıf hisseleri elemek (geçmiş testte iki yarıda, geniş evrende ve görülmemiş dönemde tutarlı).</li><li><b>Orta:</b> günlük RS (kısa vade, küçük avantaj; maliyet yüzünden ≥ 3-5 gün tutmak gerekir).</li><li><b>Kanıtsız / bağlam:</b> aylık skor, adil değer (ucuz/pahalı), Buffett kalite filtresi, bebek hisse koşulları (küçük örnek).</li><li><b>Yorum:</b> efsane metinleri kuralların okunaklı anlatımıdır; ek bilgi katmaz.</li></ul>
+    <p class="note">Canlı doğrulama: Tahmin Karnesi sayfası skorların gerçek sonuçlarını her gün biriktirir; bir bulgu canlıda tutmazsa Skor Sağlığı uyarı verir.</p>`;
+}
+document.addEventListener("click", e => {
+  if (view !== "tarama") return;
+  const t = e.target.closest("[data-scantab]"); if (t) { scanTab = t.dataset.scantab; store.set("scanTab", scanTab); renderScan(); return; }
+  if (e.target.closest("[data-scpreset]")) { const all = store.get("scanP", {}); delete all[scanTab]; store.set("scanP", all); renderScan(); return; }
+  if (e.target.closest("[data-scanq]")) { store.set("scanQ", $("scanQ").value); scanTraceShow($("scanQ").value); }
+});
+document.addEventListener("change", e => {
+  if (view !== "tarama") return; const k = e.target.dataset && e.target.dataset.scp; if (!k) return;
+  const all = store.get("scanP", {}) || {}; all[scanTab] = {...(all[scanTab] || {}), [k]: +e.target.value}; store.set("scanP", all); store.set("scanParOpen", true); renderScan();
+});
+document.addEventListener("keydown", e => { if (view === "tarama" && e.key === "Enter" && e.target.id === "scanQ") { store.set("scanQ", e.target.value); scanTraceShow(e.target.value); } });
 
 /* ---------- Uyarı Merkezi ---------- */
 const alertAck = () => store.get("alertAck", {});
@@ -2556,6 +2650,7 @@ function briefSentences() {
   return [s1, s2, s3];
 }
 function speak(txt) { try { if (!("speechSynthesis" in window)) { toast("Bu tarayıcı sesli okumayı desteklemiyor"); return; } speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "tr-TR"; u.rate = 1; speechSynthesis.speak(u); } catch (e) { toast("Sesli okuma açılamadı"); } }
+document.addEventListener("click", e => { const so = e.target.closest("[data-scanopen]"); if (so) { scanTab = so.dataset.scanopen; store.set("scanTab", scanTab); show("tarama"); } });
 document.addEventListener("click", e => { if (e.target.closest("[data-speak]")) speak(briefSentences().join(" ")); });
 function renderBrief() {
   const el = $("briefCard"); if (!el) return;
@@ -2578,6 +2673,7 @@ function renderBrief() {
       <div><div class="mute">En güçlü skorlar (birleşik)</div><div>${top.map(s => pill(s.name)).join("")}</div>${joined.length ? `<div class="note" style="margin:6px 0 0"><b class="up">Yeni lider:</b> ${joined.map(pill).join("")}</div>` : ""}</div>
       <div><div class="mute">En büyük hareketler</div><div>${mv.map(s => `<span class="pill ${s.change >= 0 ? "up" : "down"}" data-x="${esc(s.name)}">${esc(s.name)} ${s.change > 0 ? "+" : ""}${fmt(s.change, 1)}%</span>`).join("")}</div></div>
       <div><div class="mute">Risk takvimi (3 gün)</div>${risk.length ? risk.map(o => `<div class="note" style="margin:2px 0">${pill(o.s.name)} ${o.d != null && o.d >= -1 && o.d <= 3 ? "bilanço " + (o.d < 1 ? "bugün/yarın" : fmt(o.d, 0) + " gün") : ""}${o.x != null && o.x >= 0 && o.x <= 3 ? " · temettü kesim " + fmt(o.x, 0) + " gün" : ""}</div>`).join("") : '<div class="note" style="margin:2px 0">Yakın bilanço/temettü yok.</div>'}</div>
+      <div><div class="mute">Bugünün taramaları</div>${(() => { try { return ["haftalik", "gunluk", "aylik", "bebek"].map(id => `<button class="pill" data-scanopen="${id}">${SCAN_META[id].name.replace(" Taraması", "")}: <b>${runScan(id, scanP(id), {skipLazy: true}).list.length}</b></button>`).join(""); } catch (e) { return ""; } })()}<div class="note" style="margin:4px 0 0">Eşiklere ve hangi adımda elendiğine bakmak için tıklayın.</div></div>
       <div><div class="mute">Zaman Modeli</div><div class="note" style="margin:2px 0">${Z ? `Yarın açılışta: <b class="up">${nb} alım</b> · <b class="down">${ns} satım</b>` : "Henüz başlamadı"}</div><button data-go="gunici" class="kpi-link"><span>Günlük planı aç</span><i data-ico="arrow"></i></button></div>
     </div>`;
   paintIcons(el);
@@ -2804,6 +2900,7 @@ function refreshView() {
   else if (view === "tarayici") renderScreener();
   else if (view === "zaman") renderZaman();
   else if (view === "gunici") renderGunIci();
+  else if (view === "tarama") renderScan();
   else if (view === "gunluk") renderJournal();
   else if (view === "risk") renderRisk();
   else if (view === "takvim") renderCalendarPage();
@@ -2899,6 +2996,7 @@ async function loadAux() {
   { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
+  if (!IPOR) { const m = await getJson("ipo_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.cond) IPOR = m; }
   if (!LIM) { const m = await getJson("limit_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tavan) LIM = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
@@ -3002,7 +3100,7 @@ if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(esc
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "tarama", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>
