@@ -90,25 +90,27 @@ function pctRankMap(el, fn) {
   return m;
 }
 const dmi = (a, b) => a != null && b != null ? a - b : null;
-const MTF_FEATS = {
-  d: [["CMF (para akışı)", s => s.cmf], ["RSI (momentum, aşırı satım değil)", s => s.rsi], ["DI+ − DI− (yön)", s => dmi(s.pdi, s.mdi)], ["Fiyat/SMA20", s => s.sma20 > 0 ? s.close / s.sma20 - 1 : null]],
-  w: [["Haftalık trend (fiyat > SMA20 > SMA50)", s => s.sma20_w > 0 && s.sma50_w > 0 ? (s.close > s.sma20_w && s.sma20_w > s.sma50_w ? 1 : 0) : null],
-      ["6 aylık zirveye yakınlık", s => s.h6m > 0 ? s.close / s.h6m - 1 : null], ["Fiyat/haftalık SMA50", s => s.sma50_w > 0 ? s.close / s.sma50_w - 1 : null],
-      ["Haftalık DI+ − DI−", s => dmi(s.pdi_w, s.mdi_w)], ["Haftalık RSI", s => s.rsi_w], ["Haftalık CMF", s => s.cmf_w], ["6 ay getiri", s => s.p6m]],
-  m: [["Uzun trend (SMA50 > SMA200)", s => trendUp(s) == null ? null : trendUp(s) ? 1 : 0], ["52 hafta zirvesine yakınlık", s => s.dist52], ["Aylık CMF", s => s.cmf_m], ["6 ay getiri", s => s.p6m], ["1 yıl getiri", s => s.py]],
+const MTF_FEATS = { // [ad, işlev, biçim]: pct = yüzde (×100), num = sayı, bool = evet/hayır
+  d: [["CMF (para akışı)", s => s.cmf, "num"], ["RSI (momentum, aşırı satım değil)", s => s.rsi, "num"], ["DI+ − DI− (yön)", s => dmi(s.pdi, s.mdi), "num"], ["Fiyat/SMA20 farkı", s => s.sma20 > 0 ? s.close / s.sma20 - 1 : null, "pct"]],
+  w: [["Haftalık trend (fiyat > SMA20 > SMA50)", s => s.sma20_w > 0 && s.sma50_w > 0 ? (s.close > s.sma20_w && s.sma20_w > s.sma50_w ? 1 : 0) : null, "bool"],
+      ["6 aylık zirveye uzaklık", s => s.h6m > 0 ? s.close / s.h6m - 1 : null, "pct"], ["Fiyat/haftalık SMA50 farkı", s => s.sma50_w > 0 ? s.close / s.sma50_w - 1 : null, "pct"],
+      ["Haftalık DI+ − DI−", s => dmi(s.pdi_w, s.mdi_w), "num"], ["Haftalık RSI", s => s.rsi_w, "num"], ["Haftalık CMF", s => s.cmf_w, "num"], ["6 ay getiri", s => s.p6m, "pct0"]],
+  m: [["Uzun trend (SMA50 > SMA200)", s => trendUp(s) == null ? null : trendUp(s) ? 1 : 0, "bool"], ["52 hafta zirvesine uzaklık", s => s.dist52, "pct0"], ["Aylık CMF", s => s.cmf_m, "num"], ["6 ay getiri", s => s.p6m, "pct0"], ["1 yıl getiri", s => s.py, "pct0"]],
 };
+const fmtFeat = (v, k) => v == null ? "–" : k === "bool" ? (v ? "evet" : "hayır") : k === "pct" ? "%" + fmt(v * 100, 1) : k === "pct0" ? "%" + fmt(v, 1) : fmt(v, 2);
 function rankMtf(uni) {
   const el = uni.filter(s => s.ok && s.tl >= 5);
   const sc = {};
   for (const tf of ["d", "w", "m"]) {
     const maps = MTF_FEATS[tf].map(([, fn]) => pctRankMap(el, fn));
     sc[tf] = new Map(el.map(s => { const v = maps.map(m => m.get(s)).filter(x => x != null); return [s, v.length >= Math.ceil(maps.length / 2) ? v.reduce((a, b) => a + b, 0) / v.length : null]; }));
+    sc[tf + "P"] = new Map(el.map(s => [s, MTF_FEATS[tf].map(([n, fn, k], i) => [n, fmtFeat(fn(s), k), maps[i].get(s) ?? null])]));
   }
   const inEl = new Set(el);
   uni.forEach(s => {
     if (!inEl.has(s)) { s.mtf = null; return; }
     const d = sc.d.get(s), w = sc.w.get(s), m = sc.m.get(s);
-    s.mtf = {d, w, m, b: w == null ? null : 0.25 * (d ?? 50) + 0.5 * w + 0.25 * (m ?? 50)};
+    s.mtf = {d, w, m, b: w == null ? null : 0.25 * (d ?? 50) + 0.5 * w + 0.25 * (m ?? 50), parts: {d: sc.dP.get(s), w: sc.wP.get(s), m: sc.mP.get(s)}};
   });
 }
 let MTFR = null; // mtf_composite.json: bileşik skorların geçmiş testi
@@ -120,7 +122,7 @@ function mtfExpect(s) { // haftalık skorun dilimine göre geçmiş 20 günlük 
 const MTF_TIERS = {
   uyumlu: {label: "Uyumlu lider", cls: "up", tip: "Günlük, haftalık ve aylık skorların üçü de ilk %40'ta ve haftalık ≥ 70. Geçmişte üç zaman diliminin uyumu en iyi ayrışmayı verdi."},
   hlider: {label: "Haftalık lider", cls: "up", tip: "Haftalık skor ≥ 80: en tutarlı bulgu (iki yarıda ve boğa/ayı rejiminde pozitif)."},
-  toparlanan: {label: "Toparlanan (deneysel)", cls: "", tip: "Haftalık orta (50-80), günlük ≥ 75 ve para girişi (CMF > 0): erken dönüş adayı. Bu grup ayrıca test EDİLMEDİ; deneysel."},
+  toparlanan: {label: "Toparlanan (kanıtsız)", cls: "", tip: "Haftalık orta (50-80), günlük ≥ 75 ve CMF > 0: erken dönüş adayı. TEST EDİLDİ ve anlamlı çıkmadı (20g +%1,0, t=1,4; ilk yarıda ≈0, ayıda negatif): bir fırsat değil, izleme listesi."},
   zayif: {label: "Zayıf", cls: "down", tip: "Haftalık skor ≤ 30: geçmişte piyasanın altında kalan grup."},
   notr: {label: "Nötr", cls: "", tip: "Belirgin bir üstünlük yok."},
 };

@@ -77,6 +77,8 @@ def main():
     # baz çizgisi: mevcut RS bileşimi
     rk = lambda df: df.rank(axis=1, pct=True)
     sc["rs_baz"] = (rk(C / C.rolling(252).max()) + rk(C.shift(21) / C.shift(126)) + rk(C / C.shift(21))) / 3
+    for hh in (5, 10, 20):
+        fwd.setdefault(hh, C.shift(-hh) / O.shift(-1) - 1)
     res = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "stocks": int(C.shape[1]), "from": str(C.index[0].date()), "to": str(C.index[-1].date()), "pick": PICK, "tests": {}}
     print(f"{'skor':10}{'ufuk':>5}{'n':>4}{'top10%':>8}{'top20%':>8}{'bot20%':>8}{'isabet%':>8}{'t':>6}{'yarı1':>7}{'yarı2':>7}{'boğa':>7}{'ayı':>7}")
     for name in ("gunluk", "haftalik", "aylik", "birlesik", "rs_baz"):
@@ -99,6 +101,27 @@ def main():
         res["uyum"][str(h)] = {"n_gun_hisse": int(len(a)), "uyumlu": round(float(a.mean() * 100), 2), "diger": round(float(b.mean() * 100), 2), "hit": round(float((a > 0).mean() * 100), 1),
                                "h1": round(float(a[half].mean() * 100), 2), "h2": round(float(a[~half].mean() * 100), 2)}
         print(h, res["uyum"][str(h)])
+    # olay testleri: kurulum günleri (hisse-gün) ve sonraki fazla getiri; research.evaluate_signal ile aynı yöntem (seyreltilmiş, t, yarılar, rejim)
+    from research import evaluate_signal
+    d, w, m = sc["gunluk"], sc["haftalik"], sc["aylik"]
+    cmf = feats["gunluk"]["cmf20"]
+    events = {
+        "toparlanan": (d >= 0.75) & (w >= 0.5) & (w < 0.8) & (cmf > 0),
+        "toparlanan_siki": (d >= 0.85) & (w >= 0.5) & (w < 0.8) & (cmf > 0.05) & (m >= 0.4),
+        "haftalik_lider": w >= 0.8,
+        "uyumlu": (d >= 0.6) & (w >= 0.7) & (m >= 0.6),
+        "uyumlu_cmf": (d >= 0.6) & (w >= 0.7) & (m >= 0.6) & (cmf > 0),
+        "zayif": w <= 0.3,
+    }
+    res["events"] = {}
+    print("\nOlay testleri (fazla getiri %, t, ilk/ikinci yarı, boğa/ayı):")
+    for k, sig in events.items():
+        res["events"][k] = {}
+        for h in (5, 10, 20):
+            e = evaluate_signal(sig.fillna(False), fwd, regime, h) if h in fwd else None
+            res["events"][k][str(h)] = e
+            if e:
+                print(f"{k:18}{h:>4}g n={e['n']:>5} fazla={e['excess']:>6} isabet={e['win']:>5} t={e['t']:>5} y1={e['h1']} y2={e['h2']} boga={e.get('bull')} ayi={e.get('bear')}")
     (HERE / "mtf_composite.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 

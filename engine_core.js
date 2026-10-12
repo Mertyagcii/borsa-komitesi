@@ -6,8 +6,8 @@
    - Yalnızca uzun pozisyon (BIST'te açığa satış kısıtlı). Bedelsiz/bölünme tespit edilirse adet düzeltilir. */
 const ENGINE = {capital: 1000000, cost: 0.0015, slip: 0.0010};
 let INTRA = null; // {date, bars:{HISSE:[[o,h,l,c],...]}}: varsa stop/hedef gün içi kronolojik sırayla yürütülür
-const LEGENDS = ["buffett", "simons", "livermore", "kellogg", "komite"];
-const LNAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", komite: "Komite (Şeytanın Avukatı gözetiminde)"};
+const LEGENDS = ["buffett", "simons", "livermore", "kellogg", "komite", "zaman"];
+const LNAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", komite: "Komite (Şeytanın Avukatı gözetiminde)", zaman: "Zaman Modeli (haftalık skor)"};
 const r2 = x => Math.round(x * 100) / 100;
 
 function initState(date, cashYield) {
@@ -215,6 +215,31 @@ function signalsKomite(p, stocks, by, date, nav) {
   }
 }
 
+/* Zaman Modeli: araştırmanın en tutarlı bulgusunu (haftalık çok göstergeli skor ≥ 80; 20 günde ~%2,5 fazla getiri, iki yarıda ve boğa/ayıda pozitif)
+   mekanik uygular. Efsane yorumu yok; amaç modelin canlı performansını karnede ölçmek. Çıkış: skor < 60, 20 gün sonunda lider değilse, ya da stop. */
+function signalsZaman(p, stocks, by, date, nav) {
+  const bear = REGIME && REGIME.trend === "bear", per = (bear ? 0.05 : 0.07) * nav;
+  for (const pos of p.pos) {
+    const s = by[pos.n]; if (!s) continue;
+    if (s.atr) pos.stop = Math.max(pos.stop || 0, s.close - 2.5 * s.atr); // izleyen stop
+    const w = s.mtf ? s.mtf.w : null;
+    if (w != null && w < 60) queueSell(p, pos, `Haftalık skor ${fmt(w, 0)}'a düştü (< 60): avantaj bitti.`);
+    else if (pos.days >= 20) { if (w != null && w >= 80) { pos.days = 0; say(p, date, `${pos.n}: 20 günlük ufuk doldu, haftalık skor hâlâ ${fmt(w, 0)}; pozisyon yenilendi.`, pos.n); } else queueSell(p, pos, "20 günlük ufuk doldu ve artık haftalık lider değil."); }
+  }
+  const slots = 12 - p.pos.length - pendingBuys(p); if (slots <= 0) return;
+  const c = stocks.filter(s => s.ok && s.tl >= 15 && s.mtf && s.mtf.w != null && s.mtf.w >= 80 && s.atr && !heldOrOrdered(p, s.name))
+    .filter(s => { const d = devil(s, null); return !d.veto; }).sort((a, b) => b.mtf.w - a.mtf.w);
+  if (!c.length) say(p, date, "Haftalık skoru 80 üstü, vetosuz hisse yok; bekliyorum.");
+  for (const s of c) {
+    if (p.pos.length + pendingBuys(p) >= 12) break;
+    if (!sectorOk(p, s, 3)) continue;
+    const amount = Math.min(per, p.cash - pendingBuyAmt(p)); if (amount < 0.02 * nav) break;
+    const stop = Math.max(s.close - 2.5 * s.atr, s.close * 0.90);
+    queueBuy(p, {n: s.name, amount, limit: s.close * 1.03, stop, reason: `Haftalık skor ${fmt(s.mtf.w, 0)}/100 (günlük ${fmt(s.mtf.d, 0)}, aylık ${fmt(s.mtf.m, 0)}); geçmişte bu grup 20 günde piyasayı ~%2,5 geçti. Stop ${fmt(stop)} TL.`});
+    say(p, date, `${s.name}: haftalık skor ${fmt(s.mtf.w, 0)}; kurala göre alım emri verdim (%${fmt(amount / nav * 100, 1)} ağırlık).`, s.name);
+  }
+}
+
 /* ======== Bir işlem günü ======== */
 function runDay(st, data, date, idx) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s])); window_by = by;
@@ -223,15 +248,16 @@ function runDay(st, data, date, idx) {
   const prevDate = st.lastDate, days = prevDate ? Math.max(1, Math.round((new Date(date) - new Date(prevDate)) / 864e5)) : 0;
   const cy = st.config.cashYield || 0.30;
   for (const lg of LEGENDS) {
+    if (!st.p[lg]) st.p[lg] = {cash: ENGINE.capital, pos: [], orders: [], nav: [], trades: [], log: [], startDate: date}; // sonradan eklenen portföy
     const p = st.p[lg];
-    if (prevDate) {
+    if (prevDate && p.nav.length) {
       p.cash += p.cash * cy * days / 365; // nakit faizi
       if (st.fillDate !== date) fillOrders(p, by, date, lg); // seans içinde (açılışta) zaten doldurulduysa tekrar etme
       manageDay(p, by, date, lg);
     }
     const nav = navOf(p, by);
     p.nav.push({d: date, v: r2(nav), c: r2(p.cash), rg: REGIME ? REGIME.trend : null});
-    ({buffett: signalsBuffett, simons: signalsSimons, livermore: signalsLivermore, kellogg: signalsKellogg, komite: signalsKomite})[lg](p, stocks, by, date, nav);
+    ({buffett: signalsBuffett, simons: signalsSimons, livermore: signalsLivermore, kellogg: signalsKellogg, komite: signalsKomite, zaman: signalsZaman})[lg](p, stocks, by, date, nav);
   }
   // kıyas: BIST100 ve likit 150 hissenin eşit ağırlıklı endeksi
   const liquid = stocks.filter(s => s.close > 0 && s.volume).sort((a, b) => b.tl - a.tl).slice(0, 150).map(s => s.change).filter(c => c != null && Math.abs(c) <= 15);
@@ -245,7 +271,7 @@ function runDay(st, data, date, idx) {
 function fillOnly(st, data, date) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s]));
   let n = 0;
-  for (const lg of LEGENDS) { const p = st.p[lg], before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
+  for (const lg of LEGENDS) { const p = st.p[lg]; if (!p) continue; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
   st.fillDate = date;
   return n;
 }
