@@ -17,6 +17,9 @@ COST = 0.5
 
 def main():
     data = pickle.loads((HERE / "cache" / "ohlcv_wide.pkl").read_bytes())
+    ip = HERE / "cache" / "ohlcv_ipo.pkl"
+    if ip.exists():  # geçmişi kısa (son ~2 yıl) halka arzlar da dahil edilir
+        data.update(pickle.loads(ip.read_bytes()))
     f, index = frames(data)
     C, O, H, V = f["close"], f["open"], f["high"], f["volume"]
     start = C.index[0]
@@ -72,6 +75,21 @@ def main():
              "Aylık momentum > 0": df[df.mom > 0], "Aylık momentum < 0": df[df.mom < 0], "Momentum > 0 ve zirveye yakın (<%20)": df[(df.mom > 0) & (df.dd > -0.2)]}
         for k, v in G.items():
             res["cond"][k] = stat(v, k)
+    # hisse bazlı liste: ilk işlem günü, ilk kapanış, tavan serisi, ilk kapanışa göre 5/20/60. gün ve bugün
+    stocks = {}
+    for n in ipos:
+        s = C[n].dropna()
+        if len(s) < 3:
+            continue
+        r = s.pct_change().dropna(); k = 0
+        for v in r.iloc[:20]:
+            if v >= 0.095:
+                k += 1
+            else:
+                break
+        at = lambda d: round(float((s.iloc[d - 1] / s.iloc[0] - 1) * 100), 1) if len(s) >= d else None
+        stocks[n] = {"d": str(s.index[0].date()), "c0": round(float(s.iloc[0]), 4), "tavan": k, "r5": at(5), "r20": at(20), "r60": at(60), "now": round(float((s.iloc[-1] / s.iloc[0] - 1) * 100), 1), "n": int(len(s))}
+    res["stocks"] = stocks
     txt = json.dumps(res, ensure_ascii=False, separators=(",", ":")); assert "NaN" not in txt
     (HERE / "ipo_research.json").write_text(txt, encoding="utf-8")
     print(f"{len(ipos)} halka arz; tavan serisi: {res['tavan_serisi']}")

@@ -54,10 +54,38 @@ for _tf, _sfx in (("", ""), ("|1W", "_w"), ("|1M", "_m")):
             continue  # günlükte zaten var
         COLUMNS.append(_b + _tf)
         RENAME[_b + _tf] = _k + _sfx
+MTF_EXTRA.update({"net_income_fq_h": "niqh", "total_debt_fq_h": "dbth", "free_cash_flow_fq_h": "fcfh", "total_equity_fq": "eqq", "total_equity_fy": "eqy_", "net_debt_fq": "nd"})  # bilanço geçmişi (çeyreklik diziler türetilip atılır)
 MTF_EXTRA.update({"first_bar_time": "fbt", "ipo_offer_price": "ipop", "ipo_offer_price_performance": "ipoperf", "ipo_market_cap": "ipomc"})  # bebek hisse (yeni halka arz) alanları
 for _b, _k in MTF_EXTRA.items():
     COLUMNS.append(_b)
     RENAME[_b] = _k
+
+
+def _fin(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and x == x and abs(x) != float("inf")
+
+
+def _derive_fundamentals(st: dict) -> None:
+    """Çeyreklik geçmiş dizilerinden küçük özet alanlar türetir (dizi JSON'a yazılmaz):
+    nipos8 = son 8 çeyrekte net kârı pozitif olan sayısı; fcfpos4 = son 4 çeyrekte serbest nakit akışı pozitif sayısı;
+    nig4 = son 4 çeyrek net kâr / önceki 4 çeyrek − 1; dbtg = borcun 4 çeyrek öncesine göre değişimi; eqg = özsermayenin yıl sonuna göre değişimi."""
+    ni, db, fc = st.pop("niqh", None), st.pop("dbth", None), st.pop("fcfh", None)
+    eq, eqy = st.pop("eqq", None), st.pop("eqy_", None)
+    st["nipos8"] = st["fcfpos4"] = st["nig4"] = st["dbtg"] = st["eqg"] = None
+    try:
+        if isinstance(ni, list) and len(ni) >= 6:
+            v = ni[:8]; st["nipos8"] = sum(1 for x in v if _fin(x) and x > 0)
+            a, b = [x for x in ni[:4] if _fin(x)], [x for x in ni[4:8] if _fin(x)]
+            if len(a) == 4 and len(b) == 4 and sum(b) > 0:
+                st["nig4"] = round(sum(a) / sum(b) - 1, 4)
+        if isinstance(fc, list) and len(fc) >= 4:
+            st["fcfpos4"] = sum(1 for x in fc[:4] if _fin(x) and x > 0)
+        if isinstance(db, list) and len(db) >= 5 and _fin(db[0]) and _fin(db[4]) and db[4] > 0:
+            st["dbtg"] = round(db[0] / db[4] - 1, 4)
+        if _fin(eq) and _fin(eqy) and eq > 0 and eqy > 0:
+            st["eqg"] = round(eq / eqy - 1, 4)
+    except Exception:
+        pass
 
 
 def clean(v):
@@ -81,6 +109,8 @@ def fetch_snapshot() -> dict:
     )
     df = df.drop(columns=["ticker"]).rename(columns=RENAME)
     stocks = [{k: clean(v) for k, v in r.items()} for r in df.to_dict("records")]
+    for st in stocks:
+        _derive_fundamentals(st)
     if not stocks:
         raise RuntimeError("TradingView boş veri döndürdü")
     return {"ts": int(time.time()), "generated": datetime.now(TZ).strftime("%Y-%m-%d %H:%M"),

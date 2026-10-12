@@ -267,6 +267,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="tarama"><i data-ico="filter"></i>Tarama Senaryoları</a>
+      <a data-view="halkaarz"><i data-ico="award"></i>Halka Arz</a>
       <a data-view="grafik"><i data-ico="bars"></i>Grafik &amp; Göstergeler</a>
       <a data-view="gunici"><i data-ico="bars"></i>Günlük Plan &amp; Gün İçi</a>
       <a data-view="zaman"><i data-ico="compass"></i>Zaman Taraması</a>
@@ -414,6 +415,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-aylik"><section class="card" id="mnView"></section></div>
     <div class="view" id="v-takvim"><section class="card" id="clView"></section></div>
     <div class="view" id="v-tarama"><section class="card" id="scnView"></section></div>
+    <div class="view" id="v-halkaarz"><section class="card" id="ipoView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -1137,7 +1139,7 @@ document.addEventListener("change", e => { const id = e.target.id; if (view === 
 
 /* ---------- Tarama Senaryoları ---------- */
 let scanTab = store.get("scanTab", "haftalik");
-const SCAN_TABS = [["haftalik", "Haftalık Tarama"], ["gunluk", "Günlük Tarama"], ["aylik", "Aylık Tarama"], ["bebek", "Bebek Hisseler"], ["nasil", "Sistem nasıl çalışıyor?"]];
+const SCAN_TABS = [["haftalik", "Haftalık Tarama"], ["gunluk", "Günlük Tarama"], ["aylik", "Aylık Tarama"], ["bebek", "Bebek Hisseler"], ["halkaarz", "Halka Arz Taraması"], ["nasil", "Sistem nasıl çalışıyor?"]];
 const scanP = id => ({...scanDefaults(id), ...((store.get("scanP", {}) || {})[id] || {})});
 function scanEv(key) {
   if (!key) return '<span class="mute">mantıksal koşul (geçmişte ayrıca test edilmedi)</span>';
@@ -1151,7 +1153,7 @@ function scanParamsHtml(id, P) {
 }
 function scanRowHtml(id, s, i) {
   const r = committee(s), pl = scanPlan(s), dd = s.h52 > 0 ? (1 - s.close / s.h52) * 100 : null;
-  const extra = id === "bebek" ? `<td>${fp(ageDaysOf(s), 0)}</td><td>${s.ipop ? fmt(s.ipop) : "–"}${s.ipop ? ` <span class="${sign(s.close / s.ipop - 1)}">(${fmt((s.close / s.ipop - 1) * 100, 0)}%)</span>` : ""}</td><td>−%${fp(dd, 0)}</td><td class="${sign(s.p1m)}">${fp(s.p1m)}%</td><td>${s.ff != null ? "%" + fp(s.ff, 0) : "–"}</td>` : "";
+  const extra = id === "bebek" ? `<td>${fp(s.de, 2)}</td><td>${s.eqg == null ? "–" : "%" + fmt(s.eqg * 100, 0)}</td><td>${s.nipos8 == null ? "–" : s.nipos8 + "/8"}</td><td>${fp(s.revg, 0)}%</td><td class="${sign(s.p6m)}">${fp(s.p6m, 0)}%</td><td>−%${fp(dd, 0)}</td>` : id === "halkaarz" ? `<td>${fp(ageDaysOf(s), 0)}</td><td>${s.ipop ? fmt(s.ipop) : "–"}${s.ipop ? ` <span class="${sign(s.close / s.ipop - 1)}">(${fmt((s.close / s.ipop - 1) * 100, 0)}%)</span>` : ""}</td><td>−%${fp(dd, 0)}</td><td class="${sign(s.p1m)}">${fp(s.p1m)}%</td><td>${s.ff != null ? "%" + fp(s.ff, 0) : "–"}</td>` : "";
   return `<tr data-x="${esc(s.name)}"><td>${i + 1}</td><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td><td>${mtfCell(s)}</td><td>${cheapBadge(s)}</td>${extra}<td style="white-space:nowrap">${pl.stop ? fmt(pl.entry) + " / " + fmt(pl.stop) + " / " + fmt(pl.target) : "–"}</td><td>${chipsOf(r)} ${badge(r.score)}</td></tr>`;
 }
 function renderScan() {
@@ -1161,10 +1163,10 @@ function renderScan() {
   const tabs = `<div class="tabs">${SCAN_TABS.map(([k, n]) => `<button class="tab ${scanTab === k ? "on" : ""}" data-scantab="${k}">${n}</button>`).join("")}</div>`;
   if (scanTab === "nasil") { el.innerHTML = `<h2>Tarama Senaryoları</h2>${tabs}${scanHowHtml()}`; return; }
   const id = scanTab, M = SCAN_META[id], P = scanP(id), R_ = runScan(id, P, {trace: false}), list = R_.list, near = scanNearMiss(id, P, 20), n0 = R_.steps[0].n_out;
-  const head = `<th>#</th><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük · Haftalık · Aylık skor">G·H·A</th><th>Değer</th>${id === "bebek" ? '<th>Yaş (gün)</th><th>Arz fiyatı</th><th>Zirveden</th><th>1 ay</th><th>Float</th>' : ""}<th title="Giriş / stop (2,5×ATR) / hedef (2R)">Plan</th><th>Komite</th>`;
+  const head = `<th>#</th><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük · Haftalık · Aylık skor">G·H·A</th><th>Değer</th>${id === "bebek" ? '<th title="Borç/özsermaye">B/Ö</th><th title="Özsermaye yıl sonuna göre">Özsermaye</th><th title="Son 8 çeyrekte kârlı çeyrek">Kârlı Ç.</th><th>Satış büyüme</th><th>6 ay</th><th>Zirveden</th>' : id === "halkaarz" ? '<th>Yaş (gün)</th><th>Arz fiyatı</th><th>Zirveden</th><th>1 ay</th><th>Float</th>' : ""}<th title="Giriş / stop (2,5×ATR) / hedef (2R)">Plan</th><th>Komite</th>`;
   el.innerHTML = `<h2>Tarama Senaryoları <span class="sub">potansiyelli hisseleri adım adım eleyerek bulma</span></h2>${tabs}
     <div class="card" style="background:var(--panel2);margin:8px 0"><b>${M.name}</b> <span class="mute">· ufuk: ${M.ufuk}</span><p class="note" style="margin:6px 0 0">${esc(M.amac)}</p></div>
-    ${id === "bebek" ? bebekInfoHtml() : ""}
+    ${id === "halkaarz" ? `<p class="note">Halka arz taraması hisseleri ve geçmiş davranışı <a href="#halkaarz" data-go="halkaarz" style="color:var(--accent2)">Halka Arz</a> sayfasında da görebilirsiniz.</p>` : ""}
     <details ${store.get("scanParOpen", false) ? "open" : ""} id="scanParams"><summary><b>Eşikler</b> (kendinize göre ayarlayın; değişiklikler kaydedilir)</summary>${scanParamsHtml(id, P)}</details>
     <h3 style="margin:12px 0 4px">Eleme hattı (huni)</h3>
     <div class="tw"><table><thead><tr><th style="text-align:left">Adım</th><th style="text-align:left">Neden bu süzgeç?</th><th>Eşik</th><th>Geçen</th><th style="text-align:left;width:160px"></th><th style="text-align:left">Kanıt durumu</th></tr></thead><tbody>${R_.steps.map((s, i) => `<tr><td style="text-align:left;white-space:normal"><b>${i}. ${esc(s.name)}</b>${s.skipped ? " (atlandı)" : ""}</td><td style="text-align:left;white-space:normal" class="mute">${esc(s.why)}</td><td>${s.pk ? fmt(s.val, s.val % 1 ? 2 : 0) : "–"}</td><td><b>${s.n_out}</b> <span class="mute">/ ${s.n_in}</span></td><td style="text-align:left"><i style="display:block;height:8px;border-radius:4px;background:var(--accent2);width:${Math.max(1, s.n_out / (n0 || 1) * 100)}%"></i></td><td style="text-align:left;white-space:normal;font-size:12.5px">${i ? scanEv(s.ev || null) : ""}</td></tr>`).join("")}</tbody></table></div>
@@ -1183,7 +1185,7 @@ function scanTraceShow(q) {
   const tr = scanTrace(scanTab, scanP(scanTab), s);
   box.innerHTML = `<p><b>${esc(s.name)}</b> ${esc(s.description)}: ${tr.pass ? '<span class="up"><b>tüm hızlı adımları geçti</b></span>' : '<span class="down"><b>elendi</b></span>'}</p><div class="tw"><table><thead><tr><th style="text-align:left">Adım</th><th>Değer</th><th>Sonuç</th></tr></thead><tbody>${tr.steps.map(x => `<tr><td style="text-align:left;white-space:normal">${esc(x.name)}${x.first ? " <b class='down'>← ilk elendiği adım</b>" : ""}</td><td>${esc(x.txt)}</td><td>${x.ok ? '<span class="up">geçti</span>' : '<span class="down">elendi</span>'}</td></tr>`).join("")}</tbody></table></div>`;
 }
-function bebekInfoHtml() {
+function ipoInfoHtml() {
   const baby = UNIVERSE.filter(s => s.ok && s.fbt && ageDaysOf(s) <= 365), perfs = baby.map(s => s.ipoperf != null ? s.ipoperf : (s.ipop ? (s.close / s.ipop - 1) * 100 : null)).filter(x => x != null).sort((a, b) => a - b);
   const med = perfs.length ? perfs[Math.floor(perfs.length / 2)] : null, below = perfs.filter(x => x < 0).length;
   const pr = IPOR && IPOR.profile, ts = IPOR && IPOR.tavan_serisi;
@@ -1202,6 +1204,7 @@ function scanHowHtml() {
       ${row("Günlük (G)", "Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getiri sıralaması", "1-5 gün · zamanlama", scanEv("wf:gunluk:rs"))}
       ${row("Haftalık (H)", "Haftalık trend (fiyat > SMA20 > SMA50), 6 ay zirveye yakınlık, haftalık SMA50 uzaklığı, DI+/DI−, RSI, CMF, 6 ay getiri; yarı ağırlıkla RS", "2-4 hafta · ana skor", scanEv("haftalik_lider_likit"))}
       ${row("Aylık (A)", "Uzun trend (SMA50 > SMA200), 52h yakınlık, aylık CMF, 6-12 ay getiri", "2-3 ay · bağlam", '<span class="mute">anlamlı çıkmadı: sinyal sayılmaz</span>')}</tbody></table></div>
+    <p class="note"><b>Bebek hisse taraması</b> farklı çalışır: fiyat skoruna değil <b>bilanço niteliğine</b> bakar (borç/özsermaye, özsermaye büyümesi, kârlı çeyrek sayısı, satış ve kâr büyümesi) ve henüz yükselmemiş olmayı arar. Bu temel koşullar geçmişte test edilemiyor (kanıtsız); fiyat tarafında ise geçmiş test "henüz yükselmemiş" hisselerin piyasanın gerisinde kaldığını gösterdiği için haftalık skor ≥ 50 trend onayı aranır, onayı olmayanlar gözlem listesindedir.</p>
     <p class="note">Skor = ilgili göstergelerin evrendeki yüzdelik sıralarının ortalaması. Birleşik skor = 0,25 G + 0,5 H + 0,25 A. Ayrıntılı kanıt: Zaman Taraması ve Tahmin Karnesi sayfaları.</p>
     <h3 style="margin:12px 0 4px">Komite ne yapar? <span class="mute" style="font-weight:400">(kural + yorum kısmı)</span></h3>
     <div class="tw"><table><thead><tr><th style="text-align:left">Efsane</th><th style="text-align:left">Neye bakar (aldığı veri)</th><th style="text-align:left">Olumlu oy için (güncel eşikler)</th><th style="text-align:left">Not</th></tr></thead><tbody>
@@ -1212,7 +1215,7 @@ function scanHowHtml() {
       ${row("Şeytanın Avukatı", "Risk: stop olasılığı (Monte Carlo), oynaklık, likidite, bilanço yakınlığı, FOMO, sektör yoğunlaşması, rejim", `bayrak sayısı < ${P("dFlags")}; veto: bilanço ≤ 2 gün, çıkış likiditesi zayıf, stop olasılığı ≥ %65`, "Oy hakkı yalnızca olumsuz/veto")}</tbody></table></div>
     <p class="note"><b>Komite skoru</b> = dört efsanenin oylarının toplamı (+1/0/−1) ve Şeytan'ın olumsuz oyu. ≥ 3 GÜÇLÜ ADAY, 2 ADAY, 1 İZLE, 0/−1 NÖTR, ≤ −2 UZAK DUR; veto varsa güçlü aday olamaz. Efsane kurallarının eşikleri <b>Efsane Kuralları</b> sayfasından değişir. Komite, taramaların yerine geçmez: tarama "kim potansiyelli", komite "neden/neden değil ve nasıl riskleneriz" sorusunu yanıtlar.</p>
     <h3 style="margin:12px 0 4px">Hangi kısım ne kadar güvenilir?</h3>
-    <ul class="note"><li><b>En sağlam:</b> haftalık skor ve zayıf hisseleri elemek (geçmiş testte iki yarıda, geniş evrende ve görülmemiş dönemde tutarlı).</li><li><b>Orta:</b> günlük RS (kısa vade, küçük avantaj; maliyet yüzünden ≥ 3-5 gün tutmak gerekir).</li><li><b>Kanıtsız / bağlam:</b> aylık skor, adil değer (ucuz/pahalı), Buffett kalite filtresi, bebek hisse koşulları (küçük örnek).</li><li><b>Yorum:</b> efsane metinleri kuralların okunaklı anlatımıdır; ek bilgi katmaz.</li></ul>
+    <ul class="note"><li><b>En sağlam:</b> haftalık skor ve zayıf hisseleri elemek (geçmiş testte iki yarıda, geniş evrende ve görülmemiş dönemde tutarlı).</li><li><b>Orta:</b> günlük RS (kısa vade, küçük avantaj; maliyet yüzünden ≥ 3-5 gün tutmak gerekir).</li><li><b>Kanıtsız / bağlam:</b> aylık skor, adil değer (ucuz/pahalı), Buffett kalite filtresi, bebek hisse bilanço koşulları, halka arz koşulları (küçük örnek).</li><li><b>Yorum:</b> efsane metinleri kuralların okunaklı anlatımıdır; ek bilgi katmaz.</li></ul>
     <p class="note">Canlı doğrulama: Tahmin Karnesi sayfası skorların gerçek sonuçlarını her gün biriktirir; bir bulgu canlıda tutmazsa Skor Sağlığı uyarı verir.</p>`;
 }
 document.addEventListener("click", e => {
@@ -1226,6 +1229,65 @@ document.addEventListener("change", e => {
   const all = store.get("scanP", {}) || {}; all[scanTab] = {...(all[scanTab] || {}), [k]: +e.target.value}; store.set("scanP", all); store.set("scanParOpen", true); renderScan();
 });
 document.addEventListener("keydown", e => { if (view === "tarama" && e.key === "Enter" && e.target.id === "scanQ") { store.set("scanQ", e.target.value); scanTraceShow(e.target.value); } });
+
+/* ---------- Halka Arz: yeni halka arzlar (otomatik) + yaklaşan halka arzlar (elle takip) ---------- */
+const IPOU = () => store.get("ipoUpcoming", []);
+const IPO_LINKS = [["SPK Bülteni (onaylar)", "https://spk.gov.tr/spk-bultenleri"], ["KAP (satış duyuruları)", "https://www.kap.org.tr/tr/"], ["Halka Arz Takvimi (halkarz.com)", "https://halkarz.com/"], ["Rota Borsa halka arz takvimi", "https://rotaborsa.com/2026-halka-arz-takvimi/"]];
+let ipoWin = store.get("ipoWin", 12);
+function ipoState(u, now) {
+  const d0 = u.start ? new Date(u.start + "T09:00:00").getTime() : null, d1 = u.end ? new Date(u.end + "T17:00:00").getTime() : d0;
+  if (d0 == null) return ["Tarih yok", "mute"]; if (now < d0) return [`${fmt((d0 - now) / 864e5, 0)} gün sonra talep`, ""]; if (now <= d1) return ["TALEP TOPLANIYOR", "up"]; return ["Talep bitti (listeleme bekleniyor)", "mute"];
+}
+function renderIpo() {
+  const el = $("ipoView"); if (!UNIVERSE.length) { el.innerHTML = "<h2>Halka Arz</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
+  if (!IPOR && !renderIpo.tried) { renderIpo.tried = true; loadAux().then(() => { if (view === "halkaarz") renderIpo(); }); }
+  const now = Date.now(), up = IPOU().slice().sort((a, b) => (a.start || "9").localeCompare(b.start || "9")), win = ipoWin * 30.4;
+  const listed = UNIVERSE.filter(s => s.ok && s.fbt && ageDaysOf(s) <= win).sort((a, b) => b.fbt - a.fbt);
+  const perfOf = s => s.ipoperf != null ? s.ipoperf : (s.ipop ? (s.close / s.ipop - 1) * 100 : null), perfs = listed.map(perfOf).filter(x => x != null).sort((a, b) => a - b);
+  const med = perfs.length ? perfs[Math.floor(perfs.length / 2)] : null, below = perfs.filter(x => x < 0).length;
+  const sc = runScan("halkaarz", scanP("halkaarz"), {skipLazy: true}).list;
+  const pr = IPOR && IPOR.profile, ts = IPOR && IPOR.tavan_serisi, IS = (IPOR && IPOR.stocks) || {};
+  const sectors = [...new Set(UNIVERSE.map(s => trSector(s.sector)))].sort((a, b) => a.localeCompare(b, "tr"));
+  el.innerHTML = `<h2>Halka Arz <span class="sub">yeni halka arzlar · yaklaşan halka arzlar · geçmiş davranış</span></h2>
+    <p class="note">Bu sayfadaki <b>yeni halka arzlar</b> TradingView verisinden otomatik gelir. <b>Yaklaşan halka arzlar</b> için resmi bir veri akışı olmadığından takvimi siz ekleyin (aşağıdaki kaynaklardan doğrulayın); uygulama geri sayım, durum ve değerlendirme hesabını yapar. Eğitim amaçlıdır, yatırım tavsiyesi değildir; halka arzlarda lot dağıtımı, tavan serisi ve çözülme riskleri vardır.</p>
+    <h3 style="margin:12px 0 4px">1) Yaklaşan halka arzlar <span class="mute" style="font-weight:400">(sizin takvim listeniz)</span></h3>
+    <div style="margin:4px 0">Kaynaklar: ${IPO_LINKS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener" style="color:var(--accent2)">${n} ↗</a>`).join(" · ")}</div>
+    <div class="card" style="background:var(--panel2);margin:8px 0"><b>Halka arz ekle</b><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:8px">
+      <label>Şirket<input id="ipN" style="width:170px" placeholder="Örn. Örnek Enerji A.Ş."></label><label>Kod<input id="ipC" style="width:80px" placeholder="ORNEK"></label><label>SPK onayı<input id="ipA" type="date"></label>
+      <label>Talep başlangıç<input id="ipS" type="date"></label><label>Talep bitiş<input id="ipE" type="date"></label><label>Arz fiyatı (TL)<input id="ipP" type="number" step="any" style="width:90px"></label>
+      <label>Büyüklük (mn TL)<input id="ipZ" type="number" step="any" style="width:100px"></label><label>Dağıtım<select id="ipD"><option>Eşit</option><option>Oransal</option><option>Karma</option></select></label><label>Not<input id="ipT" style="width:170px"></label><button class="pbtn" data-ipadd="1">Ekle</button></div></div>
+    ${up.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Şirket</th><th>SPK onayı</th><th>Talep</th><th>Fiyat</th><th>Büyüklük</th><th>Dağıtım</th><th style="text-align:left">Durum</th><th style="text-align:left">Not</th><th></th></tr></thead><tbody>${up.map(u => { const [st, c] = ipoState(u, now); return `<tr><td style="text-align:left"><b>${esc(u.name)}</b>${u.code ? ` <span class="pill">${esc(u.code)}</span>` : ""}</td><td>${esc(u.appr || "–")}</td><td>${esc(u.start || "–")}${u.end && u.end !== u.start ? " → " + esc(u.end) : ""}</td><td>${u.price ? fmt(u.price) : "–"}</td><td>${u.size ? fmt(u.size, 0) + " mn" : "–"}</td><td>${esc(u.dist || "")}</td><td style="text-align:left" class="${c}"><b>${st}</b></td><td style="text-align:left;white-space:normal">${esc(u.note || "")}</td><td><button data-ipdel="${u.id}">✕</button></td></tr>`; }).join("")}</tbody></table></div>` : '<p class="mute">Henüz takip ettiğiniz halka arz yok.</p>'}
+    <details class="meet"><summary>🧮 Halka arz değerlendirme hesabı (arz fiyatı sektöre göre pahalı mı?)</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Arz fiyatı (TL)<input id="ivP" type="number" step="any" style="width:100px"></label><label>Tahmini hisse başı kâr (TL, 12 ay)<input id="ivE" type="number" step="any" style="width:110px"></label><label>Hisse başı defter değeri (TL)<input id="ivB" type="number" step="any" style="width:110px"></label>
+        <label>Sektör<select id="ivS">${sectors.map(n => `<option>${esc(n)}</option>`).join("")}</select></label><button data-ivcalc="1">Hesapla</button></div><div id="ivOut" class="note"></div></details>
+    <h3 style="margin:14px 0 4px">2) Yeni halka arzlar <span class="mute" style="font-weight:400">(${listed.length} hisse · son ${ipoWin} ay)</span></h3>
+    <div class="tabs">${[6, 12, 24].map(m => `<button class="tab ${ipoWin === m ? "on" : ""}" data-ipwin="${m}">Son ${m} ay</button>`).join("")}</div>
+    <p class="note">${med != null ? `Arz fiyatına göre medyan <b class="${sign(med)}">${sgnTxt(med)}</b>; ${below}/${perfs.length} hisse arz fiyatının altında. ` : ""}${ts ? `Geçmiş örnekte (${IPOR.n_ipo} halka arz) ${ts.en_az_1} hissede ilk günlerde tavan serisi görüldü (ortalama ${fmt(ts.ortalama_gun, 1)} gün); tavandaki hisse kuyrukta olduğundan alınamaz.` : ""}</p>
+    ${listed.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Listeleme</th><th>Yaş (gün)</th><th>Arz fiyatı</th><th>Şimdi</th><th title="Arz fiyatına göre">Arza göre</th><th title="İlk işlem gününden itibaren art arda tavan">Tavan serisi</th><th title="İlk kapanışa göre 20. gün">20. gün</th><th title="İlk kapanışa göre 60. gün">60. gün</th><th>Zirveden</th><th>1 ay</th><th>Float</th><th>Değer</th><th>G·H·A</th></tr></thead><tbody>${listed.map(s => { const x = IS[s.name], pf = perfOf(s), dd = s.h52 > 0 ? (1 - s.close / s.h52) * 100 : null;
+      return `<tr data-x="${esc(s.name)}"><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${new Date(s.fbt * 1000).toLocaleDateString("tr-TR")}</td><td>${fp(ageDaysOf(s), 0)}</td><td>${s.ipop ? fmt(s.ipop) : "–"}</td><td>${fmt(s.close)}</td><td>${pf == null ? "–" : sgn(pf, 0)}</td><td>${x ? x.tavan + " gün" : "–"}</td><td>${x && x.r20 != null ? sgn(x.r20, 0) : "–"}</td><td>${x && x.r60 != null ? sgn(x.r60, 0) : "–"}</td><td>−%${fp(dd, 0)}</td><td class="${sign(s.p1m)}">${fp(s.p1m, 0)}%</td><td>${s.ff != null ? "%" + fp(s.ff, 0) : "–"}</td><td>${cheapBadge(s)}</td><td>${mtfCell(s)}</td></tr>`; }).join("")}</tbody></table></div>` : '<p class="mute">Bu dönemde halka arz yok.</p>'}
+    <h3 style="margin:14px 0 4px">3) Halka arzlar nasıl davranıyor? <span class="mute" style="font-weight:400">(${IPOR ? IPOR.n_ipo + " halka arz, son ~3 yıl" : "veri yok"})</span></h3>
+    ${pr && pr["60"] ? `<div class="tw"><table><thead><tr><th>İlk işlem gününden sonra</th>${["5", "20", "60", "120"].map(d => `<th>${d}. gün</th>`).join("")}</tr></thead><tbody><tr><td style="text-align:left">Medyan getiri (ilk kapanışa göre)</td>${["5", "20", "60", "120"].map(d => `<td>${pr[d] ? sgn(pr[d].median, 0) : "–"}</td>`).join("")}</tr><tr><td style="text-align:left">İlk kapanışın üstünde kalan</td>${["5", "20", "60", "120"].map(d => `<td>${pr[d] ? "%" + fmt(pr[d].above, 0) : "–"}</td>`).join("")}</tr></tbody></table></div>` : ""}
+    ${IPOR && IPOR.cond ? `<div class="tw"><table><thead><tr><th style="text-align:left">Koşul (20 gün, piyasaya göre fazla getiri)</th><th>Gözlem</th><th>Hisse</th><th>Fazla</th><th>Maliyet sonrası</th><th>İsabet</th></tr></thead><tbody>${["Yaş 20-60 gün", "Yaş 60-120 gün", "Yaş 120-250 gün", "Zirveden ≥ %40 düşmüş", "Zirveden < %20 düşmüş", "Aylık momentum > 0", "Aylık momentum < 0", "Momentum > 0 ve zirveye yakın (<%20)"].map(k => { const e = IPOR.cond[k]; return e && e.excess != null ? `<tr><td style="text-align:left">${esc(k)}</td><td>${e.n}</td><td>${e.hisse}</td><td>${sgn(e.excess)}</td><td>${sgn(e.net)}</td><td>%${fmt(e.hit, 0)}</td></tr>` : ""; }).join("")}</tbody></table></div>
+    <p class="note">Örnek küçüktür (onlarca halka arz, örtüşen gözlemler): ipucu olarak okuyun. Bulgu, genel sistemle aynı yönde: zirveye yakın ve momentumu pozitif halka arzlar piyasayı geçti, zirveden %40+ düşenler geride kaldı.</p>` : ""}
+    <h3 style="margin:14px 0 4px">4) Halka arz taraması <span class="mute" style="font-weight:400">(${sc.length} aday)</span></h3>
+    ${sc.length ? `<div class="tw"><table><thead><tr><th>#</th><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th>G·H·A</th><th>Değer</th><th>Yaş (gün)</th><th>Arz fiyatı</th><th>Zirveden</th><th>1 ay</th><th>Float</th><th>Plan</th><th>Komite</th></tr></thead><tbody>${sc.slice(0, 20).map((s, i) => scanRowHtml("halkaarz", s, i)).join("")}</tbody></table></div>` : '<p class="mute">Şu an çözülmemiş (zirvesine %20 içinde) ve momentumu pozitif halka arz yok.</p>'}
+    <p><button data-scanopen="halkaarz">Eşikleri ve eleme hattını aç →</button></p>`;
+}
+document.addEventListener("click", e => {
+  if (view !== "halkaarz") return;
+  const w = e.target.closest("[data-ipwin]"); if (w) { ipoWin = +w.dataset.ipwin; store.set("ipoWin", ipoWin); renderIpo(); return; }
+  if (e.target.closest("[data-ipadd]")) { const n = ($("ipN").value || "").trim(); if (!n) { toast("Şirket adı girin"); return; } const a = IPOU(); a.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: n, code: ($("ipC").value || "").trim().toUpperCase(), appr: $("ipA").value, start: $("ipS").value, end: $("ipE").value, price: +$("ipP").value || null, size: +$("ipZ").value || null, dist: $("ipD").value, note: $("ipT").value.trim()}); store.set("ipoUpcoming", a); renderIpo(); return; }
+  const d = e.target.closest("[data-ipdel]"); if (d) { store.set("ipoUpcoming", IPOU().filter(x => x.id !== d.dataset.ipdel)); renderIpo(); return; }
+  if (e.target.closest("[data-ivcalc]")) {
+    const p = +$("ivP").value, eps = +$("ivE").value, bv = +$("ivB").value, sec = $("ivS").value, st = Object.values(SECTOR_STATS).length ? SECTOR_STATS[Object.keys(SECTOR_STATS).find(k => trSector(k) === sec) || ""] : null, out = [];
+    if (!(p > 0)) { $("ivOut").innerHTML = "Arz fiyatını girin."; return; }
+    if (eps > 0) { const pe = p / eps; out.push(`Arz F/K: <b>${fmt(pe, 1)}x</b>${st && st.medPe ? ` · sektör medyanı ${fmt(st.medPe, 1)}x → arz ${pe < st.medPe ? `<span class="up">%${fmt((1 - pe / st.medPe) * 100, 0)} iskontolu</span>` : `<span class="down">%${fmt((pe / st.medPe - 1) * 100, 0)} primli</span>`}` : ""}${UNIVERSE.length ? ` · tüm piyasa medyanı ${fmt(UNIVERSE.filter(s => s.pe > 0 && s.tl >= 10).map(s => s.pe).sort((a, b) => a - b)[Math.floor(UNIVERSE.filter(s => s.pe > 0 && s.tl >= 10).length / 2)], 1)}x` : ""}`); }
+    if (bv > 0) { const pb = p / bv; out.push(`Arz PD/DD: <b>${fmt(pb, 2)}x</b>${st && st.medPb ? ` · sektör medyanı ${fmt(st.medPb, 2)}x → ${pb < st.medPb ? `<span class="up">iskontolu</span>` : `<span class="down">primli</span>`}` : ""}`); }
+    const prf = UNIVERSE.filter(s => s.fbt && ageDaysOf(s) <= 365).map(s => s.ipoperf != null ? s.ipoperf : (s.ipop ? (s.close / s.ipop - 1) * 100 : null)).filter(x => x != null);
+    if (prf.length) out.push(`Son 1 yılın halka arzlarında bugünkü fiyat arz fiyatının altında olanların oranı: <b>%${fmt(prf.filter(x => x < 0).length / prf.length * 100, 0)}</b> (n ${prf.length}). Tavan serisinden sonra çözülme sık görülür; ilk gün alıcı olmak yerine 20. gün sonrası davranışı izlemek ("Yeni halka arzlar" tablosu) geçmişte daha sağlıklıydı.`);
+    $("ivOut").innerHTML = out.join("<br>") || "Kâr ya da defter değeri girin.";
+  }
+});
 
 /* ---------- Uyarı Merkezi ---------- */
 const alertAck = () => store.get("alertAck", {});
@@ -2901,6 +2963,7 @@ function refreshView() {
   else if (view === "zaman") renderZaman();
   else if (view === "gunici") renderGunIci();
   else if (view === "tarama") renderScan();
+  else if (view === "halkaarz") renderIpo();
   else if (view === "gunluk") renderJournal();
   else if (view === "risk") renderRisk();
   else if (view === "takvim") renderCalendarPage();
@@ -3100,7 +3163,7 @@ if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(esc
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "tarama", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

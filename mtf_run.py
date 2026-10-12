@@ -31,6 +31,7 @@ except Exception as e:
 try:
     import limit_research
     limit_research.main()
+    subprocess.run([sys.executable, str(HERE / "pull_ipo.py"), "--if-stale"], check=False, timeout=900)
     import ipo_research
     ipo_research.main()
 except Exception as e:
