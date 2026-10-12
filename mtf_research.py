@@ -185,7 +185,15 @@ def main():
             res["tests"][tf][k] = e
             if e:
                 print(f"{k:18}{e['n']:>5}{e['ic']:>8}{e['t']:>7}{e['spread']:>9}{e['pos']:>9}{e['ic1']:>9}{e['ic2']:>9}{str(e.get('ic_bull')):>9}{str(e.get('ic_bear')):>8}")
-    OUT.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    def clean(o):  # NaN geçerli JSON değildir; tarayıcı okuyamaz
+        if isinstance(o, float) and o != o:
+            return None
+        if isinstance(o, dict):
+            return {k: clean(v) for k, v in o.items()}
+        if isinstance(o, list):
+            return [clean(v) for v in o]
+        return o
+    OUT.write_text(json.dumps(clean(res), ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     return res, feats, fwd, regime
 
 

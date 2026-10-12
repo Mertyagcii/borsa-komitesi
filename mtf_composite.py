@@ -122,7 +122,10 @@ def main():
             res["events"][k][str(h)] = e
             if e:
                 print(f"{k:18}{h:>4}g n={e['n']:>5} fazla={e['excess']:>6} isabet={e['win']:>5} t={e['t']:>5} y1={e['h1']} y2={e['h2']} boga={e.get('bull')} ayi={e.get('bear')}")
-    (HERE / "mtf_composite.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    from mtf_research import json as _j
+    txt = json.dumps(res, ensure_ascii=False, separators=(",", ":"))
+    assert "NaN" not in txt, "NaN"
+    (HERE / "mtf_composite.json").write_text(txt, encoding="utf-8")
 
 
 if __name__ == "__main__":

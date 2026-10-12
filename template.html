@@ -801,7 +801,117 @@ const ZINFO = {
   akis: ["Para girişi: günlük ve haftalık CMF pozitif, hacim ortalamanın üstünde. CMF günlük göstergeler içinde en tutarlı olanıydı (iki yarıda ve boğa/ayıda pozitif) ama etkisi küçüktür.", "gunluk"],
   topar: ["Haftalık orta, günlük güçlü, para girişi var: dipten dönüş adayları. TEST EDİLDİ ve kanıt çıkmadı: 20 günde +%1,0 (t = 1,4), ilk yarıda ≈ 0, ayı rejiminde negatif. Fırsat değil, yalnızca izleme listesidir; bu gruba alım yapmayın.", null],
 };
+/* ---- Göstergeler: ne ölçer, neden bakıyoruz, kanıtı ne ---- */
+const FEAT_INFO = {
+  "CMF (para akışı)": ["Chaikin Para Akışı (20 gün): kapanışın günlük aralıktaki yeri × hacim. + ise alıcı, − ise satıcı baskın.", "Fiyatın hareketini hacmin yönü doğrular. Günlük göstergeler içinde en tutarlı olanıydı.", ["gunluk", "cmf20"]],
+  "RSI (momentum, aşırı satım değil)": ["14 günlük RSI: yükselen günlerin gücü / düşenlerin gücü.", "BIST'te yüksek RSI (momentum) düşük RSI'dan (aşırı satım) daha iyi sonuç verdi; 'RSI < 30'da al' kaybettirdi. Bu yüzden RSI yüksek = iyi.", ["gunluk", "rsi14"]],
+  "DI+ − DI− (yön)": ["ADX sisteminde yukarı yönlü ile aşağı yönlü hareketin farkı.", "Trendin yönünü ölçer (ADX gücü, DI yönü). Pozitif fark yükseliş baskısı demektir.", ["gunluk", "dmi14"]],
+  "Fiyat/SMA20 farkı": ["Fiyatın 20 günlük ortalamaya göre konumu.", "Kısa vadeli trendin üstünde olmak, devam eden güç belirtisi; ortalamadan çok uzaklaşma ise ayrıca risk (Şeytanın Avukatı bakar).", ["gunluk", "sma20_uzak"]],
+  "Haftalık trend (fiyat > SMA20 > SMA50)": ["Haftalık grafikte fiyat, 20 ve 50 haftalık ortalamanın üstünde ve sıralı mı?", "Araştırmada tek başına en güçlü gösterge: iki yarıda ve boğa/ayıda tutarlı. Ana yönü haftalık grafik belirler.", ["haftalik", "w_trend"]],
+  "6 aylık zirveye uzaklık": ["Fiyatın son 6 ayın en yükseğine oranı (0 = zirvede).", "Zirvelere yakın hisseler (lider hisseler) kırılım sonrası devam etme eğiliminde; zirveden uzak olanlar piyasanın gerisinde kaldı.", ["haftalik", "w_dist26"]],
+  "Fiyat/haftalık SMA50 farkı": ["Fiyatın 50 haftalık ortalamaya göre konumu.", "Orta vadeli trendin üstünde olmak; haftalık ufukta güçlü ve tutarlı bulundu.", ["haftalik", "w_sma30_uzak"]],
+  "Haftalık DI+ − DI−": ["Haftalık grafikte yön göstergesi farkı.", "Haftalık yükseliş baskısını ölçer; anlamlı ve tutarlı bulundu.", ["haftalik", "w_dmi"]],
+  "Haftalık RSI": ["Haftalık grafikte RSI.", "Haftalık momentum; yüksek olan hisseler 20 günde piyasayı geçti.", ["haftalik", "w_rsi14"]],
+  "Haftalık CMF": ["Haftalık grafikte para akışı.", "Haftalık hacim yönü. (Testte benzer ölçüt OBV idi; CMF onun yakın vekilidir, tek başına zayıf-orta.)", ["haftalik", "w_cmf10"]],
+  "6 ay getiri": ["Son 6 ayın fiyat değişimi.", "Orta vadeli momentum: kazananlar kazanmaya devam etme eğiliminde (momentum etkisi).", ["haftalik", "w_ret26"]],
+  "Uzun trend (SMA50 > SMA200)": ["Günlük grafikte 50 günlük ortalama 200 günlüğün üstünde mi?", "Uzun vadeli yükseliş trendi; aylık ufukta bağlam verir. (Aylık ufukta anlamlılık sınırda.)", ["aylik", "d_trend_200"]],
+  "52 hafta zirvesine uzaklık": ["Fiyatın 52 haftalık zirveye oranı.", "Yıllık zirveye yakın hisseler liderdir; araştırmada 52h yakınlığı en kanıtlı sinyallerden biriydi.", ["aylik", "d_dist52"]],
+  "Aylık CMF": ["Aylık grafikte para akışı.", "Uzun vadeli birikim/dağıtım. Aylık ufukta kanıt zayıf; bağlam içindir.", ["aylik", "m_cmf6"]],
+  "1 yıl getiri": ["Son 1 yılın fiyat değişimi.", "Uzun vadeli momentum; test edilmedi (veri 3 yıllık olduğundan güvenilir ölçülemedi).", null],
+};
+const ZTF = {d: ["Günlük", "1-5 gün", "zamanlama", "%25"], w: ["Haftalık", "2-4 hafta", "ana skor", "%50"], m: ["Aylık", "2-3 ay", "bağlam", "%25"]};
+function evText(key) {
+  if (!key || !MTFS) return '<span class="mute">test edilmedi</span>';
+  const e = MTFS.tests[key[0]] && MTFS.tests[key[0]][key[1]]; if (!e) return '<span class="mute">test edilmedi</span>';
+  const ok = e.t >= 2 && e.ic1 * e.ic2 > 0;
+  return `<span class="${ok ? "up" : "mute"}">${ok ? "kanıtlı" : "kanıtsız"}</span> <span class="mute">IC ${e.ic} · t ${fmt(e.t, 1)} · yarılar ${e.ic1}/${e.ic2}${e.ic_bull != null ? ` · boğa ${e.ic_bull}/ayı ${e.ic_bear ?? "–"}` : ""}</span>`;
+}
+function zExplainHtml() {
+  const tfs = zTab === "gun" ? ["d"] : zTab === "hafta" ? ["w"] : zTab === "ay" ? ["m"] : zTab === "akis" ? ["d", "w"] : ["d", "w", "m"];
+  const why = {uyum: "Üç zaman dilimi aynı yönü gösterince geçmişte en iyi ayrışma görüldü; her dilimin gösterge setini aşağıda görebilirsiniz.", hafta: "Haftalık skor araştırmanın en tutarlı bulgusu olduğu için ana skordur.", gun: "Günlük skor kısa vadeli zamanlama içindir; tek başına zayıftır.", ay: "Aylık skor uzun vadeli bağlam verir; bağımsız sinyal sayılmaz.", akis: "Para akışı sekmesi günlük ve haftalık CMF'ye ve hacme dayanır.", topar: "Haftalık orta + günlük güçlü + CMF pozitif: dönüş denemesi; kanıtsız."}[zTab] || "";
+  return `<details class="meet" style="margin-top:10px" open><summary>🔎 Bu sekmede neye bakılıyor ve neden?</summary><p class="note">${why}</p>${tfs.map(k => `<h3 style="margin:10px 0 4px">${ZTF[k][0]} skor <span class="mute" style="font-weight:400">· ufuk ${ZTF[k][1]} · rol: ${ZTF[k][2]} · birleşik skordaki ağırlık ${ZTF[k][3]}</span></h3>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th style="text-align:left">Ne ölçer?</th><th style="text-align:left">Neden bakıyoruz?</th><th style="text-align:left">Kanıt (BIST 2023-26)</th></tr></thead><tbody>${MTF_FEATS[k].map(([n]) => { const i = FEAT_INFO[n] || ["", "", null]; return `<tr><td style="text-align:left;white-space:normal"><b>${esc(n)}</b></td><td style="text-align:left;white-space:normal">${esc(i[0])}</td><td style="text-align:left;white-space:normal">${esc(i[1])}</td><td style="text-align:left;white-space:normal">${evText(i[2])}</td></tr>`; }).join("")}</tbody></table></div>`).join("")}
+    <p class="note">Skor = bu göstergelerin evren içindeki yüzdelik sıralarının ortalaması (0-100). Göstergelerin tek tek değerlerini hisse detayındaki "Bu skor neden böyle?" bölümünde görürsünüz. IC: gösterge sıralaması ile sonraki dönem fazla getirisi arasındaki korelasyon; "kanıtlı" = t ≥ 2 ve iki yarıda aynı yön.</p></details>`;
+}
+
+/* ---- Kendi filtrelerim: koşullar (hepsi birlikte sağlanmalı), kaydedilir, istenildiği kadar eklenir ---- */
+const smaPct = (s, k) => s[k] > 0 ? (s.close / s[k] - 1) * 100 : null;
+const ZFIELDS = [ // [id, ad, grup, işlev, biçim, kanıt anahtarı]
+  ["mtf_b", "Birleşik skor", "Skorlar", s => s.mtf && s.mtf.b, 0, null], ["mtf_d", "Günlük skor", "Skorlar", s => s.mtf && s.mtf.d, 0, ["comp", "gunluk"]],
+  ["mtf_w", "Haftalık skor", "Skorlar", s => s.mtf && s.mtf.w, 0, ["comp", "haftalik"]], ["mtf_m", "Aylık skor", "Skorlar", s => s.mtf && s.mtf.m, 0, ["comp", "aylik"]],
+  ["trend_w", "Haftalık trend (1 = evet)", "Trend", s => s.sma20_w > 0 && s.sma50_w > 0 ? (s.close > s.sma20_w && s.sma20_w > s.sma50_w ? 1 : 0) : null, 0, ["haftalik", "w_trend"]],
+  ["trend_d", "Uzun trend SMA50>SMA200 (1 = evet)", "Trend", s => trendUp(s) == null ? null : trendUp(s) ? 1 : 0, 0, ["aylik", "d_trend_200"]],
+  ["sma20d", "Fiyat / SMA20 farkı %", "Trend", s => smaPct(s, "sma20"), 1, ["gunluk", "sma20_uzak"]], ["sma50d", "Fiyat / SMA50 farkı %", "Trend", s => smaPct(s, "sma50"), 1, null],
+  ["sma200d", "Fiyat / SMA200 farkı %", "Trend", s => smaPct(s, "sma200"), 1, null], ["sma50w", "Fiyat / haftalık SMA50 farkı %", "Trend", s => smaPct(s, "sma50_w"), 1, ["haftalik", "w_sma30_uzak"]],
+  ["adx", "ADX günlük (trend gücü)", "Trend", s => s.adx, 0, null], ["adx_w", "ADX haftalık", "Trend", s => s.adx_w, 0, ["haftalik", "w_adx"]],
+  ["dmi", "DI+ − DI− günlük", "Trend", s => s.pdi != null && s.mdi != null ? s.pdi - s.mdi : null, 1, ["gunluk", "dmi14"]], ["dmi_w", "DI+ − DI− haftalık", "Trend", s => s.pdi_w != null && s.mdi_w != null ? s.pdi_w - s.mdi_w : null, 1, ["haftalik", "w_dmi"]],
+  ["rsi", "RSI günlük", "Momentum", s => s.rsi, 0, ["gunluk", "rsi14"]], ["rsi_w", "RSI haftalık", "Momentum", s => s.rsi_w, 0, ["haftalik", "w_rsi14"]], ["rsi_m", "RSI aylık", "Momentum", s => s.rsi_m, 0, ["aylik", "m_rsi14"]],
+  ["macd_h", "MACD histogram günlük", "Momentum", s => s.macd != null && s.macds != null ? s.macd - s.macds : null, 2, ["gunluk", "macd_hist"]], ["macd_hw", "MACD histogram haftalık", "Momentum", s => s.macd_w != null && s.macds_w != null ? s.macd_w - s.macds_w : null, 2, ["haftalik", "w_macd_hist"]],
+  ["stk", "Stokastik %K günlük", "Momentum", s => s.stk, 0, ["gunluk", "stoch14"]], ["stk_w", "Stokastik %K haftalık", "Momentum", s => s.stk_w, 0, ["haftalik", "w_stoch"]],
+  ["cci", "CCI günlük", "Momentum", s => s.cci, 0, null], ["wr", "Williams %R günlük", "Momentum", s => s.wr, 0, null], ["ao", "Awesome Osc. günlük", "Momentum", s => s.ao, 2, null],
+  ["chg", "Gün %", "Getiri", s => s.change, 1, null], ["pw", "Hafta %", "Getiri", s => s.pw, 1, null], ["p1m", "1 ay %", "Getiri", s => s.p1m, 1, null], ["p3m", "3 ay %", "Getiri", s => s.p3m, 1, null],
+  ["p6m", "6 ay %", "Getiri", s => s.p6m, 1, ["haftalik", "w_ret26"]], ["py", "1 yıl %", "Getiri", s => s.py, 1, null], ["dist52", "52h zirveye uzaklık %", "Getiri", s => s.dist52, 1, ["aylik", "d_dist52"]],
+  ["dist6", "6 ay zirveye uzaklık %", "Getiri", s => s.h6m > 0 ? (s.close / s.h6m - 1) * 100 : null, 1, ["haftalik", "w_dist26"]], ["rs", "Göreceli güç (RS)", "Getiri", s => s.rs, 0, null],
+  ["cmf", "CMF günlük", "Para akışı", s => s.cmf, 2, ["gunluk", "cmf20"]], ["cmf_w", "CMF haftalık", "Para akışı", s => s.cmf_w, 2, ["haftalik", "w_cmf10"]], ["cmf_m", "CMF aylık", "Para akışı", s => s.cmf_m, 2, ["aylik", "m_cmf6"]],
+  ["mfi", "MFI günlük", "Para akışı", s => s.mfi, 0, ["gunluk", "mfi14"]], ["mfi_w", "MFI haftalık", "Para akışı", s => s.mfi_w, 0, ["haftalik", "w_mfi14"]],
+  ["rvol", "Göreceli hacim (seans düzeltmeli)", "Hacim", s => s.rvol, 2, ["gunluk", "rvol"]], ["tl", "Günlük hacim (mn TL)", "Hacim", s => s.tl, 0, null],
+  ["vtr", "Hacim eğilimi (10g/60g)", "Hacim", s => s.av10 > 0 && s.av60 > 0 ? s.av10 / s.av60 : null, 2, null], ["ff", "Halka açıklık %", "Hacim", s => s.ff, 0, null],
+  ["atrp", "ATR % (oynaklık)", "Risk", s => s.atrPct, 1, null], ["beta", "Beta", "Risk", s => s.beta, 2, null],
+  ["pe", "F/K", "Temel", s => s.pe > 0 ? s.pe : null, 1, null], ["pb", "PD/DD", "Temel", s => s.pb, 2, null], ["roe", "ROE %", "Temel", s => s.roe, 1, null], ["dy", "Temettü verimi %", "Temel", s => s.dy, 2, null],
+  ["epsg", "EPS büyümesi %", "Temel", s => s.epsg, 0, null], ["upside", "Adil değere uzaklık % (+ ucuz)", "Temel", s => { const v = valuation(s); return v.upside; }, 0, null], ["mcap", "Piyasa değeri (milyar TL)", "Temel", s => s.mcap > 0 ? s.mcap / 1e9 : null, 1, null],
+  ["rec", "TradingView teknik tavsiye günlük (−1..+1)", "Tavsiye", s => s.rec, 2, null], ["rec_w", "TradingView tavsiye haftalık", "Tavsiye", s => s.rec_w, 2, null], ["rec_m", "TradingView tavsiye aylık", "Tavsiye", s => s.rec_m, 2, null],
+  ["tier", "Kurulum", "Kategori", s => { const x = mtfTier(s); return x ? x.id : null; }, "cat", null], ["sector", "Sektör", "Kategori", s => trSector(s.sector), "cat", null],
+];
+const ZFD = Object.fromEntries(ZFIELDS.map(([id, name, grp, get, dec, ev]) => [id, {id, name, grp, get, dec, ev, cat: dec === "cat"}]));
+const ZTPL = [
+  ["Sağlam lider", "Haftalık lider, para girişi var, likit, zirveden uzak değil", [["mtf_w", ">=", 80], ["cmf", ">=", 0], ["tl", ">=", 15], ["dist6", ">=", -10]], "mtf_w"],
+  ["Para girişi + hacim", "Alıcı baskın, hacim canlı, günlük skor iyi", [["cmf", ">=", 0.1], ["cmf_w", ">=", 0], ["rvol", ">=", 1.5], ["mtf_d", ">=", 60]], "cmf"],
+  ["Güçlü ve ucuz", "Haftalık skor iyi, adil değerin altında, makul F/K", [["mtf_w", ">=", 70], ["upside", ">=", 20], ["pe", "<=", 15], ["tl", ">=", 10]], "upside"],
+  ["Sakin trend", "Haftalık trend yukarı, oynaklık düşük", [["trend_w", "=", 1], ["atrp", "<=", 3], ["mtf_w", ">=", 70], ["tl", ">=", 10]], "mtf_w"],
+];
+let zNewOpen = false;
+const zFilters = () => store.get("zFilters", []);
+const zSaveF = a => store.set("zFilters", a);
+const zCustom = () => zTab.startsWith("f:") ? zFilters().find(f => "f:" + f.id === zTab) || null : null;
+function zPass(s, c) {
+  const F = ZFD[c.f]; if (!F) return true; const v = F.get(s);
+  if (F.cat) return c.op === "!=" ? String(v) !== String(c.v) : String(v) === String(c.v);
+  if (v == null || Number.isNaN(v)) return false;
+  const x = +c.v; return c.op === ">=" ? v >= x : c.op === "<=" ? v <= x : Math.abs(v - x) < 1e-6;
+}
+const zFmt = (F, v) => v == null || Number.isNaN(v) ? "–" : F.cat ? (F.id === "tier" ? (MTF_TIERS[v] ? MTF_TIERS[v].label : v) : String(v)) : fmt(v, F.dec);
+function zNewFilter(tpl) {
+  const a = zFilters(), id = Date.now().toString(36), t = tpl ? ZTPL[tpl] : null;
+  a.push({id, name: t ? t[0] : `Filtre ${a.length + 1}`, conds: (t ? t[2] : [["mtf_w", ">=", 70]]).map(([f, op, v]) => ({f, op, v})), sort: {f: t ? t[3] : "mtf_b", dir: -1}});
+  zSaveF(a); zTab = "f:" + id; store.set("zTab", zTab); renderZaman();
+}
+function zEditorHtml(cf) {
+  const groups = [...new Set(ZFIELDS.map(f => f[2]))];
+  const fieldSel = (cur, i) => `<select data-zf="f" data-i="${i}">${groups.map(g => `<optgroup label="${g}">${ZFIELDS.filter(f => f[2] === g).map(f => `<option value="${f[0]}" ${cur === f[0] ? "selected" : ""}>${esc(f[1])}</option>`).join("")}</optgroup>`).join("")}</select>`;
+  const valIn = (c, i) => { const F = ZFD[c.f];
+    if (c.f === "tier") return `<select data-zf="v" data-i="${i}">${Object.entries(MTF_TIERS).map(([k, v]) => `<option value="${k}" ${c.v === k ? "selected" : ""}>${v.label}</option>`).join("")}</select>`;
+    if (c.f === "sector") { const secs = [...new Set(UNIVERSE.map(s => trSector(s.sector)))].sort((a, b) => a.localeCompare(b, "tr")); return `<select data-zf="v" data-i="${i}">${secs.map(n => `<option ${c.v === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`; }
+    return `<input type="number" step="any" data-zf="v" data-i="${i}" value="${esc(c.v)}" style="width:100px">`; };
+  const badge = c => { const F = ZFD[c.f]; if (!F || F.cat) return "";
+    if (F.ev && F.ev[0] === "comp") { const e = MTFR && MTFR.tests && MTFR.tests[F.ev[1]] && MTFR.tests[F.ev[1]][{gunluk: "5", haftalik: "20", aylik: "60"}[F.ev[1]]]; if (!e) return ""; const ok = e.t >= 2 && e.h1 * e.h2 > 0; return `<span style="font-size:12px"><span class="${ok ? "up" : "mute"}">${ok ? "kanıtlı" : "kanıtsız"}</span> <span class="mute">bileşik skor · t ${fmt(e.t, 1)} · yarılar ${e.h1}/${e.h2}</span></span>`; }
+    return `<span style="font-size:12px">${evText(F.ev)}</span>`; };
+  const sortF = cf.sort || {f: "mtf_b", dir: -1};
+  return `<div class="card" style="background:var(--panel2);margin:10px 0"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"><label>Filtre adı<input data-zf="name" value="${esc(cf.name)}" style="width:200px"></label>
+    <label>Sırala<select data-zf="sortf">${ZFIELDS.filter(f => !ZFD[f[0]].cat).map(f => `<option value="${f[0]}" ${sortF.f === f[0] ? "selected" : ""}>${esc(f[1])}</option>`).join("")}</select></label>
+    <label>Yön<select data-zf="sortd"><option value="-1" ${sortF.dir < 0 ? "selected" : ""}>Büyükten küçüğe</option><option value="1" ${sortF.dir > 0 ? "selected" : ""}>Küçükten büyüğe</option></select></label>
+    <button data-zdup="1">⧉ Kopyala</button><button data-zdel="1" style="color:var(--down)">🗑 Sil</button><button data-zexp="1">📤 Dışa aktar</button><button data-zimp="1">📥 İçe aktar</button></div>
+    <div style="margin-top:10px"><b>Koşullar</b> <span class="mute">(hepsi birlikte sağlanmalı · değişiklikler otomatik kaydedilir)</span></div>
+    ${cf.conds.map((c, i) => `<div class="zrow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0">${fieldSel(c.f, i)}<select data-zf="op" data-i="${i}">${(ZFD[c.f] && ZFD[c.f].cat ? [["=", "="], ["!=", "≠"]] : [[">=", "≥"], ["<=", "≤"], ["=", "="]]).map(([k, n]) => `<option value="${k}" ${c.op === k ? "selected" : ""}>${n}</option>`).join("")}</select>${valIn(c, i)}${badge(c)}<button data-zcdel="${i}" title="Koşulu sil">✕</button></div>`).join("") || "<p class='mute'>Koşul yok: tüm hisseler listelenir.</p>"}
+    <div style="margin-top:6px"><button data-zcadd="1">＋ Koşul ekle</button></div>
+    <p class="note">Rozetler her göstergenin tek başına geçmiş kanıtını gösterir. Birden çok koşulu birleştirmek (ve kendi eşiklerinizi seçmek) ayrıca TEST EDİLMEMİŞTİR: çok sayıda koşul geçmişe aşırı uyum riski taşır ve hisse sayısını hızla azaltır.</p></div>`;
+}
 function zRows() {
+  if (zTab.startsWith("f:")) {
+    const cf = zCustom(); if (!cf) return [];
+    const F = ZFD[(cf.sort || {}).f] || ZFD.mtf_b, dir = (cf.sort || {dir: -1}).dir;
+    return UNIVERSE.filter(s => s.ok && s.tl >= zMin && (!zSec || trSector(s.sector) === zSec) && cf.conds.every(c => zPass(s, c)))
+      .sort((a, b) => { const x = F.get(a), y = F.get(b); return dir * ((x ?? (dir > 0 ? 1e12 : -1e12)) - (y ?? (dir > 0 ? 1e12 : -1e12))); });
+  }
   const el = UNIVERSE.filter(s => s.mtf && s.mtf.w != null && s.tl >= zMin && (!zSec || trSector(s.sector) === zSec));
   const tier = s => mtfTier(s).id;
   let a, key;
@@ -816,13 +926,14 @@ function zRows() {
 function renderZaman() {
   if (!UNIVERSE.length) { $("zView").innerHTML = "<p class='mute'>Veri bekleniyor…</p>"; return; }
   const all = UNIVERSE.filter(s => s.mtf && s.mtf.w != null), cnt = {}; all.forEach(s => { const t = mtfTier(s); cnt[t.id] = (cnt[t.id] || 0) + 1; });
-  const rows = zRows(), shown = rows.slice(0, zTop), [info, tkey] = ZINFO[zTab];
+  const cf = zCustom(); if (zTab.startsWith('f:') && !cf) { zTab = 'uyum'; store.set('zTab', zTab); }
+  const rows = zRows(), shown = rows.slice(0, zTop), [info, tkey] = cf ? ["Kendi filtreniz: aşağıdaki koşulların hepsini sağlayan hisseler. Bu filtre geçmişte test edilmedi; koşulların yanındaki rozetler her göstergenin tek başına kanıt durumunu gösterir.", null] : ZINFO[zTab];
   const secs = [...new Set(UNIVERSE.map(s => trSector(s.sector)))].sort((a, b) => a.localeCompare(b, "tr"));
   const ev = MTFR && tkey && MTFR.tests[tkey];
   const evH = tkey === "gunluk" ? "5" : tkey === "aylik" ? "60" : "20", e = ev && ev[evH];
   const evLine = e ? `<p class="note">Geçmiş test (${MTFR.stocks} hisse, ${MTFR.from} → ${MTFR.to}): en iyi %10 dilimi ${evH} günde piyasa ortalamasının <b>${e.top10 > 0 ? "+" : ""}${fmt(e.top10, 2)}%</b> üstünde (en kötü %20: ${fmt(e.bot20, 2)}%), isabet (piyasayı yenme oranı) <b>%${fmt(e.hit, 0)}</b>, t = ${fmt(e.t, 1)}; ilk yarı ${fmt(e.h1, 2)}% / ikinci yarı ${fmt(e.h2, 2)}%${e.bull != null ? `; boğada ${fmt(e.bull, 2)}%, ayıda ${e.bear != null ? fmt(e.bear, 2) + "%" : "–"}` : ""}.</p>` : "";
   const regime = REGIME ? `<div class="note" style="border-left:3px solid var(--warn);padding-left:10px;margin:8px 0">Piyasa rejimi: <b>${REGIME.label}</b> · hisselerin %${fmt(REGIME.a50, 0)}'i SMA50, %${fmt(REGIME.a200, 0)}'i SMA200 üstünde. ${REGIME.trend === "bear" ? "Ayı piyasasında eski 'güçlü aday' süzgeci (4 efsaneden 3'ü onaylamalı) neredeyse hiç hisse bırakmaz; bu sayfa mutlak değil GÖRECELİ güce bakar: piyasanın gerisindekileri eler, öndekileri sıralar. Skorların avantajı piyasa ortalamasına göredir; hisse piyasadan iyi olsa da mutlak getirisi eksi olabilir." : ""}</div>` : "";
-  const T = id => MTF_TIERS[id].label;
+  const T = id => MTF_TIERS[id].label, xcols = cf ? [...new Set(cf.conds.map(c => c.f))].filter(f => ZFD[f] && !['mtf_b', 'mtf_d', 'mtf_w', 'mtf_m', 'cmf'].includes(f)).slice(0, 4).map(f => ZFD[f]) : [];
   const evk = {uyum: "uyumlu", hafta: "haftalik_lider", topar: "toparlanan"}[zTab], ee = MTFR && MTFR.events && evk && MTFR.events[evk] && MTFR.events[evk]["20"];
   const evLine2 = ee ? `<p class="note">Olay testi (kurulum günleri, 20 gün sonrası): piyasa ortalamasının <b>${ee.excess > 0 ? "+" : ""}${fmt(ee.excess, 2)}%</b> üstü, isabet %${fmt(ee.win, 0)}, t = ${fmt(ee.t, 1)}, n = ${ee.n}; ilk yarı ${fmt(ee.h1, 2)}% / ikinci yarı ${fmt(ee.h2, 2)}%; boğada ${ee.bull != null ? fmt(ee.bull, 2) + "%" : "–"}, ayıda ${ee.bear != null ? fmt(ee.bear, 2) + "%" : "–"}.</p>` : "";
   const zy = MTFR && MTFR.events && MTFR.events.zayif && MTFR.events.zayif["20"];
@@ -830,19 +941,20 @@ function renderZaman() {
   $("zView").innerHTML = `<h2>Zaman Taraması <span class="sub">günlük · haftalık · aylık</span></h2>
     <p class="note">Her hisse üç zaman diliminde, TradingView göstergeleriyle puanlanır (0-100; evrendeki yüzdelik sıra ortalaması). Göstergeler önce BIST geçmişinde ufuklarında test edilip seçildi; ağırlık en tutarlı olan haftalık skorda.</p>
     ${regime}
-    <div class="tabs">${ZTABS.map(([k, n]) => `<button class="tab ${zTab === k ? "on" : ""}" data-ztab="${k}">${n}${k === zTab ? ` (${rows.length})` : ""}</button>`).join("")}</div>
-    <p class="note">${info}</p>${evLine}${evLine2}${zNote}
+    <div class="tabs">${ZTABS.map(([k, n]) => `<button class="tab ${zTab === k ? "on" : ""}" data-ztab="${k}">${n}${k === zTab ? ` (${rows.length})` : ""}</button>`).join("")}${zFilters().map(f => `<button class="tab ${zTab === "f:" + f.id ? "on" : ""}" data-ztab="f:${f.id}">★ ${esc(f.name)}${zTab === "f:" + f.id ? ` (${rows.length})` : ""}</button>`).join("")}<button class="tab" data-zadd="1" title="Kendi filtreni oluştur ve kaydet">＋ Filtre</button></div>
+    ${zNewOpen ? `<div class="card" style="background:var(--panel2);margin:8px 0"><b>Yeni filtre: nasıl başlayalım?</b><div class="tabs"><button class="tab" data-ztpl="-1">Boş filtre</button>${ZTPL.map((x, i) => `<button class="tab" data-ztpl="${i}" title="${esc(x[1])}">${esc(x[0])}</button>`).join("")}</div><p class="note">Şablonlar yalnızca başlangıç noktasıdır; her koşulun eşiğini ve göstergesini değiştirebilirsiniz.</p></div>` : ""}
+    <p class="note">${info}</p>${cf ? zEditorHtml(cf) : zExplainHtml()}${cf ? "" : evLine + evLine2 + zNote}
     <div class="controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0">
       <label>Min. hacim (mn TL)<select id="zMin">${[1, 5, 10, 30, 100].map(v => `<option value="${v}" ${zMin === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label>Sektör<select id="zSec"><option value="">Hepsi</option>${secs.map(n => `<option ${zSec === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
       <label>Göster<select id="zTop">${[20, 40, 100, 300].map(v => `<option value="${v}" ${zTop === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <span class="mute">Evren: ${Object.entries(cnt).map(([k, v]) => `${T(k)} ${v}`).join(" · ")}</span></div>
-    ${shown.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük skor">G</th><th title="Haftalık skor">H</th><th title="Aylık skor">A</th><th title="0,25 G + 0,5 H + 0,25 A">Birleşik</th><th>Kurulum</th><th title="Haftalık skorun geçmişte 20 günde verdiği piyasa üstü getiri">Geçmiş 20g beklenti</th><th title="Chaikin Para Akışı (günlük)">CMF</th><th>Efsaneler</th><th>Komite</th></tr></thead><tbody>${shown.map(s => {
+    ${shown.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Gün %</th><th title="Günlük skor">G</th><th title="Haftalık skor">H</th><th title="Aylık skor">A</th><th title="0,25 G + 0,5 H + 0,25 A">Birleşik</th><th>Kurulum</th><th title="Haftalık skorun geçmişte 20 günde verdiği piyasa üstü getiri">Geçmiş 20g beklenti</th><th title="Chaikin Para Akışı (günlük)">CMF</th>${xcols.map(F => `<th title="Filtrenizdeki gösterge">${esc(F.name)}</th>`).join("")}<th>Efsaneler</th><th>Komite</th></tr></thead><tbody>${shown.map(s => {
       const r = committee(s), t = mtfTier(s), ex = mtfExpect(s), m = s.mtf;
       return `<tr data-x="${esc(s.name)}"><td style="text-align:left"><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td>
         <td class="${scCls(m.d)}">${fmt(m.d, 0)}</td><td class="${scCls(m.w)}"><b>${fmt(m.w, 0)}</b></td><td class="${scCls(m.m)}">${fmt(m.m, 0)}</td><td><b>${fmt(m.b, 0)}</b></td>
         <td><span class="vt ${t.cls || "mute"}" title="${esc(t.tip)}">${t.label}</span></td><td class="${sign(ex)}">${ex == null ? "–" : (ex > 0 ? "+" : "") + fmt(ex, 1) + "%"}</td><td class="${sign(s.cmf)}">${s.cmf == null ? "–" : fmt(s.cmf, 2)}</td>
-        <td>${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`; }).join("")}</tbody></table></div>`
+        ${xcols.map(F => `<td>${zFmt(F, F.get(s))}</td>`).join("")}<td>${chipsOf(r)}</td><td>${badge(r.score)}</td></tr>`; }).join("")}</tbody></table></div>`
       : `<p class="mute">Bu süzgeçle hisse yok. Minimum hacmi düşürmeyi ya da başka bir sekmeyi deneyin.</p>`}
     <details style="margin-top:12px"><summary><b>Hangi göstergeler kanıtlandı?</b> (BIST 2023-26 testi)</summary>${evidenceTable()}</details>
     <p class="note">Dürüst okuma: bu skorlar küçük ama tutarlı bir avantaj gösterir (haftalıkta piyasayı yenme oranı yaklaşık %52-53; avantaj büyüklükte, isabet oranında değil). "Doğruluk yüzdesi" garanti edilemez; hayatta kalma yanlılığı, tek rejim ve maliyetsizlik testi iyimser kılar. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>`;
@@ -856,7 +968,29 @@ function evidenceTable() {
   return Object.entries(MTFS.tests).map(([tf, o]) => `<h3 style="margin:10px 0 4px">${NAMES[tf]}</h3><div class="tw"><table><thead><tr><th style="text-align:left">Gösterge</th><th>IC</th><th>t</th><th>En iyi−en kötü %20 (%)</th><th>Pozitif dönem %</th><th>İlk yarı IC</th><th>İkinci yarı IC</th><th>Boğa IC</th><th>Ayı IC</th></tr></thead><tbody>${Object.entries(o).filter(([, e]) => e).map(([k, e]) => `<tr class="${e.t >= 2 && e.ic1 * e.ic2 > 0 ? "up" : ""}"><td style="text-align:left">${esc(k)}</td><td>${e.ic}</td><td>${fmt(e.t, 1)}</td><td>${e.spread == null || Number.isNaN(e.spread) ? "–" : fmt(e.spread, 2)}</td><td>${fmt(e.pos, 0)}</td><td>${e.ic1}</td><td>${e.ic2}</td><td>${e.ic_bull ?? "–"}</td><td>${e.ic_bear ?? "–"}</td></tr>`).join("")}</tbody></table></div>`).join("") +
     `<p class="note">IC: gösterge sıralaması ile sonraki dönem fazla getirisi sıralaması arasındaki korelasyon. Yeşil satır: t ≥ 2 ve iki yarıda aynı işaret. Aylık ufukta örnek küçüktür (≈25 bağımsız dönem), sonuçlara güvenilmemelidir.</p>`;
 }
-document.addEventListener("click", e => { const z = e.target.closest("[data-ztab]"); if (z) { zTab = z.dataset.ztab; store.set("zTab", zTab); renderZaman(); } });
+document.addEventListener("click", e => {
+  if (view !== "zaman") return;
+  const z = e.target.closest("[data-ztab]"); if (z) { zTab = z.dataset.ztab; store.set("zTab", zTab); renderZaman(); return; }
+  if (e.target.closest("[data-zadd]")) { zNewOpen = !zNewOpen; renderZaman(); return; }
+  const tp = e.target.closest("[data-ztpl]"); if (tp) { zNewOpen = false; const n = +tp.dataset.ztpl; zNewFilter(n >= 0 ? n : null); toast("Filtre oluşturuldu"); return; }
+  const cf = zCustom(); if (!cf) return; const all = zFilters(), cur = all.find(f => f.id === cf.id);
+  if (e.target.closest("[data-zcadd]")) { cur.conds.push({f: "mtf_w", op: ">=", v: 70}); zSaveF(all); renderZaman(); return; }
+  const cd = e.target.closest("[data-zcdel]"); if (cd) { cur.conds.splice(+cd.dataset.zcdel, 1); zSaveF(all); renderZaman(); return; }
+  if (e.target.closest("[data-zdup]")) { const id = Date.now().toString(36); all.push({...JSON.parse(JSON.stringify(cur)), id, name: cur.name + " (kopya)"}); zSaveF(all); zTab = "f:" + id; store.set("zTab", zTab); renderZaman(); toast("Kopyalandı"); return; }
+  if (e.target.closest("[data-zdel]")) { if (!window.confirm(`"${cur.name}" filtresi silinsin mi?`)) return; zSaveF(all.filter(f => f.id !== cur.id)); zTab = "uyum"; store.set("zTab", zTab); renderZaman(); return; }
+  if (e.target.closest("[data-zexp]")) { const j = JSON.stringify(all); (navigator.clipboard ? navigator.clipboard.writeText(j) : Promise.reject()).then(() => toast("Filtreleriniz panoya kopyalandı"), () => window.prompt("Kopyalayın:", j)); return; }
+  if (e.target.closest("[data-zimp]")) { const j = window.prompt("Dışa aktardığınız filtre metnini yapıştırın:"); if (!j) return; try { const o = JSON.parse(j); if (!Array.isArray(o)) throw 0; const ids = new Set(all.map(f => f.id)); o.filter(f => f && f.id && Array.isArray(f.conds) && !ids.has(f.id)).forEach(f => all.push(f)); zSaveF(all); renderZaman(); toast("İçe aktarıldı"); } catch (err) { toast("Geçersiz metin"); } }
+});
+document.addEventListener("change", e => {
+  const el = e.target.closest("[data-zf]"); if (!el || view !== "zaman") return;
+  const cf = zCustom(); if (!cf) return; const all = zFilters(), cur = all.find(f => f.id === cf.id), k = el.dataset.zf, i = +el.dataset.i;
+  if (k === "name") cur.name = el.value.trim() || cur.name;
+  else if (k === "sortf") cur.sort = {...(cur.sort || {dir: -1}), f: el.value};
+  else if (k === "sortd") cur.sort = {...(cur.sort || {f: "mtf_b"}), dir: +el.value};
+  else if (k === "f") { const F = ZFD[el.value]; cur.conds[i] = {f: el.value, op: F.cat ? "=" : ">=", v: el.value === "tier" ? "hlider" : el.value === "sector" ? trSector(UNIVERSE[0].sector) : 0}; }
+  else cur.conds[i][k] = el.value;
+  zSaveF(all); renderZaman();
+});
 
 /* ---------- Grafik & Göstergeler: TradingView gelişmiş grafik (kendi göstergeni ekleyebilirsin) ---------- */
 let chSym = store.get("chSym", "THYAO"), chIv = store.get("chIv", "D"), chSt = store.get("chSt", ["Volume@tv-basicstudies"]), chLoaded = false;
