@@ -275,6 +275,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="sektorler"><i data-ico="compass"></i>Sektörler</a>
       <a data-view="atolye"><i data-ico="flask"></i>Backtest Atölyesi</a>
       <a data-view="portfoyler"><i data-ico="wallet"></i>Portföyler</a>
+      <a data-view="gunluk"><i data-ico="clipboard"></i>İşlem Günlüğüm</a>
+      <a data-view="risk"><i data-ico="shield"></i>Risk Paneli</a>
+      <a data-view="takvim"><i data-ico="news"></i>Takvim</a>
       <a data-view="portfoyum"><i data-ico="award"></i>Portföyüm</a>
       <a data-view="hesabim"><i data-ico="user"></i>Sanal Hesabım</a>
       <a data-view="rapor"><i data-ico="clipboard"></i>Haftalık Rapor</a>
@@ -399,6 +402,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
 
     <!-- TARAYICI -->
     <div class="view" id="v-tahmin"><section class="card" id="thView"></section></div>
+    <div class="view" id="v-gunluk"><section class="card" id="jrView"></section></div>
+    <div class="view" id="v-risk"><section class="card" id="rkView"></section></div>
+    <div class="view" id="v-takvim"><section class="card" id="clView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -699,7 +705,7 @@ const COLS = [
   ["change", "Gün %", "", "Bugünkü değişim"],
   ["rs", "RS", "", "Göreceli güç (0-100): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getiri sıralaması. 3 yıllık BIST araştırmasında en çok kazandıran ölçüt."],
   ["dist52", "52h zirve %", "hide-sm", "52 haftalık zirveye uzaklık (0 = zirvede)."],
-  ["upside", "Adil değere %", "hide-sm", "Olması gereken (adil) değerin güncel fiyata göre farkı: + ise fiyat adil değerin altında. Beş yöntemin medyanı; ayrıntı Analiz Masası'nda."],
+  ["upside", "Adil değere %", "hide-sm", "Olması gereken (adil) değerin güncel fiyata göre farkı: + ise fiyat adil değerin altında. Altı yöntemin medyanı; yöntemler çelişiyorsa (güven düşük) tek rakama değil aralığa bakın. Ayrıntı ve varsayımlar Analiz Masası'nda."],
   ["bbDist", "Alt banda %", "hide-sm", "Fiyatın Bollinger alt bandına uzaklığı. Araştırmada alt banda yakın hisseler piyasanın gerisinde kaldı."],
   ["rsi", "RSI", "hide-sm", "14 günlük RSI: 30 altı aşırı satım, 70 üstü aşırı alım."],
   ["chips", "Efsaneler", "hide-sm", "B Buffett · S Simons · L Livermore · K Kellogg · Ş Şeytanın Avukatı. Yeşil olumlu, gri nötr, kırmızı olumsuz."],
@@ -799,7 +805,7 @@ function flowHtml(s) {
 
 /* ---------- Zaman Taraması: günlük / haftalık / aylık ---------- */
 let MTFS = null; // mtf_research.json: gösterge bazlı kanıt tablosu
-let GDT = null, GON = null; // daytrade_research.json, overnight_research.json
+let GDT = null, GON = null, LIM = null; // + limit_research.json (tavan/taban) // daytrade_research.json, overnight_research.json
 let MTFW = null, MLOG = null; // mtf_walkforward.json: ileri doğrulama; mtf_log.json: canlı skor kaydı
 let zTab = store.get("zTab", "uyum"), zMin = store.get("zMin", 10), zSec = "", zTop = 40;
 const ZTABS = [["uyum", "Uyumlu (3 dilim)"], ["hafta", "Haftalık (2-4 hafta)"], ["gun", "Günlük (1-5 gün)"], ["ay", "Aylık (2-3 ay)"], ["akis", "Para akışı"], ["topar", "Toparlananlar (deneysel)"]];
@@ -1018,6 +1024,139 @@ document.addEventListener("change", e => {
   zSaveF(all); renderZaman();
 });
 
+/* ---------- İşlem Günlüğüm: kişisel karne (tarayıcıda saklanır) ---------- */
+let JR = store.get("journal", {trades: []});
+const jSave = () => store.set("journal", JR);
+const jCostPct = () => +store.get("jCost", 0.5);
+const jDays = (a, b) => Math.max(0, Math.round((new Date(b || Date.now()) - new Date(a)) / 864e5));
+const jRet = (x, px) => (px / x.entry - 1) * 100;
+function jStats(closed) {
+  const c = jCostPct(), rs = closed.map(x => jRet(x, x.exit) - c), w = rs.filter(v => v > 0), l = rs.filter(v => v <= 0);
+  const pnl = closed.map(x => (x.exit - x.entry) * x.qty - x.entry * x.qty * c / 100), tot = pnl.reduce((a, b) => a + b, 0);
+  const Rm = closed.filter(x => x.stop && x.stop < x.entry).map(x => (x.exit - x.entry) / (x.entry - x.stop));
+  let cum = 0, peak = 0, dd = 0; closed.slice().sort((a, b) => (a.exitD || "").localeCompare(b.exitD || "")).forEach(x => { cum += (x.exit - x.entry) * x.qty - x.entry * x.qty * c / 100; peak = Math.max(peak, cum); dd = Math.min(dd, cum - peak); });
+  const gw = pnl.filter(v => v > 0).reduce((a, b) => a + b, 0), gl = -pnl.filter(v => v <= 0).reduce((a, b) => a + b, 0);
+  return {n: closed.length, win: closed.length ? w.length / closed.length * 100 : null, avgW: w.length ? w.reduce((a, b) => a + b, 0) / w.length : null, avgL: l.length ? l.reduce((a, b) => a + b, 0) / l.length : null,
+    exp: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null, pf: gl > 0 ? gw / gl : null, avgR: Rm.length ? Rm.reduce((a, b) => a + b, 0) / Rm.length : null, nR: Rm.length, tot, dd,
+    hold: closed.length ? closed.reduce((a, x) => a + jDays(x.entryD, x.exitD), 0) / closed.length : null, best: rs.length ? Math.max(...rs) : null, worst: rs.length ? Math.min(...rs) : null};
+}
+function renderJournal() {
+  const el = $("jrView"), open = JR.trades.filter(x => x.exit == null), closed = JR.trades.filter(x => x.exit != null), S = jStats(closed);
+  const live = n => UNIVERSE.find(s => s.name === n), tags = ["Zaman Modeli", "Haftalık lider", "Kendi analizim", "Haber / olay", "Diğer"];
+  const byTag = Object.entries(closed.reduce((m, x) => { (m[x.tag || "Diğer"] = m[x.tag || "Diğer"] || []).push(x); return m; }, {})).map(([k, a]) => [k, jStats(a)]);
+  const today = new Date().toISOString().slice(0, 10);
+  el.innerHTML = `<h2>İşlem Günlüğüm <span class="sub">kendi işlemlerinin karnesi · bu tarayıcıda saklanır</span></h2>
+    <p class="note">Kendi alım-satımlarını kaydet; sistem kazanma oranını, beklentini, risk/getiri oranını (R) ve tutma süreni çıkarsın. En hızlı öğrenme yolu kendi sonuçlarına bakmaktır. Maliyet (gidiş-dönüş) <input id="jCost" type="number" step="0.05" value="${jCostPct()}" style="width:70px"> % varsayılır. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+    <div class="card" style="background:var(--panel2);margin:8px 0"><b>Yeni işlem</b><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:8px">
+      <label>Hisse<input id="jN" list="tickers" style="width:100px" placeholder="THYAO"></label><label>Adet<input id="jQ" type="number" min="1" style="width:90px"></label><label>Giriş fiyatı<input id="jP" type="number" step="any" style="width:100px"></label>
+      <label>Tarih<input id="jD" type="date" value="${today}"></label><label>Stop<input id="jS" type="number" step="any" style="width:90px"></label><label>Hedef<input id="jT" type="number" step="any" style="width:90px"></label>
+      <label>Neden<select id="jTag">${tags.map(x => `<option>${x}</option>`).join("")}</select></label><label>Not<input id="jNote" style="width:180px"></label><button class="pbtn" data-jadd="1">Ekle</button></div></div>
+    <h3 style="margin:12px 0 4px">Açık işlemler (${open.length})</h3>
+    ${open.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Adet</th><th>Giriş</th><th>Son</th><th>K/Z %</th><th>K/Z TL</th><th title="Stop'a göre kâr/risk oranı">R</th><th>Stop'a uzaklık</th><th>Gün</th><th>Skor</th><th></th></tr></thead><tbody>${open.map(x => { const s = live(x.n), px = s ? s.close : x.entry, rr = x.stop && x.stop < x.entry ? (px - x.entry) / (x.entry - x.stop) : null, t = s && mtfTier(s);
+      return `<tr><td style="text-align:left"><b data-x="${esc(x.n)}" style="cursor:pointer">${esc(x.n)}</b>${x.note ? `<span class="nm">${esc(x.note)}</span>` : ""}</td><td>${fmt(x.qty, 0)}</td><td>${fmt(x.entry)}</td><td>${fmt(px)}</td><td>${sgn(jRet(x, px))}</td><td>${sgn((px - x.entry) * x.qty, 0, "")}</td><td>${rr == null ? "–" : fmt(rr, 1) + "R"}</td><td class="${x.stop && px < x.stop * 1.03 ? "down" : ""}">${x.stop ? "%" + fmt((px / x.stop - 1) * 100, 1) : '<span class="down">stop yok</span>'}</td><td>${jDays(x.entryD)}</td><td>${t ? `<span class="vt ${t.cls || "mute"}">${t.label}</span>` : "–"}</td><td><button data-jclose="${x.id}">Kapat</button> <button data-jdel="${x.id}" title="Sil">✕</button></td></tr>`; }).join("")}</tbody></table></div>` : '<p class="mute">Açık işlem yok.</p>'}
+    <h3 style="margin:12px 0 4px">Karne <span class="mute" style="font-weight:400">(${closed.length} kapalı işlem, maliyet sonrası)</span></h3>
+    ${S.n ? `<div class="kpis" style="display:flex;gap:16px;flex-wrap:wrap"><div><div class="mute">Kazanma oranı</div><b>%${fmt(S.win, 0)}</b></div><div><div class="mute">Ort. kazanç</div><b>${sgn(S.avgW)}</b></div><div><div class="mute">Ort. kayıp</div><b>${sgn(S.avgL)}</b></div><div><div class="mute">Beklenti / işlem</div><b>${sgn(S.exp)}</b></div><div><div class="mute">Kâr faktörü</div><b>${S.pf == null ? "–" : fmt(S.pf, 2)}</b></div><div><div class="mute">Ort. R</div><b>${S.avgR == null ? "–" : fmt(S.avgR, 2) + "R"}</b> <span class="mute">(${S.nR})</span></div><div><div class="mute">Toplam K/Z</div><b>${sgn(S.tot, 0, " TL")}</b></div><div><div class="mute">Maks. düşüş</div><b>${fmt(S.dd, 0)} TL</b></div><div><div class="mute">Ort. tutma</div><b>${fmt(S.hold, 1)} gün</b></div><div><div class="mute">En iyi / kötü</div><b>${sgn(S.best)} / ${sgn(S.worst)}</b></div></div>
+      <canvas id="jCv" style="height:150px;margin-top:8px"></canvas>
+      <div class="note">${[S.hold != null && S.hold < 3 ? "Ortalama tutma süren 3 günün altında: maliyet (gidiş-dönüş %" + jCostPct() + ") avantajı yiyor; Günlük Plan sayfasındaki bekleme süresi tablosuna bak." : "", S.avgW != null && S.avgL != null && Math.abs(S.avgL) > S.avgW ? "Ortalama kaybın kazancından büyük: kayıpları erken kesmeyi dene." : "", closed.filter(x => !x.stop).length ? `${closed.filter(x => !x.stop).length} işlemde stop kaydı yok: R hesaplanamıyor.` : ""].filter(Boolean).join(" ")}</div>
+      ${byTag.length > 1 ? `<div class="tw"><table><thead><tr><th style="text-align:left">Neden / strateji</th><th>İşlem</th><th>Kazanma</th><th>Beklenti</th><th>Toplam K/Z</th></tr></thead><tbody>${byTag.map(([k, v]) => `<tr><td style="text-align:left">${esc(k)}</td><td>${v.n}</td><td>%${fmt(v.win, 0)}</td><td>${sgn(v.exp)}</td><td>${sgn(v.tot, 0, " TL")}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <details><summary>Kapalı işlemler</summary><div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Giriş</th><th>Çıkış</th><th>Net getiri</th><th>R</th><th>Gün</th><th>Neden</th><th></th></tr></thead><tbody>${closed.slice().reverse().map(x => `<tr><td style="text-align:left"><b>${esc(x.n)}</b></td><td>${x.entryD} · ${fmt(x.entry)}</td><td>${x.exitD} · ${fmt(x.exit)}</td><td>${sgn(jRet(x, x.exit) - jCostPct())}</td><td>${x.stop && x.stop < x.entry ? fmt((x.exit - x.entry) / (x.entry - x.stop), 1) + "R" : "–"}</td><td>${jDays(x.entryD, x.exitD)}</td><td>${esc(x.tag || "")}</td><td><button data-jdel="${x.id}">✕</button></td></tr>`).join("")}</tbody></table></div></details>`
+      : '<p class="mute">Henüz kapalı işlem yok; ilk işlemi kapattığında karne burada oluşur.</p>'}
+    <div style="margin-top:10px"><button data-jexp="1">📤 Dışa aktar</button> <button data-jimp="1">📥 İçe aktar</button> <button data-jcsv="1">⬇ CSV</button></div>`;
+  const cv = $("jCv"); if (cv && S.n > 1) { let c = 0; const cc = jCostPct(); miniLine(cv, [0, ...closed.slice().sort((a, b) => (a.exitD || "").localeCompare(b.exitD || "")).map(x => (c += (x.exit - x.entry) * x.qty - x.entry * x.qty * cc / 100))], css("--accent2"), 0); }
+}
+document.addEventListener("change", e => { if (e.target.id === "jCost") { store.set("jCost", +e.target.value || 0.5); renderJournal(); } });
+document.addEventListener("click", e => {
+  if (view !== "gunluk") return;
+  if (e.target.closest("[data-jadd]")) {
+    const n = ($("jN").value || "").trim().toUpperCase(), q = +$("jQ").value, px = +$("jP").value, d = $("jD").value, st = +$("jS").value || null, tg = +$("jT").value || null;
+    if (!UNIVERSE.some(s => s.name === n)) { toast("Hisse bulunamadı"); return; } if (!(q > 0 && px > 0)) { toast("Adet ve fiyat girin"); return; }
+    if (st && st >= px) { toast("Stop giriş fiyatının altında olmalı"); return; }
+    JR.trades.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), n, qty: q, entry: px, entryD: d, stop: st, target: tg, tag: $("jTag").value, note: $("jNote").value.trim()}); jSave(); renderJournal(); toast(n + " eklendi"); return;
+  }
+  const c = e.target.closest("[data-jclose]"); if (c) { const x = JR.trades.find(t => t.id === c.dataset.jclose), s = UNIVERSE.find(u => u.name === x.n); const px = parseFloat(window.prompt(`${x.n} çıkış fiyatı (TL)?`, String(s ? s.close : x.entry))); if (!(px > 0)) return; x.exit = px; x.exitD = new Date().toISOString().slice(0, 10); jSave(); renderJournal(); return; }
+  const d = e.target.closest("[data-jdel]"); if (d) { if (!window.confirm("Bu işlem silinsin mi?")) return; JR.trades = JR.trades.filter(t => t.id !== d.dataset.jdel); jSave(); renderJournal(); return; }
+  if (e.target.closest("[data-jexp]")) { const j = JSON.stringify(JR); (navigator.clipboard ? navigator.clipboard.writeText(j) : Promise.reject()).then(() => toast("Günlük panoya kopyalandı"), () => window.prompt("Kopyalayın:", j)); return; }
+  if (e.target.closest("[data-jimp]")) { const j = window.prompt("Dışa aktardığınız günlük metnini yapıştırın:"); if (!j) return; try { const o = JSON.parse(j); if (!Array.isArray(o.trades)) throw 0; const ids = new Set(JR.trades.map(t => t.id)); o.trades.filter(t => t && t.id && t.n && t.qty > 0 && t.entry > 0 && !ids.has(t.id)).forEach(t => JR.trades.push(t)); jSave(); renderJournal(); toast("İçe aktarıldı"); } catch (err) { toast("Geçersiz metin"); } return; }
+  if (e.target.closest("[data-jcsv]")) { const L = [["hisse", "adet", "giris_tarihi", "giris", "stop", "hedef", "cikis_tarihi", "cikis", "neden", "not"].join(";"), ...JR.trades.map(x => [x.n, x.qty, x.entryD, x.entry, x.stop ?? "", x.target ?? "", x.exitD ?? "", x.exit ?? "", x.tag ?? "", (x.note || "").replace(/;/g, ",")].join(";"))]; const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + L.join("\n")], {type: "text/csv;charset=utf-8"})); a.download = "islem-gunlugum.csv"; a.click(); URL.revokeObjectURL(a.href); }
+});
+
+/* ---------- Risk Paneli: açık pozisyonların toplam riski, yoğunlaşma, korelasyon, günlük kayıp bütçesi ---------- */
+function corrAvg(names) {
+  const rets = names.map(n => { const h = HIST && HIST.stocks[n]; if (!h || !h.closes || h.closes.length < 62) return null; const c = h.closes.slice(-61); return c.slice(1).map((v, i) => v / c[i] - 1); }).filter(Boolean);
+  if (rets.length < 2) return null;
+  const cor = (a, b) => { const n = a.length, ma = a.reduce((x, y) => x + y, 0) / n, mb = b.reduce((x, y) => x + y, 0) / n; let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; } return sab / Math.sqrt(saa * sbb || 1); };
+  let s = 0, k = 0; for (let i = 0; i < rets.length; i++) for (let j = i + 1; j < rets.length; j++) { s += cor(rets[i], rets[j]); k++; } return {avg: s / k, n: rets.length};
+}
+function renderRisk() {
+  const el = $("rkView"), cap = +store.get("rkCap", 100000), dayLim = +store.get("rkDay", 2), perRisk = +store.get("rkPer", 1), totLim = +store.get("rkTot", 6), inclMy = store.get("rkMy", false);
+  const rows = [];
+  JR.trades.filter(x => x.exit == null).forEach(x => rows.push({n: x.n, qty: x.qty, cost: x.entry, stop: x.stop, src: "günlük"}));
+  if (inclMy && MY && MY.pos) MY.pos.forEach(x => rows.push({n: x.n, qty: x.sh, cost: x.cost, stop: null, src: "portföyüm"}));
+  const P = rows.map(r => { const s = UNIVERSE.find(u => u.name === r.n), px = s ? s.close : r.cost, val = px * r.qty; return {...r, s, px, val, riskTL: r.stop ? Math.max(0, (px - r.stop) * r.qty) : null, dayTL: s && s.change != null ? val * s.change / (100 + s.change) : 0}; });
+  const val = P.reduce((a, x) => a + x.val, 0), risk = P.reduce((a, x) => a + (x.riskTL ?? x.val * 0.08), 0), noStop = P.filter(x => !x.stop), dayPnl = P.reduce((a, x) => a + x.dayTL, 0);
+  const sec = {}; P.forEach(x => { const k = x.s ? trSector(x.s.sector) : "?"; sec[k] = (sec[k] || 0) + x.val; });
+  const big = P.slice().sort((a, b) => b.val - a.val)[0], co = corrAvg([...new Set(P.map(x => x.n))]);
+  const beta = val ? P.reduce((a, x) => a + (x.s && x.s.beta != null ? x.s.beta : 1) * x.val, 0) / val : null, earn = P.filter(x => x.s && x.s.nextEarn && (x.s.nextEarn * 1000 - Date.now()) / 864e5 >= -1 && (x.s.nextEarn * 1000 - Date.now()) / 864e5 <= 5);
+  const bear = REGIME && REGIME.trend === "bear", invPct = val / cap * 100, riskPct = risk / cap * 100, dayPct = dayPnl / cap * 100;
+  const L = (ok, name, val, hint) => `<tr><td style="text-align:left">${ok === 1 ? "🟢" : ok === 0 ? "🟡" : "🔴"} <b>${name}</b></td><td>${val}</td><td class="mute" style="text-align:left;white-space:normal">${hint}</td></tr>`;
+  const maxPct = big ? big.val / cap * 100 : 0, top = Object.entries(sec).sort((a, b) => b[1] - a[1]);
+  el.innerHTML = `<h2>Risk Paneli <span class="sub">toplam risk, yoğunlaşma, korelasyon, günlük kayıp bütçesi</span></h2>
+    <p class="note">Açık pozisyonların (İşlem Günlüğüm${inclMy ? " + Portföyüm" : ""}) portföy düzeyi riskini ölçer. Pozisyon boyutu tek hisse için Karar Kartı'nda hesaplanır; burada hepsi birlikte değerlendirilir. Ayarlar bu tarayıcıda saklanır.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Sermaye (TL)<input id="rkCap" type="number" value="${cap}" style="width:120px"></label><label>Günlük azami kayıp %<input id="rkDay" type="number" step="0.25" value="${dayLim}" style="width:90px"></label><label>İşlem başı risk %<input id="rkPer" type="number" step="0.25" value="${perRisk}" style="width:90px"></label><label>Toplam açık risk limiti %<input id="rkTot" type="number" step="0.5" value="${totLim}" style="width:90px"></label><label style="display:flex;gap:6px;align-items:center"><input id="rkMy" type="checkbox" ${inclMy ? "checked" : ""}> Portföyüm'ü de say</label></div>
+    ${P.length ? `<div class="tw"><table><thead><tr><th style="text-align:left">Kontrol</th><th>Değer</th><th style="text-align:left">Yorum</th></tr></thead><tbody>
+      ${L(riskPct <= totLim ? 1 : riskPct <= totLim * 1.5 ? 0 : -1, "Toplam açık risk (stop'a kadar)", "%" + fmt(riskPct, 2) + " sermaye", `Limit %${fmt(totLim, 1)}. Stop'u olmayan pozisyonlar için %8 varsayıldı (${noStop.length} adet).`)}
+      ${L(noStop.length === 0 ? 1 : -1, "Stop'suz pozisyon", String(noStop.length), noStop.length ? noStop.map(x => x.n).join(", ") + ": stop belirleyin (Karar Kartı, 2,5×ATR)." : "Hepsinin stop'u var.")}
+      ${L(dayPct >= -dayLim * 0.5 ? 1 : dayPct > -dayLim ? 0 : -1, "Bugünkü K/Z (gün içi)", sgn(dayPct), `Günlük azami kayıp %${fmt(dayLim, 1)}; ${dayPct <= -dayLim ? "LİMİT AŞILDI: yeni işlem açmayın, planlı çıkış düşünün." : "kullanılan bütçe %" + fmt(Math.max(0, -dayPct) / dayLim * 100, 0)}.`)}
+      ${L(maxPct <= 25 ? 1 : maxPct <= 35 ? 0 : -1, "En büyük pozisyon", big ? big.n + " %" + fmt(maxPct, 0) : "–", "Tek hissede sermayenin %25'inden fazlası yoğunlaşma riskidir.")}
+      ${L(top.length && top[0][1] / (val || 1) <= 0.5 ? 1 : 0, "Sektör yoğunlaşması", top.length ? esc(top[0][0]) + " %" + fmt(top[0][1] / val * 100, 0) : "–", "Aynı sektör yarıdan fazlaysa hisseler birlikte düşer.")}
+      ${L(co == null ? 0 : co.avg <= 0.5 ? 1 : co.avg <= 0.7 ? 0 : -1, "Ortalama ikili korelasyon (60 gün)", co ? fmt(co.avg, 2) + " (" + co.n + " hisse)" : "hesaplanamadı", "0,7 üstü: pozisyonlar tek bir pozisyon gibi davranır; çeşitlendirme yoktur.")}
+      ${L(beta == null || beta <= 1.2 ? 1 : 0, "Ağırlıklı beta", beta == null ? "–" : fmt(beta, 2), "Piyasa düşüşüne duyarlılık; 1'in üstü piyasadan sert hareket eder.")}
+      ${L(!bear || invPct <= 50 ? 1 : invPct <= 70 ? 0 : -1, "Yatırım oranı", "%" + fmt(invPct, 0), bear ? "Ayı rejiminde yatırım oranını %50'nin altında tutmak önerilir." : "Boğa/karışık rejimde sınır daha serbesttir.")}
+      ${L(earn.length === 0 ? 1 : 0, "Yaklaşan bilanço (5 gün)", String(earn.length), earn.length ? earn.map(x => x.n).join(", ") + ": sürpriz riski; pozisyonu küçültmeyi düşünün." : "Yok.")}
+      </tbody></table></div>
+      <h3 style="margin:12px 0 4px">Sektör dağılımı</h3>${top.map(([k, v]) => `<div class="row2"><span>${esc(k)}</span><span style="flex:1;margin:0 10px;align-self:center"><i style="display:block;height:8px;border-radius:4px;background:var(--accent2);width:${v / val * 100}%"></i></span><b>%${fmt(v / val * 100, 0)}</b></div>`).join("")}
+      <p class="note">Yeni bir işlem için kalan risk bütçesi: <b>%${fmt(Math.max(0, totLim - riskPct), 2)}</b> sermaye (işlem başı hedef risk %${fmt(perRisk, 1)} = ${fmt(cap * perRisk / 100, 0)} TL).</p>`
+      : '<p class="mute">Açık pozisyon yok. İşlem Günlüğüm\'e işlem ekleyin ya da "Portföyüm\'ü de say" kutusunu işaretleyin.</p>'}`;
+}
+document.addEventListener("change", e => { const id = e.target.id; if (view === "risk" && ["rkCap", "rkDay", "rkPer", "rkTot"].includes(id)) { store.set(id, +e.target.value); renderRisk(); } else if (id === "rkMy") { store.set("rkMy", e.target.checked); renderRisk(); } });
+
+/* ---------- Takvim: bilanço, temettü, enflasyon + kendi olaylarım ---------- */
+const CE = () => store.get("calEvents", []);
+function renderCalendarPage() {
+  const el = $("clView"), flt = store.get("calFlt", "likit"), now = Date.now(), end = now + 35 * 864e5;
+  const mine = new Set([...(MY && MY.pos ? MY.pos.map(x => x.n) : []), ...JR.trades.filter(x => x.exit == null).map(x => x.n)]);
+  const ok = s => flt === "fav" ? FAVS.has(s.name) : flt === "mine" ? mine.has(s.name) : flt === "likit" ? s.tl >= 20 : s.tl >= 5;
+  const ev = [];
+  UNIVERSE.filter(s => s.ok && ok(s)).forEach(s => {
+    if (s.nextEarn && s.nextEarn * 1000 >= now - 864e5 && s.nextEarn * 1000 <= end) ev.push({t: s.nextEarn * 1000, k: "bilanço", s});
+    if (s.exDiv && s.exDiv * 1000 >= now - 864e5 && s.exDiv * 1000 <= end) ev.push({t: s.exDiv * 1000, k: "temettü", s});
+  });
+  for (let m = 0; m < 3; m++) { const d = new Date(); d.setUTCMonth(d.getUTCMonth() + m, 3); d.setUTCHours(7, 0, 0, 0); if (d.getTime() >= now - 864e5 && d.getTime() <= end) ev.push({t: d.getTime(), k: "makro", title: "TÜİK enflasyon açıklaması (genellikle ayın 3'ü, 10:00)"}); }
+  CE().forEach(c => { const t = new Date(c.date + "T09:00:00").getTime(); if (t >= now - 864e5 && t <= end) ev.push({t, k: "kendi", title: c.title, id: c.id}); });
+  ev.sort((a, b) => a.t - b.t);
+  const byDay = {}; ev.forEach(e => { const k = new Date(e.t).toISOString().slice(0, 10); (byDay[k] = byDay[k] || []).push(e); });
+  const KC = {bilanço: "down", temettü: "up", makro: "mute", kendi: ""}, KI = {bilanço: "📊", temettü: "💰", makro: "🏛", kendi: "📌"};
+  el.innerHTML = `<h2>Takvim <span class="sub">önümüzdeki 5 hafta</span></h2>
+    <p class="note">Bilanço ve temettü tarihleri TradingView'dendir ve <b>tahminidir</b>; şirket açıklamasıyla doğrulayın. Merkez bankası toplantısı gibi tarihleri aşağıdan kendiniz ekleyin (sabit tarih bilgisi taşımıyoruz).</p>
+    <div class="tabs">${[["likit", "Likit hisseler"], ["hepsi", "Tüm hisseler"], ["fav", "Favorilerim"], ["mine", "Pozisyonlarım"]].map(([k, n]) => `<button class="tab ${flt === k ? "on" : ""}" data-calf="${k}">${n}</button>`).join("")}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Olay ekle<input id="calT" placeholder="Örn. TCMB faiz kararı" style="width:220px"></label><label>Tarih<input id="calD" type="date"></label><button data-caladd="1">＋ Ekle</button><button data-calics="1">📅 Takvime aktar (.ics)</button></div>
+    ${Object.keys(byDay).length ? Object.entries(byDay).map(([d, a]) => { const dt = new Date(d + "T12:00:00"), df = (dt - now) / 864e5; return `<div class="card" style="background:var(--panel2);margin:6px 0;padding:10px 12px"><div><b>${dt.toLocaleDateString("tr-TR", {weekday: "long", day: "numeric", month: "long"})}</b> <span class="mute">· ${df < 0.5 ? "bugün/yarın" : fmt(df, 0) + " gün sonra"}</span></div>
+      <div style="margin-top:6px">${a.map(e => e.s ? `<span class="pill ${KC[e.k]}" data-x="${esc(e.s.name)}" title="${esc(e.s.description)}">${KI[e.k]} ${esc(e.s.name)} ${e.k}${e.s.mtf && mtfTier(e.s) ? ` · <span class="${mtfTier(e.s).cls || ""}">${mtfTier(e.s).label}</span>` : ""}</span>` : `<span class="pill">${KI[e.k]} ${esc(e.title)}${e.id ? ` <a data-caldel="${e.id}" style="cursor:pointer" title="Sil">✕</a>` : ""}</span>`).join(" ")}</div></div>`; }).join("") : '<p class="mute">Bu süzgeçle yakın olay yok.</p>'}
+    ${ev.some(e => e.k === "bilanço") ? `<p class="note">Bilançoya 5 gün kala yeni pozisyon açmamak Zaman Modeli'nin kuralıdır: sürpriz riski skorun avantajından büyük olabilir.</p>` : ""}`;
+}
+document.addEventListener("click", e => {
+  if (view !== "takvim") return;
+  const f = e.target.closest("[data-calf]"); if (f) { store.set("calFlt", f.dataset.calf); renderCalendarPage(); return; }
+  if (e.target.closest("[data-caladd]")) { const t = ($("calT").value || "").trim(), d = $("calD").value; if (!t || !d) { toast("Başlık ve tarih girin"); return; } const a = CE(); a.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: t, date: d}); store.set("calEvents", a); renderCalendarPage(); return; }
+  const dl = e.target.closest("[data-caldel]"); if (dl) { store.set("calEvents", CE().filter(c => c.id !== dl.dataset.caldel)); renderCalendarPage(); return; }
+  if (e.target.closest("[data-calics]")) {
+    const evs = []; UNIVERSE.filter(s => s.ok && s.tl >= 20).forEach(s => { if (s.nextEarn) evs.push([s.nextEarn * 1000, s.name + " bilanço (tahmini)"]); if (s.exDiv) evs.push([s.exDiv * 1000, s.name + " temettü kesim"]); }); CE().forEach(c => evs.push([new Date(c.date + "T09:00:00").getTime(), c.title]));
+    const pad = n => String(n).padStart(2, "0"), ds = t => { const d = new Date(t); return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()); };
+    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Borsa Komitesi//TR", ...evs.filter(x => x[0] >= Date.now() - 864e5).flatMap(([t, s], i) => ["BEGIN:VEVENT", "UID:bk" + i + "-" + ds(t) + "@borsa-komitesi", "DTSTAMP:" + ds(Date.now()) + "T000000Z", "DTSTART;VALUE=DATE:" + ds(t), "SUMMARY:" + s.replace(/[,;]/g, " "), "END:VEVENT"]), "END:VCALENDAR"].join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], {type: "text/calendar"})); a.download = "borsa-komitesi-takvim.ics"; a.click(); URL.revokeObjectURL(a.href);
+  }
+});
+
 /* ---------- Günlük Plan & Gün İçi: bugün ne yapılır, bekleme süresinin ekonomisi, gün içi kanıtı ---------- */
 function miniLine(cv, vals, color, base) {
   if (!cv || !vals || vals.length < 2) return;
@@ -1025,6 +1164,25 @@ function miniLine(cv, vals, color, base) {
   if (base != null) { g.strokeStyle = css("--line"); g.setLineDash([4, 3]); g.beginPath(); g.moveTo(6, Y(base)); g.lineTo(w - 6, Y(base)); g.stroke(); g.setLineDash([]); }
   g.beginPath(); vals.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.strokeStyle = color; g.lineWidth = 2; g.lineJoin = "round"; g.stroke();
   g.fillStyle = css("--mute"); g.font = "11px system-ui"; g.textAlign = "left"; g.fillText(fmt(hi, 2), 6, 10); g.fillText(fmt(lo, 2), 6, H - 3);
+}
+function limitStreak(s, sign) {
+  const h = HIST && HIST.stocks[s.name]; if (!h || !h.closes) return null;
+  const c = h.closes.slice(); const today = new Date().toISOString().slice(0, 10); if (h.last !== today) c.push(s.close);
+  let k = 0; for (let i = c.length - 1; i > 0; i--) { const r = c[i] / c[i - 1] - 1; if (sign > 0 ? r >= 0.095 : r <= -0.095) k++; else break; } return k;
+}
+function limitStats(side) {
+  const L = LIM && LIM[side]; if (!L) return "";
+  const rows = Object.entries(L.by_streak).filter(([, v]) => v.next_lim != null);
+  const tr = L.tradable, up = side === "tavan";
+  return `<div class="tw"><table><thead><tr><th style="text-align:left">${up ? "Tavan" : "Taban"} kapanışının</th><th>Olay</th><th>Ertesi gün de ${up ? "tavan" : "taban"}</th><th>Ertesi açılış boşluğu</th><th>Ertesi kapanış</th><th>5 gün sonra</th><th>Açılış kilitli</th></tr></thead><tbody>${rows.map(([k, v]) => `<tr><td style="text-align:left">${k}. gün${k === "4" ? "+" : ""}</td><td>${v.n}</td><td><b>%${fmt(v.next_lim, 0)}</b></td><td>${sgn(v.gap)}</td><td>${sgn(v.c1)}</td><td>${sgn(v.c5)}</td><td>%${fmt(v.locked, 0)}</td></tr>`).join("")}</tbody></table></div>
+    ${tr && tr.oc_net != null ? `<p class="note">Alınabilir senaryo (ertesi açılışta kilit yoksa ${up ? "açılıştan al" : "açılıştan al (taban dibi avı)"}): açılış→kapanış net ${sgn(tr.oc_net)} (t ${fmt(tr.oc_t, 1)}), açılış→5 gün net ${sgn(tr.o5_net)} (t ${fmt(tr.o5_t, 1)}). ${up ? "Avantaj, kapanışta zaten elinde olanlarda kalır (açılış boşluğu); sonradan girene bırakmaz." : "Taban sonrası alım kaybettirir: düşüş çoğu zaman sürer."}</p>` : ""}`;
+}
+function limitRadar() {
+  const tv = UNIVERSE.filter(s => s.ok && s.change >= 9.5 && s.tl >= 5).sort((a, b) => b.tl - a.tl), tb = UNIVERSE.filter(s => s.ok && s.change <= -9.5 && s.tl >= 5).sort((a, b) => b.tl - a.tl);
+  const chip = (s, sg) => { const k = limitStreak(s, sg); return `<span class="pill ${sg > 0 ? "up" : "down"}" data-x="${esc(s.name)}" title="${esc(s.description)}">${esc(s.name)} ${sg > 0 ? "+" : ""}${fmt(s.change, 1)}%${k ? ` · ${k}. gün` : ""}</span>`; };
+  return `<p>Tavan: <b class="up">${tv.length}</b> ${tv.slice(0, 14).map(s => chip(s, 1)).join("")}</p><p>Taban: <b class="down">${tb.length}</b> ${tb.slice(0, 14).map(s => chip(s, -1)).join("")}</p>
+    ${tb.length ? `<p class="note down">Taban uyarısı: taban kapatan hisse ertesi gün ortalama ${LIM ? sgn(LIM.taban.by_streak["1"].c1) : "−%2,5"} daha düşük kapanıyor, 5 günde ${LIM ? sgn(LIM.taban.by_streak["1"].c5) : "−%5"}; seri uzadıkça kayıp artıyor. Portföyünüzde varsa "ucuzladı" diye ekleme yapmayın.</p>` : ""}
+    <details><summary>Tavan ve taban sonrası ne olur? (geçmiş davranış${LIM ? `, ${LIM.stocks} hisse` : ""})</summary><h4 style="margin:8px 0 2px">Tavan</h4>${limitStats("tavan")}<h4 style="margin:10px 0 2px">Taban</h4>${limitStats("taban")}</details>`;
 }
 function giPhase() {
   const n = istanbulNow(), m = n.min;
@@ -1064,8 +1222,8 @@ async function renderGunIci() {
       : '<p class="mute">Zaman Modeli henüz başlamadı: ilk emirler bir sonraki kapanıştan sonra oluşur.</p>'}
     <h3 style="margin:12px 0 4px">Lider değişimi <span class="mute" style="font-weight:400">(skor kaydına göre${prev ? ": " + prev.d + " → " + last.d : ""})</span></h3>
     ${pm ? `<p><b class="up">Yeni lider kurulum:</b> ${joined.length ? joined.map(r => pill(r[0])).join("") : '<span class="mute">yok</span>'}</p><p><b class="down">Liderlikten düşenler (portföyünüzde varsa gözden geçirin):</b> ${dropped.length ? dropped.map(r => pill(r[0])).join("") : '<span class="mute">yok</span>'}</p>` : '<p class="mute">Skor kaydı birikiyor; en az iki işlem günü gerekir (her kapanıştan sonra otomatik eklenir).</p>'}
-    <h3 style="margin:12px 0 4px">Piyasa nabzı</h3>
-    <p>Tavan: <b class="up">${tavan.length}</b> ${tavan.slice(0, 10).map(s => pill(s.name)).join("")} · Taban: <b class="down">${taban.length}</b> ${taban.slice(0, 10).map(s => pill(s.name)).join("")} <span class="mute">(bilgi; tavandaki hisse alınamaz, kuyruk vardır)</span></p>
+    <h3 style="margin:12px 0 4px">Tavan / Taban radarı <span class="mute" style="font-weight:400">(bilgi; tavandaki hisse kuyrukta, alınamaz)</span></h3>
+    ${limitRadar()}
     <h2 style="margin-top:14px">2) Bekleme süresinin ekonomisi <span class="sub">(birleşik skorun en iyi %10 dilimi, piyasaya göre fazla getiri)</span></h2>
     ${T && T.birlesik ? `<div class="tw"><table><thead><tr><th>Tutma süresi</th><th>Brüt fazla getiri</th><th>Gün başına</th><th>Net (%${cost} maliyet)</th><th>Net (%0,2 maliyet)</th><th>İsabet</th><th>t</th></tr></thead><tbody>${hz.map(evRow).join("")}</tbody></table></div>
       <p class="note">Avantaj her gün birikir (~%0,13-0,25/gün) ama giriş-çıkış maliyeti tek seferliktir: kısa tutmak avantajı maliyete yedirir, uzun tutmak maliyeti seyreltir. 1-2 günde net getiri negatif, ~3 günde başa baş, 5-10 günde pozitif. Komisyonunuz düşükse (%0,2) eşik 1-2 güne iner. <b>Günlük işlem yapıp pozisyonu aynı gün/ertesi gün kapatmak bu yüzden hedeflenmedi.</b></p>` : '<p class="mute">Araştırma verisi yok.</p>'}
@@ -1718,6 +1876,22 @@ function renderAnaliz() {
   body.innerHTML = `${anSummary(s, r)}${valuationHtml(s)}<div id="anScen"></div><div id="anPeers"></div><div id="anNote"></div><div id="anDetail" style="margin-top:12px"></div>`;
   anScenario(s); anPeers(s); anNote(s); detail(s.name, "anDetail");
 }
+function valExplain(s, v) {
+  const iv = intrinsic(s), m = macro(), sens = valSens(s), pit = RESEARCH && RESEARCH.pit, nM = v.methods.length;
+  const sc = sens ? `<div class="tw"><table><thead><tr><th style="text-align:left">Kazanç değeri (TL)</th><th>iskonto −2 puan</th><th>iskonto ${fmt(iv.r * 100, 1)}%</th><th>iskonto +2 puan</th></tr></thead><tbody>${["büyüme −2 puan", "büyüme %" + fmt(iv.g * 100, 1), "büyüme +2 puan"].map((n, i) => `<tr><td style="text-align:left">${n}</td>${sens.rows[i].map((x, j) => `<td ${i === 1 && j === 1 ? 'style="font-weight:700"' : ""}>${fmt(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : "";
+  return `<details class="meet" style="margin-top:8px"><summary>🔎 Bu değerler nasıl hesaplanıyor? Neye güvenmeliyim?</summary>
+    <p class="note"><b>Defter değeri:</b> bilançodaki özkaynağın hisse başına karşılığı (son çeyrek; TMS 29 enflasyon muhasebesiyle cari satın alma gücüne göre yeniden ifade edilmiştir). <b>Şu anki değer:</b> son fiyat (15 dk gecikmeli). <b>Olması gereken değer:</b> aşağıdaki yöntemlerin medyanı (bu hissede ${nM} yöntem hesaplanabildi); aralık en düşük–en yüksek değerdir.</p>
+    <div class="tw"><table><thead><tr><th style="text-align:left">Yöntem</th><th style="text-align:left">Nasıl çalışır?</th><th style="text-align:left">Zayıf yanı</th></tr></thead><tbody>
+      <tr><td style="text-align:left"><b>Kazanç değeri</b></td><td style="text-align:left;white-space:normal">Hisse başı kâr × adil çarpan. Çarpan = (1+g)/(r−g); r reel iskonto, g reel büyüme.</td><td style="text-align:left;white-space:normal">r ve g'ye çok duyarlı (aşağıdaki tablo); son 12 ay kârı tek seferlik kalemlerle bozulabilir.</td></tr>
+      <tr><td style="text-align:left"><b>Nakit akışı değeri</b></td><td style="text-align:left;white-space:normal">Serbest nakit akışı/hisse × aynı çarpan (banka hariç).</td><td style="text-align:left;white-space:normal">Yatırım döngüsüne göre dalgalanır; negatif olabilir.</td></tr>
+      <tr><td style="text-align:left"><b>Gerekçeli PD/DD</b></td><td style="text-align:left;white-space:normal">(sürdürülebilir ROE − g)/(r − g) × defter değeri. ROE yarı yarıya iskonto oranına doğru sönümlenir (yüksek getiri kalıcı değildir).</td><td style="text-align:left;white-space:normal">Banka ve varlık ağırlıklı işletmeler için anlamlı; defter değeri muhasebe kurallarından etkilenir.</td></tr>
+      <tr><td style="text-align:left"><b>Graham sayısı</b></td><td style="text-align:left;white-space:normal">√(22,5 × EPS × defter değeri): F/K ≤ 15 ve PD/DD ≤ 1,5 ilkesi.</td><td style="text-align:left;white-space:normal">1970'ler ABD'si için tasarlandı; yüksek enflasyona uyarlanmadı.</td></tr>
+      <tr><td style="text-align:left"><b>Sektör medyan F/K ve PD/DD</b></td><td style="text-align:left;white-space:normal">Hisseyi sektörünün ortanca çarpanıyla değerler (göreli).</td><td style="text-align:left;white-space:normal">Sektör pahalıysa hisse de "adil" görünür; piyasa düzeyini sorgulamaz.</td></tr></tbody></table></div>
+    <p class="note"><b>Bu hisse için varsayımlar:</b> tahvil getirisi %${fmt(m.rf * 100, 1)}${m.live ? " (canlı TR10Y)" : ""}, enflasyon beklentisi %${fmt(m.infl * 100, 0)}, hisse risk primi %${fmt(m.erp * 100, 0)} → reel iskonto oranı <b>%${fmt(iv.r * 100, 1)}</b>. Reel büyüme <b>%${fmt(iv.g * 100, 1)}</b> (EPS büyümesi ${s.epsg == null ? "yok" : "%" + fmt(s.epsg, 0)}${s.epsg != null && Math.abs(s.epsg) > 200 ? ": taban etkisi sayıldı, 0 alındı" : "; güven katsayısı 0,35, sınır −%2/+%4"}). Adil çarpan <b>${fmt(iv.mult, 1)}x</b> (hissenin şu anki F/K'sı ${s.pe > 0 ? fmt(s.pe, 1) + "x" : "tanımsız"}). Varsayımları <b>Efsane Kuralları</b> sayfasından değiştirebilirsiniz.</p>
+    ${sc}
+    <p class="note"><b>Güven (${v.confidence}):</b> yöntemlerin birbirine yakınlığıdır, doğruluk ölçüsü değildir. "Düşük" ise yöntemler çelişiyor demektir: tek bir rakama değil, aralığa bakın.</p>
+    <p class="note" style="border-left:3px solid var(--warn);padding-left:10px"><b>Doğrulama durumu (dürüst not):</b> Adil değerin geleceği ne kadar öngördüğünü geçmişte ölçemiyoruz; temel verilerin (F/K, özkaynak...) geçmiş sürümleri elimizde yok. Bu yüzden değer analizi <b>tahmin skoruna GİRMEZ</b> (günlük/haftalık/aylık skorlar yalnızca fiyat-hacim göstergelerine dayanır ve test edilmiştir). Değer yalnızca Buffett'ın görüşünde ve Karar Kartı'nda ek bağlam olarak kullanılır. Her hafta noktasal (o günkü) temel veri ve adil değer kaydediyoruz (${pit ? pit.snapshots : 0}/${pit ? pit.needed : 8} kayıt); ${pit && pit.ready ? "ilk sonuçlar Sistem Araştırması'nda." : "yeterli kayıt birikince 'adil değere uzaklık' faktörünün sonraki getiriyi öngörüp öngörmediği ölçülecek."} Not: bu model sistematik olarak gerçeği yansıtmayabilir; denetimde önceki sürümün (nominal iskonto, sıfır büyüme) hisselerin çoğunu "pahalı" gösterdiği görüldü ve düzeltildi.</p></details>`;
+}
 function valuationHtml(s) {
   const v = valuation(s), mx = Math.max(v.book || 0, v.price, v.hi || 0) * 1.08 || 1, pct = x => Math.min(100, x / mx * 100);
   const row = (nm, val, cls, extra) => `<div class="valbar"><span class="nm">${nm}</span><span class="bar">${extra || ""}<i style="width:${val == null ? 0 : pct(val)}%;background:${cls}"></i></span><span class="vv">${val == null ? "–" : fmt(val) + " TL"}</span></div>`;
@@ -1729,7 +1903,7 @@ function valuationHtml(s) {
     ${row("Olması gereken değer (medyan)", v.fair, "var(--up)", rg)}
     <p style="margin:6px 0">${v.fair != null ? `Piyasa fiyatı olması gereken değerin <b class="${sign(-v.upside)}">${v.upside >= 0 ? "%" + fmt(v.upside, 0) + " altında" : "%" + fmt(-v.upside, 0) + " üstünde"}</b>` : "Olması gereken değer hesaplanamadı"}${v.lo != null ? ` · makul aralık ${fmt(v.lo)}–${fmt(v.hi)} TL` : ""} · yöntemler arası uyum: <b>${v.confidence}</b>${v.pbNow != null ? ` · fiyat/defter ${fmt(v.pbNow, 2)}x` : ""}.</p>
     ${v.methods.length ? `<div class="tw"><table class="cmpv"><thead><tr><th style="text-align:left">Yöntem</th><th>Değer (TL)</th><th>Fiyata göre</th></tr></thead><tbody>${v.methods.map(x => `<tr><td style="text-align:left;white-space:normal">${esc(x.l)}</td><td>${fmt(x.v)}</td><td class="${sign(x.v / v.price - 1)}">${x.v / v.price >= 1 ? "+" : ""}${fmt((x.v / v.price - 1) * 100, 0)}%</td></tr>`).join("")}</tbody></table></div>` : ""}
-    <p class="note">İskonto oranı: tahvil %${fmt(m.rf * 100, 1)} + hisse risk primi %${fmt(m.erp * 100, 0)}; büyüme: son EPS büyümesinin %75'i, enflasyonla (%${fmt(m.infl * 100, 0)}) sınırlı. Defter değeri enflasyonlu ortamda gerçek değeri olduğundan düşük gösterebilir. Bu bir tahmindir; yatırım tavsiyesi değildir.</p></div>`;
+${valExplain(s, v)}</div>`;
 }
 function openAnalysis(name) {
   if (!UNIVERSE.some(x => x.name === name)) { toast("Hisse bulunamadı: " + name); return; }
@@ -2210,7 +2384,7 @@ function decisionCard(s, r) {
   if (s.sma20_w > 0 && s.close > s.sma20_w && s.sma20_w > s.sma50_w) pos.push("Haftalık trend yukarı"); else if (s.sma50_w > 0 && s.close < s.sma50_w) neg.push("Fiyat haftalık SMA50'nin altında");
   if (s.rs != null) (s.rs >= 80 ? pos : s.rs <= 30 ? neg : []).push(`Göreceli güç ${fmt(s.rs, 0)}/100`);
   if (s.cmf != null) (s.cmf > 0.1 ? pos : s.cmf < -0.1 ? neg : []).push(`Para akışı (CMF) ${s.cmf > 0 ? "pozitif" : "negatif"}: ${fmt(s.cmf, 2)}`);
-  if (vl.upside != null) (vl.upside >= 25 ? pos : vl.upside <= -40 ? neg : []).push(`Adil değere ${vl.upside >= 0 ? "%" + fmt(vl.upside, 0) + " uzak (ucuz)" : "göre %" + fmt(-vl.upside, 0) + " pahalı"}`);
+  if (vl.upside != null && (vl.confidence === "yüksek" || vl.confidence === "orta")) (vl.upside >= 25 ? pos : vl.upside <= -40 ? neg : []).push(`Adil değere ${vl.upside >= 0 ? "%" + fmt(vl.upside, 0) + " uzak (ucuz)" : "göre %" + fmt(-vl.upside, 0) + " pahalı"}`);
   if (bear) neg.push("Piyasa ayı rejiminde (avantaj piyasaya göredir)");
   if (ed != null && ed >= -1 && ed <= 7) neg.push(`Bilanço ${fmt(Math.max(0, ed), 0)} gün içinde: sürpriz riski`);
   if (s.atrPct != null && s.atrPct > 5) neg.push(`Yüksek oynaklık (ATR %${fmt(s.atrPct, 1)})`);
@@ -2466,6 +2640,9 @@ function refreshView() {
   else if (view === "tarayici") renderScreener();
   else if (view === "zaman") renderZaman();
   else if (view === "gunici") renderGunIci();
+  else if (view === "gunluk") renderJournal();
+  else if (view === "risk") renderRisk();
+  else if (view === "takvim") renderCalendarPage();
   else if (view === "tahmin") renderTahmin();
   else if (view === "grafik") renderChartPage();
   else if (view === "atolye") renderBacktestLab();
@@ -2554,6 +2731,7 @@ async function loadAux() {
   { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
+  if (!LIM) { const m = await getJson("limit_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tavan) LIM = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
     const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
     if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
@@ -2647,7 +2825,7 @@ if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(esc
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "grafik", "gunici", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "grafik", "gunici", "gunluk", "risk", "takvim", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

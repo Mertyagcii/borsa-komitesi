@@ -7,7 +7,7 @@
 const fmt = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
 
 const RULE_DEFS = [
-  ["Makro varsayımlar (veri yoksa)", [["rf", "Tahvil getirisi % (veri yoksa)", 33], ["erp", "Hisse risk primi % (tahvilin üstü)", 6], ["infl", "Enflasyon beklentisi %", 30]]],
+  ["Makro varsayımlar (veri yoksa)", [["rf", "Tahvil getirisi % (veri yoksa)", 33], ["erp", "Hisse risk primi % (tahvilin üstü)", 6], ["infl", "Enflasyon beklentisi %", 30], ["gMax", "Adil değer: reel büyüme üst sınırı %", 4], ["gMin", "Adil değer: reel büyüme alt sınırı %", -2], ["gK", "Adil değer: EPS büyümesine güven katsayısı", 0.35]]],
   ["Buffett: işletme sahibi gibi", [["bMcap", "Min. piyasa değeri (milyar TL)", 10], ["bRoe", "Reel ROE en az %", 5], ["bNm", "Net kâr marjı en az %", 8], ["bGm", "Brüt marj en az % (fiyatlama gücü)", 25], ["bDe", "Borç/Özsermaye en çok", 0.6], ["bMos", "Güvenlik marjı en az %", 25]]],
   ["Simons: model", [["sEdge", "Beklenen 10g fazla getiri en az %", 1], ["sRs", "Min. göreceli güç (RS) yüzdesi", 70], ["sKelly", "Kelly çarpanı (kesirli)", 0.25], ["sCap", "Tek hisse azami ağırlık %", 6]]],
   ["Livermore: trend ve pivot", [["lRs", "Lider sayılmak için min. RS", 80], ["lPiv", "Pivota yakınlık %", 2], ["lVol", "Min. göreceli hacim", 1.2], ["lExt", "Aşırı uzama (SMA50 üstü) % üst sınır", 30]]],
@@ -229,19 +229,33 @@ function computeSectorStats(uni) {
   return rows;
 }
 
-/* Adil değer (büyüyen kalıcı gelir): iskonto oranı = tahvil getirisi + hisse risk primi; büyüme = son EPS büyümesinin %75'i,
-   [0, enflasyon] aralığıyla sınırlı (yüksek enflasyonda kazançlar uzun vadede enflasyondan hızlı büyüyemez).
-   İki tahmin: kazanç (EPS) ve sahip kazancı (FCF/hisse; banka dışı). Temkinli olan alınır. */
+/* Adil değer: ENFLASYONDAN ARINDIRILMIŞ (reel) iskonto ve büyüme. (Denetim notu: önceki sürüm nominal iskonto (tahvil %33 + risk primi) kullanıp
+   büyümeyi 0'a sabitliyordu; %30 enflasyonda bu, hisselerin çoğuna "adil F/K ≈ 2,6" biçiyordu (gerçek medyan F/K ≈ 11) ve sistematik olarak "pahalı" diyordu.)
+   - Nominal iskonto = tahvil getirisi + hisse risk primi; reel iskonto = (1 + tahvil) / (1 + enflasyon beklentisi) − 1 + hisse risk primi.
+   - Reel büyüme g: son EPS büyümesinin %35'i (TMS 29 sonrası rakamlar reel kabul edilir) (gürültülü olduğundan güven katsayısı düşük), [gMin, gMax] (varsayılan −%2, +%4) aralığıyla sınırlı;
+     |EPS büyümesi| > %200 ise taban etkisi sayılır, büyüme 0 alınır.
+   - Adil çarpan = (1 + g) / (r_reel − g), [3, 20] ile sınırlı. Reel çarpan nominal EPS'e uygulanır (nominal ve reel oranlar aynı enflasyonla ölçeklendiğinde çarpan aynıdır).
+   - Banka/finans ve varlık ağırlıklı işletmeler için ayrıca gerekçeli PD/DD = (reel ROE − g) / (r_reel − g) (valuation içinde).
+   İki tahmin: kazanç (EPS) ve sahip kazancı (FCF/hisse; banka dışı). Buffett için temkinli olan (küçük olan) alınır. */
 function intrinsic(s) {
-  const m = macro(), r = m.rf + m.erp, fin = isFin(s);
-  const g = Math.max(0, Math.min((s.epsg ?? 0) / 100 * 0.75, m.infl, r - 0.08));
-  const out = {g, r, fvEps: null, fvOe: null, fv: null, mos: null, gn: graham(s)};
-  if (s.eps > 0) out.fvEps = s.eps * (1 + g) / (r - g);
-  if (!fin && s.fcf > 0 && s.mcap > 0 && s.close > 0) out.fvOe = (s.fcf / (s.mcap / s.close)) * (1 + g) / (r - g);
+  const m = macro(), rNom = m.rf + m.erp, rReal = (1 + m.rf) / (1 + m.infl) - 1 + m.erp, fin = isFin(s); // reel risksiz getiri + hisse risk primi
+  const epsgReal = s.epsg != null && Math.abs(s.epsg) <= 200 ? s.epsg / 100 : null; // TMS 29 (enflasyon muhasebesi) sonrası bilanço rakamları cari satın alma gücüyle yeniden ifade edilir: büyüme zaten reel kabul edilir
+  const gMax = (R.gMax ?? 4) / 100, gMin = (R.gMin ?? -2) / 100, gK = R.gK ?? 0.35;
+  const g = Math.max(gMin, Math.min(gMax, epsgReal == null ? 0 : gK * epsgReal));
+  const mult = rReal - g > 0.01 ? Math.max(3, Math.min(20, (1 + g) / (rReal - g))) : 20;
+  const out = {g, r: rReal, rNom, mult, fvEps: null, fvOe: null, fv: null, mos: null, gn: graham(s), epsgReal};
+  if (s.eps > 0) out.fvEps = s.eps * mult;
+  if (!fin && s.fcf > 0 && s.mcap > 0 && s.close > 0) out.fvOe = (s.fcf / (s.mcap / s.close)) * mult;
   const c = [out.fvEps, out.fvOe].filter(v => v != null);
   out.fv = c.length ? Math.min(...c) : null;
   out.mos = out.fv ? (out.fv - s.close) / out.fv * 100 : null;
   return out;
+}
+/* Duyarlılık: adil değer iskonto oranı ve büyümeye çok duyarlıdır; ±2 puanlık değişimle kazanç değeri nasıl oynuyor? */
+function valSens(s) {
+  const iv = intrinsic(s); if (!(s.eps > 0)) return null;
+  const rows = [-0.02, 0, 0.02].map(dg => [-0.02, 0, 0.02].map(dr => { const g = iv.g + dg, r = iv.r + dr, k = r - g > 0.01 ? Math.max(3, Math.min(20, (1 + g) / (r - g))) : 20; return s.eps * k; }));
+  return {rows, g: iv.g, r: iv.r};
 }
 
 /* =====================================================================================
@@ -262,7 +276,7 @@ function buffett(s) {
     chk(fin || s.de == null ? null : s.de <= R.bDe && (nd == null || nd <= 2.5), `Borç/Özsermaye ≤ ${R.bDe} ve net borç/FAVÖK ≤ 2,5`, fin ? "banka/finans: geçerli değil" : `${fmt(s.de)} / ${nd == null ? "–" : fmt(nd, 1)}`),
     chk(fin || s.fcf == null ? null : s.fcf > 0, "Serbest nakit akışı pozitif (sahip kazancı)", fin ? "banka/finans: geçerli değil" : s.fcf == null ? "–" : s.fcf > 0 ? `pozitif (getiri ${pc(fcfy)})` : "negatif"),
     chk(s.epsg == null ? null : s.epsg >= m.infl * 100, "Kazanç büyümesi enflasyonu karşılıyor (reel büyüme ≥ 0)", `${pc(s.epsg)} vs enflasyon ${pc(m.infl * 100)}`),
-    chk(iv.mos == null ? null : iv.mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos}: adil değer ${iv.fv ? fmt(iv.fv) + " TL" : "–"} (iskonto: tahvil %${fmt(m.rf * 100, 1)} + risk primi %${fmt(m.erp * 100, 0)}, büyüme %${fmt(iv.g * 100, 0)})`, pc(iv.mos)),
+    chk(iv.mos == null ? null : iv.mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos}: adil değer ${iv.fv ? fmt(iv.fv) + " TL" : "–"} (reel iskonto %${fmt(iv.r * 100, 1)} = tahvil %${fmt(m.rf * 100, 1)} + risk primi %${fmt(m.erp * 100, 0)} enflasyondan arındırılmış; reel büyüme %${fmt(iv.g * 100, 1)}; çarpan ${fmt(iv.mult, 1)}x)`, pc(iv.mos)),
     chk(ey == null ? null : ey >= m.rf * 100 * 0.5, "Kazanç getirisi (1/FK) tahvil faizinin yarısından fazla (kalanı büyümeyle gelir)", `${pc(ey)} vs tahvil ${pc(m.rf * 100)}`),
     chk(null, "Kalıcı rekabet avantajı (moat), basit iş modeli, yetenek çevresi", "veriyle ölçülemez: kendiniz doğrulayın"),
     chk(null, "Dürüst ve yetenekli yönetim", "veriyle ölçülemez"),
@@ -502,12 +516,16 @@ function strengthList(uni, n, minTl) {
 }
 
 /* ---------- Değer tablosu: defter değeri, şu anki değer, olması gereken değer ----------
-   Beş yöntem (varsa): kazanç değeri, nakit akışı değeri, Graham sayısı, sektör medyan F/K ve PD/DD çarpanları.
+   Altı yöntem (varsa): kazanç değeri, nakit akışı değeri, gerekçeli PD/DD (reel ROE), Graham sayısı, sektör medyan F/K ve PD/DD çarpanları.
    "Olması gereken değer" = yöntemlerin medyanı; aralık = en düşük–en yüksek. Yöntemler birbirinden çok farklıysa güven düşüktür. */
 function valuation(s) {
   const iv = intrinsic(s), gn = graham(s), st = SECTOR_STATS[s.sector || "Diğer"], book = s.bvps > 0 ? s.bvps : null, m = [];
-  if (iv.fvEps != null) m.push({id: "eps", l: "Kazanç değeri (EPS; tahvil + risk primi iskontolu)", v: iv.fvEps});
-  if (iv.fvOe != null) m.push({id: "fcf", l: "Nakit akışı değeri (serbest nakit akışı/hisse)", v: iv.fvOe});
+  if (iv.fvEps != null) m.push({id: "eps", l: `Kazanç değeri (EPS × adil çarpan ${fmt(iv.mult, 1)}; reel iskonto %${fmt(iv.r * 100, 1)}, reel büyüme %${fmt(iv.g * 100, 1)})`, v: iv.fvEps});
+  if (iv.fvOe != null) m.push({id: "fcf", l: `Nakit akışı değeri (serbest nakit akışı/hisse × ${fmt(iv.mult, 1)})`, v: iv.fvOe});
+  if (s.roe != null && s.roe > 0 && s.roe < 200 && book) { // gerekçeli PD/DD: sürdürülebilir reel ROE iskonto oranını aşıyorsa defter değerinin üstünde, aşmıyorsa altında işlem görmeli
+    const roeS = 0.5 * s.roe / 100 + 0.5 * iv.r, pbJ = Math.max(0.2, Math.min(4, (roeS - iv.g) / (iv.r - iv.g))); // ROE (TMS 29 sonrası reel kabul) yarı yarıya iskonto oranına doğru sönümlenir: yüksek getiriler kalıcı değildir
+    m.push({id: "roepb", l: `Gerekçeli PD/DD (sürdürülebilir ROE %${fmt(roeS * 100, 1)}; ${fmt(pbJ, 2)}x) × defter değeri`, v: pbJ * book});
+  }
   if (gn != null) m.push({id: "graham", l: "Graham sayısı (√(22,5 × EPS × defter değeri))", v: gn});
   if (st && st.medPe > 0 && s.eps > 0) m.push({id: "pe", l: `Sektör medyan F/K (${fmt(st.medPe, 1)}) × EPS`, v: st.medPe * s.eps});
   if (st && st.medPb > 0 && book) m.push({id: "pb", l: `Sektör medyan PD/DD (${fmt(st.medPb, 2)}) × defter değeri`, v: st.medPb * book});

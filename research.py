@@ -232,7 +232,7 @@ def pit_eval() -> dict:
         df = pd.DataFrame(d["rows"], columns=d["cols"]).set_index("name")
         snaps.append((d["d"], df))
     defs = {"roe": ("ROE", 1), "nm": ("Net marj", 1), "gm": ("Brüt marj", 1), "de": ("Düşük borç/özsermaye", -1), "pe": ("Düşük F/K", -1),
-            "pb": ("Düşük PD/DD", -1), "fcfy": ("FCF getirisi", 1), "epsg": ("EPS büyümesi", 1), "dy": ("Temettü verimi", 1)}
+            "pb": ("Düşük PD/DD", -1), "upside": ("Adil değere uzaklık (+ ucuz)", 1), "fcfy": ("FCF getirisi", 1), "epsg": ("EPS büyümesi", 1), "dy": ("Temettü verimi", 1)}
     for k, (label, sg) in defs.items():
         ics = []
         for (d0, a), (d1, b) in zip(snaps[:-1], snaps[1:]):

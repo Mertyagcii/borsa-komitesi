@@ -28,6 +28,11 @@ try:  # gün içi / gece taşıma araştırması: 15 dk veri haftada bir yenilen
         overnight_research.main()
 except Exception as e:
     print("gün içi araştırma başarısız:", e)
+try:
+    import limit_research
+    limit_research.main()
+except Exception as e:
+    print("tavan/taban araştırması başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward

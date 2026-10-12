@@ -44,7 +44,7 @@ if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
 /* ---- core.js'i bir vm içinde çalıştır (tarayıcıyla aynı mantık) ---- */
 const coreSrc = fs.readFileSync(path.join(__dirname, "core.js"), "utf8");
 const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __NOW: Date.now()});
-const FUND_COLS = ["name", "close", "roe", "nm", "gm", "de", "fcf", "mcap", "eps", "bvps", "epsg", "pe", "pb", "dy", "debt", "ebitda", "cash", "p1m", "p6m", "rs"];
+const FUND_COLS = ["name", "close", "roe", "nm", "gm", "de", "fcf", "mcap", "eps", "bvps", "epsg", "pe", "pb", "dy", "debt", "ebitda", "cash", "p1m", "p6m", "rs", "upside", "fair"];
 const out = vm.runInContext(`
 ${coreSrc}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
@@ -55,6 +55,7 @@ current = strengthList(UNI, 25, 5);
 const res = current.map(s => [s, committee(s)]);
 const sc = personaScreens(UNI, 8, []);
 const liquid300 = UNI.filter(s => s.ok && s.tl >= 10).sort((a, b) => b.tl - a.tl).slice(0, 300);
+liquid300.forEach(s => { const v = valuation(s); s.upside = v.upside; s.fair = v.fair; }); // noktasal kayıt: adil değer yöntemi ileride test edilebilsin
 const events = [];
 Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n); if (!s || !s.close) return;
   (v.items || []).forEach(i => { const tg = tagsOf(i.t).map(x => x[0]); if (tg.length && NOW / 1000 - i.ts < 4 * 86400) events.push({k: n + "|" + i.ts, n, ts: i.ts, tags: tg, s: i.s, e: s.close}); }); });
