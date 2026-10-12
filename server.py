@@ -84,10 +84,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send((HERE / "template.html").read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/data":
             self._send(snapshot(), "application/json; charset=utf-8")
-        elif self.path.split("?")[0] in ("/news.json", "/history.json"):
+        elif self.path.split("?")[0] in ("/news.json", "/history.json", "/picks.json", "/core.js"):
             f = HERE / self.path.split("?")[0].lstrip("/")
             if f.exists():
-                self._send(f.read_bytes(), "application/json; charset=utf-8")
+                self._send(f.read_bytes(), "application/javascript; charset=utf-8" if f.suffix == ".js" else "application/json; charset=utf-8")
             else:
                 self._send(b"{}", "application/json; charset=utf-8", 404)
         else:

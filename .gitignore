@@ -3,3 +3,4 @@ site/
 data.json
 news.json
 *.pyc
+alerts.txt

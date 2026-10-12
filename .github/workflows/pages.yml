@@ -1,4 +1,4 @@
-name: Veri guncelle ve yayinla
+﻿name: Veri guncelle ve yayinla
 
 on:
   schedule:
@@ -40,7 +40,30 @@ jobs:
             git commit -m "history.json guncellendi"
             git push
           fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - run: python build_site.py
+      - name: Komite karnesi kaydi ve uyarilar (gunde bir kez, kapanistan sonra)
+        run: node signals.js
+      - name: picks/snapshots degistiyse kaydet
+        run: |
+          if [ -n "$(git status --porcelain picks.json snapshots.json)" ]; then
+            git config user.name "tradingofis-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add picks.json snapshots.json
+            git commit -m "karne kaydi guncellendi"
+            git pull --rebase origin main
+            git push
+          fi
+      - name: Telegram uyarisi (TELEGRAM_BOT_TOKEN ve TELEGRAM_CHAT_ID tanimliysa)
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] && [ -f alerts.txt ]; then
+            curl -s "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" --data-urlencode "chat_id=${TG_CHAT}" --data-urlencode "text=$(cat alerts.txt)" > /dev/null
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

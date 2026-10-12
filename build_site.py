@@ -1,4 +1,4 @@
-"""Yayın klasörü (site/) üretir: index.html + data.json + news.json (+ history.json varsa).
+﻿"""Yayın klasörü (site/) üretir: index.html + data.json + news.json (+ history.json varsa).
 GitHub Actions bunu 15 dakikada bir çalıştırır."""
 import json
 import shutil
@@ -13,6 +13,9 @@ SITE = HERE / "site"
 
 SITE.mkdir(exist_ok=True)
 shutil.copy(HERE / "template.html", SITE / "index.html")
+for extra in ("core.js", "picks.json"):
+    if (HERE / extra).exists():
+        shutil.copy(HERE / extra, SITE / extra)
 snap = fetch_snapshot()
 (SITE / "data.json").write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
 

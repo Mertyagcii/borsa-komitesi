@@ -22,6 +22,7 @@ RENAME = {
     "Low.1M": "l1m", "High.3M": "h3m", "price_52_week_high": "h52", "price_52_week_low": "l52", "Perf.W": "pw",
     "Perf.1M": "p1m", "Perf.3M": "p3m", "Perf.6M": "p6m", "SMA20": "sma20", "SMA200": "sma200", "high": "hi",
     "low": "lo", "ADX": "adx", "beta_1_year": "beta", "enterprise_value_ebitda_ttm": "evebitda",
+    "earnings_release_next_date": "nextEarn", "ex_dividend_date_upcoming": "exDiv",
 }
 COLUMNS = [
     "name", "description", "sector", "close", "volume", "change", "SMA50", "BB.lower", "BB.upper",
@@ -31,6 +32,7 @@ COLUMNS = [
     "earnings_per_share_diluted_ttm", "book_value_per_share_fq", "dividends_yield_current", "VWAP", "High.1M",
     "Low.1M", "High.3M", "price_52_week_high", "price_52_week_low", "Perf.W", "Perf.1M", "Perf.3M", "Perf.6M",
     "SMA20", "SMA200", "high", "low", "ADX", "beta_1_year", "enterprise_value_ebitda_ttm",
+    "earnings_release_next_date", "ex_dividend_date_upcoming",
 ]
 
 

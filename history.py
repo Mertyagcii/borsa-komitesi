@@ -107,12 +107,18 @@ def build(names: list[str], log=print) -> dict:
                 pool[key][h] += r
         if k % 25 == 0:
             log(f"[{k}/{len(names)}] ...")
+    index = None
+    for sym in ("XU100", "XU030", "XUTUM"):
+        idf = get_hist(tv, sym)
+        if idf is not None:
+            index = {"name": sym, "last": str(idf.index[-1])[:10], "closes": [round(float(x), 2) for x in idf["close"].tail(260)]}
+            break
     now = datetime.now(TZ)
     pooled = {key: summarize(pool[key], pool_n[key]) for key in "ABC"}
     pooled["base"] = summarize({h: np.concatenate(v).tolist() if v else [] for h, v in base.items()}, 0)
     return {
         "ts": int(time.time()), "generated": now.strftime("%Y-%m-%d %H:%M"),
-        "bars": N_BARS, "pooled": pooled,
+        "bars": N_BARS, "pooled": pooled, "index": index,
         "stocks": stocks,
     }
 

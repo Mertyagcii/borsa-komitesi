@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
@@ -165,6 +165,36 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .persona .plan{margin-top:6px;font-size:12.5px;padding-top:6px;border-top:1px dashed var(--line)}
 .persona .vt{font-size:11px;font-weight:700;margin-left:6px}
 .srcs{font-size:12.5px;color:var(--mute)}.srcs a{color:var(--accent2)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.tab{border-radius:99px;padding:4px 12px;font-size:12.5px}
+.tab.on{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff;border-color:transparent}
+.ntag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:0 7px;margin-right:6px;background:var(--panel2);color:var(--mute)}
+.ntag.up{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
+.ntag.down{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+.actions button{font-size:12px;padding:4px 10px;border-radius:99px}
+.calc{margin-top:12px;background:var(--panel2);border-radius:14px;padding:10px 12px}
+.calc summary{font-weight:600;cursor:pointer}
+.calcgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+.calcgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--mute);gap:3px}
+.calcgrid input,.calcgrid select{width:100%}
+#calcOut{font-size:13px}
+#calcOut .row2{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed var(--line)}
+.cmp th,.cmp td{white-space:normal}
+.cmp td.best{color:var(--up);font-weight:700}
+.cmp th{position:static;cursor:default}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);background:var(--panel);border:1px solid var(--accent);color:var(--text);padding:8px 16px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:200;font-size:13px}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.karne td,.karne th{white-space:nowrap}
+.few{color:var(--warn);font-size:11px;margin-left:4px}
+@media print{
+  :root{--bg:#fff;--shell:#fff;--panel:#fff;--panel2:#f3f3f6;--line:#ccc;--text:#111;--mute:#555;--accent2:#0a8f68;--up:#1a7f37;--down:#c0262d;--warn:#8a5a00}
+  body{background:#fff;padding:0}
+  body.printing .shell,body.printing #scrim,body.printing .tour,body.printing #toast{display:none!important}
+  body.printing #drawer{position:static;transform:none;width:100%;box-shadow:none;border:0;overflow:visible;padding:0}
+  body.printing #dClose,body.printing .actions,body.printing .calc{display:none!important}
+  body:not(.printing) #drawer{display:none}
+}
 </style>
 </head>
 <body>
@@ -175,8 +205,11 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
     <nav class="nav" id="nav">
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="adaylar"><i data-ico="list"></i>Aday Hisseler</a>
+      <a data-view="ekranlar"><i data-ico="filter"></i>Efsane Ekranları</a>
       <a data-view="favoriler"><i data-ico="star"></i>Favoriler</a>
+      <a data-view="karsilastir"><i data-ico="columns"></i>Karşılaştır</a>
       <a data-view="haberler"><i data-ico="news"></i>Haberler</a>
+      <a data-view="karne"><i data-ico="award"></i>Komite Karnesi</a>
       <a data-view="geritest"><i data-ico="bars"></i>Geri Test</a>
     </nav>
     <div class="side-bottom nav">
@@ -248,6 +281,7 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
           <div class="list" id="auditList"></div>
         </div>
       </div>
+      <div class="row r3"><div class="card" id="regimeCard"></div><div class="card" id="calCard"></div></div>
       <section class="card" id="audit"></section>
     </div>
 
@@ -280,6 +314,15 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
     <!-- HABERLER -->
     <div class="view" id="v-haberler"><section class="card" id="newsView"></section></div>
 
+    <!-- EFSANE EKRANLARI -->
+    <div class="view" id="v-ekranlar"><section class="card"><h2>Efsane ekranları</h2><p class="note">Her efsane tüm likit hisseleri kendi ölçütleriyle tarar (alt banda yakın olma şartı yoktur).</p><div class="tabs" id="screenTabs"></div><div id="screenBody"></div></section></div>
+
+    <!-- KARŞILAŞTIR -->
+    <div class="view" id="v-karsilastir"><section class="card" id="cmpView"></section></div>
+
+    <!-- KARNE -->
+    <div class="view" id="v-karne"><section class="card" id="karneView"></section></div>
+
     <!-- GERİ TEST -->
     <div class="view" id="v-geritest"><section class="card" id="backtest"></section></div>
 
@@ -290,6 +333,13 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
         <p class="note">Eşikleri değiştirin; komite ve tablo anında güncellenir. Ayarlar bu tarayıcıda saklanır.</p>
         <div class="rules" id="rules"></div>
         <p><button id="rulesReset">Varsayılana dön</button></p>
+      </section>
+      <section class="card" style="margin-top:16px">
+        <h2>Bildirimler</h2>
+        <p class="note">Sayfa açıkken yeni "güçlü aday" ya da favorilerinizde olumsuz haber çıkınca tarayıcı bildirimi gönderilir. Sekme başlığındaki sayı güçlü aday adedini gösterir.</p>
+        <p><label class="inline" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="notifChk"> Tarayıcı bildirimlerini aç</label></p>
+        <p class="note" id="notifState"></p>
+        <p class="note">Sayfa kapalıyken de uyarı almak için Telegram bağlantısını GitHub'da tanımlayabilirsiniz (Yardım sayfasında anlatılıyor).</p>
       </section>
     </div>
 
@@ -303,6 +353,15 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
           <li><b>Baş Denetçi:</b> Veri eksiklerini, eski veriyi, küçük örneklemi ve komite içi çelişkileri kontrol eder.</li>
           <li><b>Geri test:</b> Bollinger alt bandına değen hisselerin sonraki 5/10/20 gün getirisi, her gün alma tabanıyla karşılaştırılır. Maliyet içermez, geçmiş geleceği garanti etmez.</li>
           <li><b>Haber skoru:</b> Başlıklardaki anahtar kelimelerle hesaplanan kaba bir göstergedir.</li>
+        </ul>
+        <h2 style="margin-top:18px">Sayfalar</h2>
+        <ul>
+          <li><b>Efsane Ekranları:</b> Her efsane tüm likit hisseleri kendi kontrol listesiyle tarar; Şeytanın Avukatı "risk radarı" verir.</li>
+          <li><b>Karşılaştır:</b> 2-3 hisseyi temel, teknik, komite ve risk ölçütleriyle yan yana koyar (en iyi değer yeşil).</li>
+          <li><b>Komite Karnesi:</b> Her iş günü kapanışta komitenin kararları kaydedilir; 5/10/20 iş günü sonra hissenin getirisi, aynı dönemde 150 likit hissenin ortalamasıyla kıyaslanır. İlk sonuçlar kayıttan 5 iş günü sonra görünür. Örneklem küçükken (n&lt;20) sonuçlar anlamsızdır.</li>
+          <li><b>Detay paneli:</b> Pozisyon hesaplayıcı (sermaye, risk %, stop türüne göre lot ve hedefler), bağlantı kopyalama ve PDF/yazdır.</li>
+          <li><b>Piyasa rejimi:</b> BIST endeksinin SMA50/SMA200 durumu ve SMA50 üstündeki hisse oranı. Ayı rejiminde Livermore uzun pozisyon açmaz.</li>
+          <li><b>Telegram uyarısı (isteğe bağlı):</b> GitHub deposunda Settings → Secrets and variables → Actions bölümünde <code>TELEGRAM_BOT_TOKEN</code> ve <code>TELEGRAM_CHAT_ID</code> tanımlarsanız, her kapanışta yeni güçlü adaylar size mesajla bildirilir.</li>
         </ul>
         <h2 style="margin-top:18px">Efsaneler gerçekte nasıl düşünür? (araştırma özeti)</h2>
         <ul>
@@ -331,10 +390,11 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 <aside id="drawer" aria-label="Hisse detayı"><button id="dClose" class="ibtn round" title="Kapat (Esc)">✕</button><div id="detail"></div></aside>
 <div class="tour" id="tour"></div>
 
+<script src="core.js"></script>
 <script>
 let DATA = {ts: 0, generated: "–", stocks: []}, HIST = null, NEWS = {};
 const $ = id => document.getElementById(id);
-const fmt = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
+
 const sign = v => v == null ? "" : v >= 0 ? "up" : "down";
 const store = {
   get(k, def) { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
@@ -369,20 +429,14 @@ const ICONS = {
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   arrow: '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>',
   chev: '<polyline points="6 9 12 15 18 9"/>',
+  columns: '<rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="18" rx="1.5"/>',
+  award: '<circle cx="12" cy="8" r="6"/><path d="M15.5 13.5 17 22l-5-3-5 3 1.5-8.5"/>',
+  filter: '<polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/>',
 };
 const ico = n => `<svg class="i" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 function paintIcons(root = document) { root.querySelectorAll("i[data-ico]").forEach(el => { el.innerHTML = ico(el.dataset.ico); }); }
 
 /* ---------- Efsane kuralları (ayarlanabilir) ---------- */
-const RULE_DEFS = [
-  ["Buffett (Hagstrom'un finansal ve değer ilkeleri)", [["bRoe", "ROE en az %", 15], ["bDe", "Borç/Özsermaye en çok", 0.5], ["bNm", "Net kâr marjı en az %", 10], ["bPe", "F/K en çok", 15], ["bPb", "PD/DD en çok", 1.5], ["bMos", "Güvenlik marjı en az %", 25]]],
-  ["Simons (istatistik)", [["sZ", "Sapma (z) en az", 1.8], ["sMinN", "Geri test min. sinyal", 5], ["sWin", "Min. kazanma % (10g)", 55], ["sEdge", "Taban üstü min. fark (puan)", 0.5]]],
-  ["Livermore (trend & pivot)", [["lPiv", "Pivota yakınlık %", 1], ["lVol", "Min. göreceli hacim", 1.2]]],
-  ["Kellogg (momentum)", [["kRvol", "Min. göreceli hacim", 2], ["kChg", "Gün içi hareket en az %", 3], ["kAtr", "Min. ATR %", 3]]],
-  ["Şeytanın Avukatı (risk)", [["dAtr", "Günlük oynaklık üst sınır %", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dMaxDd", "Son 1 yıl maks. düşüş % (üst sınır)", 35], ["dSector", "Aynı sektörden en fazla aday", 3], ["dFlags", "Karşı çıkma için bayrak sayısı", 2]]],
-  ["Simülasyon", [["mDays", "Ufuk (iş günü)", 20], ["mStop", "Stop seviyesi %", 7]]],
-];
-const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
 let R = {...DEFAULTS, ...store.get("rules", {})};
 function buildRules() {
   $("rules").innerHTML = RULE_DEFS.map(([g, f]) => `<fieldset><legend>${g}</legend>${f.map(([k, n]) =>
@@ -391,200 +445,17 @@ function buildRules() {
 $("rules").addEventListener("input", e => {
   const k = e.target.dataset.r; if (!k) return;
   const v = parseFloat(e.target.value);
-  if (Number.isFinite(v)) { R[k] = v; store.set("rules", R); mcCache = {}; render(); }
+  if (Number.isFinite(v)) { R[k] = v; store.set("rules", R); mcCache = {}; screenCache = null; render(); }
 });
-$("rulesReset").addEventListener("click", () => { R = {...DEFAULTS}; store.set("rules", R); mcCache = {}; buildRules(); render(); });
+$("rulesReset").addEventListener("click", () => { R = {...DEFAULTS}; store.set("rules", R); mcCache = {}; screenCache = null; buildRules(); render(); });
 
 /* ---------- Favoriler ---------- */
 let FAVS = new Set(store.get("favs", []));
 function toggleFav(n) { FAVS.has(n) ? FAVS.delete(n) : FAVS.add(n); store.set("favs", [...FAVS]); render(); }
 
 /* ---------- Türetilmiş alanlar ---------- */
-function enrich(s) {
-  s.ok = s.close > 0 && s.bb_lower != null && s.bb_upper != null && s.sma50 != null;
-  s.bbDist = s.ok ? (s.close / s.bb_lower - 1) * 100 : null;
-  s.smaDist = s.ok ? (s.close / s.sma50 - 1) * 100 : null;
-  s.atrPct = s.atr != null && s.close > 0 ? s.atr / s.close * 100 : null;
-  s.tl = s.close * s.volume / 1e6; // günlük işlem hacmi, milyon TL
-  return s;
-}
 let UNIVERSE = [];
 
-/* ---------- Monte Carlo (GBM, drift=0). Oynaklık: gerçek geçmiş (sigma60) varsa o, yoksa 0.8×ATR% ---------- */
-let mcCache = {};
-function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
-function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function sigmaOf(s) {
-  const h = HIST && HIST.stocks[s.name];
-  if (h && h.sigma60 > 0) return {v: h.sigma60, src: "gerçek geçmiş (60 gün)"};
-  if (s.atrPct != null) return {v: 0.8 * s.atrPct / 100, src: "0,8×ATR% tahmini"};
-  return null;
-}
-function monteCarlo(s, n = 2000) {
-  const key = s.name; if (mcCache[key]) return mcCache[key];
-  const sg = sigmaOf(s); if (!sg) return null;
-  const days = Math.max(1, Math.round(R.mDays)), stop = R.mStop, sigma = Math.max(sg.v, 1e-4), r = rng(hash(s.name));
-  const finals = new Float64Array(n); let stopHit = 0;
-  for (let i = 0; i < n; i++) {
-    let lp = 0, min = 0;
-    for (let d = 0; d < days; d++) {
-      const z = Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
-      lp += -0.5 * sigma * sigma + sigma * z;
-      if (lp < min) min = lp;
-    }
-    finals[i] = Math.exp(lp) - 1;
-    if (Math.exp(min) <= 1 - stop / 100) stopHit++;
-  }
-  const sorted = Array.from(finals).sort((a, b) => a - b), q = p => sorted[Math.floor(p * (n - 1))] * 100;
-  return mcCache[key] = { sigma: sigma * 100, src: sg.src, days, stop, p05: q(.05), p50: q(.5), p95: q(.95),
-    probLoss: sorted.filter(x => x < 0).length / n * 100, probStop: stopHit / n * 100, finals: sorted };
-}
-
-/* ---------- Geri test (history.json'dan) ---------- */
-function btFor(s) {
-  if (!HIST) return null;
-  const own = HIST.stocks[s.name] && HIST.stocks[s.name].bt, base = HIST.pooled.base, pooled = HIST.pooled.A;
-  const useOwn = own && own.n >= R.sMinN && own.h10;
-  const b = useOwn ? own : pooled;
-  if (!b || !b.h10 || !base || !base.h10) return null;
-  return { own: !!useOwn, n: b.n, win: b.h10.win, mean: b.h10.mean, med: b.h10.med, p10: b.h10.p10, aw: b.h10.aw, al: b.h10.al,
-    baseWin: base.h10.win, baseMean: base.h10.mean, edge: b.h10.mean - base.h10.mean };
-}
-
-/* ---------- Efsaneler: her biri gerçek yatırım felsefesinin kontrol listesiyle çalışır ----------
-   Kaynaklar (ikincil): Hagstrom "The Warren Buffett Way", Zuckerman "The Man Who Solved the Market", Livermore "Reminiscences of a Stock Operator"
-   özetleri, Kellogg röportaj/özetleri. Kesin kural setleri kamuya açık değildir; burada yorumlanmış, ölçülebilir karşılıkları kullanılır. */
-const OK = 1, BAD = -1, NA = 0;
-const chk = (c, t, val) => ({s: c == null ? NA : c ? OK : BAD, t, val: val ?? ""});
-const pc = v => v == null || Number.isNaN(v) ? "–" : "%" + fmt(v, 1);
-function tally(checks) {
-  const ok = checks.filter(c => c.s === OK).length, bad = checks.filter(c => c.s === BAD).length, n = ok + bad;
-  return {ok, bad, n, score: n ? Math.round(ok / n * 100) : null};
-}
-const isFin = s => s.sector === "Finance";
-const graham = s => s.eps > 0 && s.bvps > 0 ? Math.sqrt(22.5 * s.eps * s.bvps) : null;
-
-function buffett(s) {
-  const fin = isFin(s), gn = graham(s), mos = gn ? (gn - s.close) / gn * 100 : null;
-  const checks = [
-    chk(s.roe == null ? null : s.roe >= R.bRoe, `Özsermaye getirisi (ROE) ≥ %${R.bRoe}`, pc(s.roe)),
-    chk(fin || s.de == null ? null : s.de <= R.bDe, `Borç/Özsermaye ≤ ${R.bDe}`, fin ? "banka/finans: geçerli değil" : fmt(s.de)),
-    chk(s.nm == null ? null : s.nm >= R.bNm, `Net kâr marjı ≥ %${R.bNm}`, pc(s.nm)),
-    chk(fin || s.fcf == null ? null : s.fcf > 0, "Serbest nakit akışı pozitif (owner earnings vekili)", fin ? "banka/finans: geçerli değil" : s.fcf == null ? "–" : s.fcf > 0 ? "pozitif" : "negatif"),
-    chk(s.epsg == null ? null : s.epsg > 0, "Hisse başı kazanç büyüyor (nominal)", pc(s.epsg)),
-    chk(s.pe == null ? null : s.pe > 0 && s.pe <= R.bPe, `F/K ≤ ${R.bPe}`, fmt(s.pe, 1)),
-    chk(s.pb == null ? null : s.pb <= R.bPb, `PD/DD ≤ ${R.bPb}`, fmt(s.pb)),
-    chk(mos == null ? null : mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos} (Graham sayısı ${gn ? fmt(gn) + " TL" : "–"})`, pc(mos)),
-    chk(null, "Rekabet avantajı (moat), basit iş modeli, uzun vadeli beklenti", "veriyle ölçülemez: kendiniz doğrulayın"),
-    chk(null, "Dürüst ve yetenekli yönetim", "veriyle ölçülemez"),
-  ];
-  const k = tally(checks);
-  const v = k.n >= 5 && k.score >= 70 ? 1 : k.n >= 4 && k.score < 40 ? -1 : 0;
-  const t = v > 0 ? `Rakamlar kaliteli ve makul fiyatlı bir işletmeye benziyor (${k.ok}/${k.n} ölçülebilir ilke geçti).`
-    : v < 0 ? `Ölçülebilir ilkelerin çoğu başarısız (${k.ok}/${k.n} geçti): ya iş zayıf ya da fiyat pahalı. "Harika bir işletmeyi makul fiyata" arıyorum; bu o değil.`
-    : `Karışık tablo (${k.ok}/${k.n} geçti). Bariz bir iskonto ya da bariz bir kusur yok; acele etmem.`;
-  const cap = gn ? gn * (1 - R.bMos / 100) : null;
-  const plan = cap ? `${fmt(cap)} TL altını makul alım sayardı (Graham sayısı ${fmt(gn)} TL − %${R.bMos} güvenlik marjı). Stop kullanmaz; fiyat düşerse işletmenin değerini yeniden sorgular, uzun vadeli tutar.`
-    : "Güvenlik marjı hesaplanamadı (EPS/defter değeri eksik). Stop kullanmaz; işletmeyi uzun vadeli sahiplik gözüyle değerlendirir.";
-  return {v, score: k.score, checks, t, plan};
-}
-
-function simons(s) {
-  const mc = monteCarlo(s), bt = btFor(s), h = HIST && HIST.stocks[s.name];
-  const sd = (s.bb_upper - s.bb_lower) / 4, z = sd > 0 ? (s.close - (s.bb_upper + s.bb_lower) / 2) / sd : null;
-  const checks = [
-    chk(z == null ? null : z <= -R.sZ, `Fiyat 20 günlük ortalamadan ≥ ${R.sZ} standart sapma aşağıda (z-skoru)`, z == null ? "–" : fmt(z, 2)),
-    chk(bt ? bt.n >= R.sMinN : null, `Geçmişte yeterli örnek (≥ ${R.sMinN} sinyal)`, bt ? `${bt.n} sinyal (${bt.own ? "bu hisse" : "tüm hisseler"})` : "geçmiş yok"),
-    chk(bt ? bt.win >= R.sWin : null, `10 gün sonra kazanma oranı ≥ %${R.sWin}`, bt ? `${pc(bt.win)} (taban ${pc(bt.baseWin)})` : "–"),
-    chk(bt ? bt.edge >= R.sEdge : null, `Ort. getiri tabanın ≥ ${R.sEdge} puan üstünde`, bt ? `${pc(bt.mean)} / taban ${pc(bt.baseMean)}` : "–"),
-    chk(h && h.ac1 != null ? (h.ac1 <= -0.03 ? true : h.ac1 >= 0.08 ? false : null) : null, "Ortalamaya dönüş rejimi: günlük getirilerin otokorelasyonu negatif", h && h.ac1 != null ? fmt(h.ac1, 2) : "–"),
-    chk(h ? h.sigma60 <= 1.5 * h.sigma250 : null, "Oynaklık rejimi sakin (60g σ ≤ 1,5 × 250g σ)", h ? `${pc(h.sigma60 * 100)} / ${pc(h.sigma250 * 100)}` : "–"),
-    chk(mc ? mc.probStop < R.dStop : null, `Simülasyonda stop olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
-  ];
-  const k = tally(checks);
-  let kelly = null; if (bt && bt.aw > 0 && bt.al < 0) { const p = bt.win / 100, b = bt.aw / -bt.al; kelly = p - (1 - p) / b; }
-  let v = 0;
-  if ((mc && mc.probStop >= 65) || (bt && bt.edge <= -R.sEdge)) v = -1;
-  else if (bt && bt.edge >= R.sEdge && bt.win >= R.sWin && z != null && z <= -R.sZ && k.score >= 60) v = 1;
-  const t = v > 0 ? "Duygu yok, sadece sayı: sapma aşırı, geçmişte bu sinyal tabana göre pozitif sonuç vermiş. Yine de bu tek bir küçük avantaj; tek hisseye bahis değil, çok sayıda küçük avantajın toplamı kazandırır."
-    : v < 0 ? "Sayılar aleyhine: ya geçmişte sinyal tabandan kötü sonuç vermiş ya da oynaklık stop'a değme ihtimalini çok yükseltiyor."
-    : "Matematiksel olarak ayırt edilebilir bir avantaj göremiyorum. Avantaj yoksa işlem yok.";
-  const plan = kelly == null ? "Geçmiş verisi (kazanç/kayıp oranı) yok; Kelly pozisyon büyüklüğü hesaplanamadı."
-    : bt && bt.edge < R.sEdge ? `Tabana göre avantaj yok: pozisyon önerilmez. (Mutlak Kelly %${fmt(kelly * 100, 1)} görünse de bu, piyasanın nominal yükseliş eğiliminden gelir, sinyalden değil.)`
-    : kelly > 0 ? `Kelly oranı %${fmt(kelly * 100, 1)}, yarı-Kelly %${fmt(kelly * 50, 1)}: pozisyon bu orandan büyük olmamalı (ekip Kelly'yi pozisyon boyutlamada kullanmıştır). Sinyal ufku ~10 iş günü.`
-    : "Kelly ≤ 0: geçmiş veriye göre matematiksel avantaj yok, pozisyon önerilmez.";
-  return {v, score: k.score, checks, t, plan};
-}
-
-function livermore(s) {
-  const trend = s.sma200 == null ? null : s.close > s.sma50 && s.sma50 > s.sma200, pivot = s.h1m, np = pivot ? s.close / pivot : null;
-  const checks = [
-    chk(trend, "Ana trend yukarı: fiyat > SMA50 > SMA200", `${fmt(s.close)} / ${fmt(s.sma50)} / ${s.sma200 ? fmt(s.sma200) : "–"}`),
-    chk(np == null ? null : np >= 1 - R.lPiv / 100 ? true : np < 0.95 ? false : null, `Pivot noktası (1 aylık zirve ${pivot ? fmt(pivot) : "–"}) kırılıyor ya da üstünde`, np == null ? "–" : `zirvenin ${pc(np * 100 - 100)}`),
-    chk(s.rvol == null ? null : s.rvol >= R.lVol ? s.change > 0 : null, `Kırılım hacimle teyitli (göreceli hacim ≥ ${R.lVol}x ve fiyat artıyor)`, `${fmt(s.rvol, 1)}x, ${pc(s.change)}`),
-    chk(s.close >= s.sma50 ? true : s.sma20 != null && s.close < s.sma20 ? false : null, "Düşen bıçak değil (SMA50 üstünde ya da toparlanıyor)", `SMA50'ye ${pc(s.smaDist)}`),
-    chk(s.h52 ? s.close >= 0.85 * s.h52 : null, "Zirveye yakın: 52 hafta zirvesinin %85'i üstünde", s.h52 ? pc((s.close / s.h52 - 1) * 100) : "–"),
-    chk(s.p3m == null ? null : s.p3m > 0, "Son 3 ayda fiyat artmış (en az direnç çizgisi yukarı)", pc(s.p3m)),
-  ];
-  const k = tally(checks);
-  const v = k.n >= 4 && k.score >= 70 && trend !== false ? 1 : k.n >= 4 && k.score < 35 ? -1 : 0;
-  const t = v > 0 ? "Trend dostum: fiyat en az direnç çizgisinde, pivot üstünde ve hacim eşlik ediyor. Beklenti değil teyit arıyorum, burada teyit var."
-    : v < 0 ? "Düşen bıçak tutulmaz. Trend aşağı ya da pivot çok uzakta; bu hisseye şimdi girmek umut ticaretidir."
-    : "Net bir fırsat yok. Açık bir kırılım olmadan işlem yapmam; beklemek de bir pozisyondur.";
-  const plan = pivot && np >= 0.95 ? `Pivot ${fmt(pivot)} TL üstünde hacimli kapanışta ilk küçük alım. Pozisyon kâra geçtikçe eklenir (piramit), zarardakine asla eklenmez. Yanılma noktası (stop): pivotun %3 altı ≈ ${fmt(pivot * 0.97)} TL; stop alım öncesinde belirlenir.`
-    : "Şu an pivotun belirgin altında: işlem yok. Pivotu hacimle aşan bir kapanış beklenir; stop ancak alımdan önce belirlenirse anlamlıdır.";
-  return {v, score: k.score, checks, t, plan};
-}
-
-function kellogg(s) {
-  const rv = s.rvol, brk = s.h1m ? s.close >= s.h1m * 0.98 : null;
-  const checks = [
-    chk(rv == null ? null : rv >= R.kRvol, `Olağandışı hacim: göreceli hacim ≥ ${R.kRvol}x`, `${fmt(rv, 1)}x`),
-    chk(s.change == null ? null : s.change >= R.kChg ? true : s.change <= -R.kChg ? false : null, `Güçlü hareket: gün içi ≥ %${R.kChg}`, pc(s.change)),
-    chk(brk, "Kırılım: 1 aylık zirvenin %2 yakınında ya da üstünde", s.h1m ? pc((s.close / s.h1m - 1) * 100) : "–"),
-    chk(s.pw == null ? null : s.pw > 0, "Haftalık momentum pozitif", pc(s.pw)),
-    chk(s.atrPct == null ? null : s.atrPct >= R.kAtr, `Hareket kapasitesi: ATR ≥ %${R.kAtr}`, pc(s.atrPct)),
-    chk(s.tl >= R.dTl, `Likidite/spread: günlük hacim ≥ ${R.dTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
-  ];
-  const k = tally(checks), big = rv != null && rv >= R.kRvol;
-  const v = big && s.change > 0 && k.score >= 60 ? 1 : big && s.change < 0 ? -1 : 0;
-  const t = v > 0 ? "Hacim patladı, fiyat kırılıyor: momentum teyitli. Hızlı hareket eden hisse, kısa vadeli fırsat."
-    : v < 0 ? "Hacim yüksek ama fiyat düşüyor: bu dağıtım, alıcı değil satıcı baskın."
-    : "Hacim ve kırılım yok; ilgi görmeyen hissede vakit kaybetmem.";
-  const plan = s.lo ? `Stop: gün içi dip ${fmt(s.lo)} TL (fiyatın ${pc((s.lo / s.close - 1) * 100)} altı). Birkaç gün–hafta tutulur; kâr kademeli satılır (scale out), kayıp hızla kesilir, zarardaki pozisyona ekleme yapılmaz.` : "Stop için gün içi dip verisi yok.";
-  return {v, score: k.score, checks, t, plan};
-}
-
-function devil(s, others) {
-  const mc = monteCarlo(s), n = NEWS[s.name], h = HIST && HIST.stocks[s.name], sg = mc ? mc.sigma : s.atrPct;
-  const secN = current.filter(x => x.sector === s.sector).length;
-  const stopPct = s.atrPct != null ? 2 * s.atrPct : null, maxPos = stopPct ? Math.min(100, 100 / stopPct) : null;
-  const checks = [
-    chk(mc ? mc.probStop < R.dStop : null, `${mc ? mc.days : R.mDays} günde %${R.mStop} stop'a değme olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
-    chk(sg == null ? null : sg <= R.dAtr, `Günlük oynaklık ≤ %${R.dAtr}`, pc(sg)),
-    chk(s.tl >= R.dTl, `Likidite: günlük hacim ≥ ${R.dTl} mn TL (çıkış kolay)`, `${fmt(s.tl, 0)} mn TL`),
-    chk(s.smaDist >= -5, "Fiyat SMA50'nin %5'ten fazla altında değil", pc(s.smaDist)),
-    chk(s.l52 ? s.close >= 1.1 * s.l52 : null, "52 hafta dibine %10'dan fazla uzak (dipte değil)", s.l52 ? pc((s.close / s.l52 - 1) * 100) : "–"),
-    chk(h && h.dd250 != null ? h.dd250 >= -R.dMaxDd : null, `Son 1 yılda maks. düşüş ≤ %${R.dMaxDd}`, h && h.dd250 != null ? pc(h.dd250) : "–"),
-    chk(s.pe == null ? null : s.pe > 0, "Şirket kâr ediyor (F/K tanımlı)", fmt(s.pe, 1)),
-    chk(n && n.ok ? n.score > -2 : null, "Haber akışı olumsuz değil", n && n.ok ? `skor ${n.score}` : "haber yok"),
-    chk(secN <= R.dSector, `Sektör yoğunlaşması: aynı sektörden ≤ ${R.dSector} aday`, `${secN} aday`),
-    chk(s.rsi == null ? null : s.rsi <= 70, "RSI aşırı alımda değil", fmt(s.rsi, 0)),
-  ];
-  const k = tally(checks), bads = checks.filter(c => c.s === BAD);
-  const v = bads.length >= R.dFlags ? -1 : 0;
-  const t = bads.length ? `Pre-mortem: bu işlem batarsa nedenleri şunlar olur → ${bads.slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "")).join("; ")}.${v < 0 ? " Karşı çıkıyorum." : " Henüz itiraz sınırında değil."}`
-    : "Pre-mortem'de belirgin bir başarısızlık nedeni bulamadım; ama makro şokta (kur, faiz, jeopolitik) BIST'te korelasyonlar 1'e gider.";
-  const plan = stopPct ? `Stres testi: ATR stopu (2×ATR) ≈ %${fmt(stopPct, 1)}. Portföyün %1'ini riske atma kuralıyla azami pozisyon ≈ portföyün %${fmt(maxPos, 1)}. Hisse −%10 gap açarsa zarar portföyün ≈ %${fmt(maxPos * 0.1, 2)}'i olur.` : "ATR verisi yok; stres testi yapılamadı.";
-  return {v, score: k.score, checks, t, plan};
-}
-function committee(s) {
-  const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
-  l.seytan = devil(s, Object.values(l));
-  const score = Object.values(l).reduce((a, x) => a + x.v, 0);
-  const label = score >= 3 ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
-  return { l, score, label };
-}
 const personaCard = (n, p) => `<div class="persona ${p.v > 0 ? "p1" : p.v < 0 ? "pm" : ""}"><b>${n} <span class="vt ${p.v > 0 ? "up" : p.v < 0 ? "down" : "mute"}">${p.v > 0 ? "Olumlu" : p.v < 0 ? "Olumsuz" : "Nötr"}</span>${p.score != null ? ` <span class="mute">· ${p.score}/100</span>` : ""}</b>
   <span>${esc(p.t)}</span>
   <details open><summary>Kontrol listesi</summary><ul class="chk">${p.checks.map(c => `<li class="c${c.s > 0 ? "ok" : c.s < 0 ? "bad" : "na"}"><i>${c.s > 0 ? "✓" : c.s < 0 ? "✗" : "–"}</i><span>${esc(c.t)}</span><em>${esc(c.val)}</em></li>`).join("")}</ul></details>
@@ -694,6 +565,7 @@ function fillSectors() {
   sel.innerHTML = '<option value="">Hepsi</option>' + names.map(n => `<option ${n === cur ? "selected" : ""}>${esc(n)}</option>`).join("");
 }
 function render() {
+  NOW = Date.now(); REGIME = UNIVERSE.length ? computeRegime(UNIVERSE, HIST) : null;
   current = candidates();
   if (UNIVERSE.length && $("sec").options.length <= 1) fillSectors();
   baseResults = current.map(s => [s, committee(s)]);
@@ -731,14 +603,221 @@ function renderBacktest() {
     <tr><td>Taban: her gün alınsaydı</td><td>–</td>${row(P.base)}</tr></tbody></table>
     <p class="note">Hücreler: kazanma oranı / ortalama getiri. Sinyaller 5 gün seyreltilmiştir. Maliyet ve kayma yoktur; geçmiş geleceği garanti etmez.</p>`;
 }
+/* ---------- Haber türleri, yardımcılar ---------- */
+function toast(msg) {
+  let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }
+  el.textContent = msg; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2200);
+}
+const trLower = s => String(s || "").replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase();
+const TAGS = [["Temettü", /temettü|kâr payı|kar payı/, "up"], ["Bedelsiz", /bedelsiz|bölünme/, "up"], ["Bilanço", /bilanço|finansal sonuç|net dönem|çeyrek|faaliyet raporu/, ""],
+  ["İhale/Sözleşme", /ihale|sözleşme|sipariş|anlaşma/, "up"], ["Dava/Ceza", /dava|ceza|soruşturma|tedbir|yasak|iflas|konkordato/, "down"], ["Geri alım", /geri alım/, "up"],
+  ["Analist", /hedef fiyat|tavsiye|\(.*yatırım\)|beklenti/, ""]];
+const tagsOf = title => { const x = trLower(title); return TAGS.filter(([, re]) => re.test(x)); };
+const tagHtml = title => tagsOf(title).map(([n, , c]) => `<span class="ntag ${c}">${n}</span>`).join("");
+let newsTag = "";
 function renderNews() {
   const items = [];
   Object.entries(NEWS).forEach(([tk, n]) => (n.items || []).forEach(i => items.push({...i, tk})));
-  const seen = new Set(), list = items.sort((a, b) => b.ts - a.ts).filter(i => !seen.has(i.t) && seen.add(i.t)).slice(0, 60);
-  $("newsView").innerHTML = `<h2>Son haberler <span class="sub">(likit hisseler, TradingView/KAP akışı)</span></h2>` + (list.length ?
+  const seen = new Set(), all = items.sort((a, b) => b.ts - a.ts).filter(i => !seen.has(i.t) && seen.add(i.t));
+  const list = all.filter(i => !newsTag || tagsOf(i.t).some(([n]) => n === newsTag)).slice(0, 80);
+  $("newsView").innerHTML = `<h2>Son haberler <span class="sub">(likit hisseler, TradingView/KAP akışı)</span></h2>
+    <div class="tabs">${[["", "Hepsi"], ...TAGS.map(([n]) => [n, n])].map(([k, n]) => `<button class="tab ${newsTag === k ? "on" : ""}" data-ntag="${k}">${n}</button>`).join("")}</div>` + (list.length ?
     `<div class="nlist">${list.map(i => `<div class="nitem"><span class="pill tk" data-x="${esc(i.tk)}">${esc(i.tk)}</span>
-      <span class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)}</span><span class="mute" style="margin-left:auto;white-space:nowrap">${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></div>`).join("")}</div>`
-    : "<p class='mute'>Haber verisi yok.</p>");
+      <span>${tagHtml(i.t)}<span class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)}</span></span><span class="mute" style="margin-left:auto;white-space:nowrap">${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></div>`).join("")}</div>`
+    : "<p class='mute'>Bu türde haber yok.</p>");
+}
+
+/* ---------- Efsane ekranları ---------- */
+let screenTab = "buffett", screenCache = null;
+const SCREEN_INFO = {
+  buffett: ["Warren Buffett", "Kaliteli işletme + güvenlik marjı: ROE, borç, net marj, serbest nakit akışı, F/K, PD/DD ve Graham sayısı kontrol listesini geçenler. Banka/finans için borç ve nakit akışı ölçütleri geçersiz sayılır."],
+  simons: ["Jim Simons", "İstatistiksel sapma: fiyat 20 günlük ortalamanın yeterince altında VE geçmişte bu sinyal tabana göre pozitif sonuç vermiş hisseler (fiyat geçmişi olan likit hisseler taranır)."],
+  livermore: ["Jesse Livermore", "Trend + pivot: fiyat > SMA50 > SMA200, 1 aylık zirve hacimle kırılıyor, piyasa rejimi ayı değil."],
+  kellogg: ["Jack Kellogg", "Momentum: olağandışı hacim, güçlü gün içi hareket, kırılım, yeterli likidite."],
+  seytan: ["Şeytanın Avukatı", "Risk radarı: en çok risk bayrağı taşıyan likit hisseler (uzak durulacaklar): stop olasılığı, oynaklık, düşüş, bilanço yakınlığı, rejim."],
+};
+function renderScreens() {
+  if (!UNIVERSE.length) { $("screenBody").innerHTML = ""; return; }
+  $("screenTabs").innerHTML = Object.entries(SCREEN_INFO).map(([k, [n]]) => `<button class="tab ${screenTab === k ? "on" : ""}" data-stab="${k}">${n}</button>`).join("");
+  if (!screenCache) screenCache = {sc: personaScreens(UNIVERSE, 25, []), risk: riskRadar(UNIVERSE, 25)};
+  const [, desc] = SCREEN_INFO[screenTab], clean = c => c.t.replace(/ \(.*?\)/g, "");
+  const rows = screenTab === "seytan"
+    ? screenCache.risk.map(([s, p, bad]) => [s, `${bad} bayrak`, p.checks.filter(c => c.s === BAD).slice(0, 3).map(clean).join(" · ")])
+    : screenCache.sc[screenTab].map(([s, p]) => [s, `${p.score}/100`, p.checks.filter(c => c.s === OK).slice(0, 3).map(c => `${clean(c)}: ${c.val}`).join(" · ")]);
+  $("screenBody").innerHTML = `<p class="note">${desc}</p>` + (rows.length ? `<div class="tw"><table><thead><tr><th>Hisse</th><th>Fiyat</th><th>Gün %</th><th>Skor</th><th style="text-align:left">Öne çıkan ölçütler</th></tr></thead><tbody>${rows.map(([s, sc, facts]) =>
+    `<tr data-x="${esc(s.name)}"><td><b>${esc(s.name)}</b><span class="nm">${esc(s.description)}</span></td><td>${fmt(s.close)}</td><td class="${sign(s.change)}">${fmt(s.change)}</td><td>${sc}</td><td style="text-align:left;white-space:normal;max-width:520px" class="mute">${esc(facts)}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="mute">Şu an bu efsanenin ölçütlerini geçen hisse yok.${screenTab === "livermore" && REGIME && REGIME.trend === "bear" ? " (Piyasa rejimi ayı: Livermore ayı piyasasında uzun pozisyon açmaz.)" : ""}</p>`);
+}
+
+/* ---------- Karşılaştırma ---------- */
+let CMP = store.get("cmp", []);
+function toggleCmp(n) {
+  if (CMP.includes(n)) CMP = CMP.filter(x => x !== n);
+  else { if (CMP.length >= 3) { toast("En fazla 3 hisse karşılaştırılabilir"); return; } CMP.push(n); }
+  store.set("cmp", CMP); toast(CMP.includes(n) ? `${n} karşılaştırmaya eklendi (${CMP.length}/3)` : `${n} çıkarıldı`);
+  if (view === "karsilastir") renderCompare(); else if (selected) detail(selected);
+}
+function renderCompare() {
+  const stocks = CMP.map(n => UNIVERSE.find(s => s.name === n)).filter(Boolean);
+  const head = `<h2>Hisse karşılaştırma</h2><div class="controls" style="margin:8px 0;display:flex;gap:8px"><input id="cmpAdd" list="tickers" placeholder="Hisse ekle (en fazla 3)"><button data-cmpadd="1">Ekle</button></div>`;
+  if (stocks.length < 1) { $("cmpView").innerHTML = head + "<p class='mute'>Karşılaştırmak için hisse ekleyin ya da hisse detayında “⇄ Karşılaştır” düğmesini kullanın.</p>"; return; }
+  const cm = stocks.map(s => [s, committee(s)]), mcs = stocks.map(s => monteCarlo(s));
+  const ROWS = [
+    ["Fiyat (TL)", (s) => s.close, v => fmt(v), null], ["Gün %", s => s.change, v => fmt(v), "max"], ["Piyasa değeri (milyar TL)", s => s.mcap / 1e9, v => fmt(v, 1), null],
+    ["F/K", s => s.pe > 0 ? s.pe : null, v => fmt(v, 1), "min"], ["PD/DD", s => s.pb, v => fmt(v), "min"], ["ROE %", s => s.roe, v => fmt(v, 1), "max"],
+    ["Borç/Özsermaye", s => isFin(s) ? null : s.de, v => fmt(v), "min"], ["Net marj %", s => s.nm, v => fmt(v, 1), "max"], ["EPS büyümesi %", s => s.epsg, v => fmt(v, 1), "max"],
+    ["Temettü verimi %", s => s.dy, v => fmt(v), "max"], ["Alt banda %", s => s.bbDist, v => fmt(v), "min"], ["SMA50'ye %", s => s.smaDist, v => fmt(v), "max"],
+    ["RSI", s => s.rsi, v => fmt(v, 0), null], ["1 ay %", s => s.p1m, v => fmt(v, 1), "max"], ["3 ay %", s => s.p3m, v => fmt(v, 1), "max"],
+    ["Göreceli hacim", s => s.rvol, v => fmt(v, 1), "max"],
+  ];
+  const best = (vals, dir) => { if (!dir) return -1; const f = vals.map((v, i) => [v, i]).filter(([v]) => v != null); if (f.length < 2) return -1; return f.sort((a, b) => dir === "max" ? b[0] - a[0] : a[0] - b[0])[0][1]; };
+  const rowHtml = ([lab, get, f, dir]) => { const vals = stocks.map(get), b = best(vals, dir); return `<tr><th>${lab}</th>${vals.map((v, i) => `<td class="${i === b ? "best" : ""}">${v == null || Number.isNaN(v) ? "–" : f(v)}</td>`).join("")}</tr>`; };
+  const extra = [
+    `<tr><th>Sektör</th>${stocks.map(s => `<td>${esc(trSector(s.sector))}</td>`).join("")}</tr>`,
+    `<tr><th>Komite</th>${cm.map(([, r]) => `<td>${badge(r.score)}</td>`).join("")}</tr>`,
+    `<tr><th>Efsane oyları</th>${cm.map(([, r]) => `<td>${chipsOf(r)}</td>`).join("")}</tr>`,
+    ...PERSONAS.map(([k, n]) => `<tr><th>${n} puanı</th>${cm.map(([, r]) => `<td>${r[ "l" ][k].score ?? "–"}/100</td>`).join("")}</tr>`),
+    `<tr><th>Stop olasılığı (sim.)</th>${mcs.map(m => `<td>${m ? "%" + fmt(m.probStop, 0) : "–"}</td>`).join("")}</tr>`,
+    `<tr><th>Graham güvenlik marjı</th>${stocks.map(s => { const g = graham(s); return `<td>${g ? "%" + fmt((g - s.close) / g * 100, 0) : "–"}</td>`; }).join("")}</tr>`,
+  ];
+  $("cmpView").innerHTML = head + `<div class="note">Yeşil: ölçütte en iyi değer. <span class="mute">Kaldırmak için hisse adına tıklayın.</span></div><canvas id="cmpCv" style="height:200px;margin:8px 0"></canvas>
+    <div class="tw"><table class="cmp"><thead><tr><th></th>${stocks.map(s => `<th data-cmprem="${esc(s.name)}" style="cursor:pointer;color:var(--accent2)" title="Karşılaştırmadan çıkar">${esc(s.name)} ✕</th>`).join("")}</tr></thead>
+    <tbody>${extra.slice(0, 2).join("")}${ROWS.map(rowHtml).join("")}${extra.slice(2).join("")}</tbody></table></div>`;
+  drawCompare(stocks);
+}
+function drawCompare(stocks) {
+  const cv = $("cmpCv"); if (!cv || !cv.clientWidth) return;
+  const H = 200, {g, w} = setupCanvas(cv, H), cols = [css("--accent2"), css("--warn"), css("--down")];
+  const series = stocks.map(s => HIST && HIST.stocks[s.name] ? HIST.stocks[s.name].closes.slice(-120) : null);
+  const norm = series.map(c => c ? c.map(v => v / c[0] * 100) : null), all = norm.filter(Boolean).flat();
+  if (!all.length) { g.fillStyle = css("--mute"); g.font = "13px system-ui"; g.fillText("Fiyat geçmişi yok.", 8, 24); return; }
+  const lo = Math.min(...all), hi = Math.max(...all), X = (i, n) => 4 + i / (n - 1) * (w - 8), Y = v => H - 18 - (v - lo) / (hi - lo || 1) * (H - 34);
+  g.strokeStyle = css("--line"); g.lineWidth = 1; g.beginPath(); g.moveTo(0, Y(100)); g.lineTo(w, Y(100)); g.stroke();
+  norm.forEach((c, k) => { if (!c) return; g.beginPath(); c.forEach((v, i) => i ? g.lineTo(X(i, c.length), Y(v)) : g.moveTo(X(i, c.length), Y(v))); g.strokeStyle = cols[k]; g.lineWidth = 2; g.stroke(); });
+  g.font = "11px system-ui"; g.fillStyle = css("--mute"); g.fillText("Son 120 gün, başlangıç = 100", 6, H - 4);
+  stocks.forEach((s, k) => { g.fillStyle = cols[k]; g.fillText(s.name, w - 60 - k * 0 , 14 + k * 14); });
+}
+
+/* ---------- Karne ---------- */
+let PICKS = null, picksAt = 0;
+async function loadPicks() {
+  if (PICKS && Date.now() - picksAt < 3600e3) return;
+  const p = await getJson("picks.json?t=" + Math.floor(Date.now() / 36e5));
+  if (p && p.picks) { PICKS = p; picksAt = Date.now(); }
+}
+async function renderKarne() {
+  const el = $("karneView"); el.innerHTML = "<h2>Komite karnesi</h2><p class='mute'>Yükleniyor…</p>";
+  await loadPicks();
+  if (!PICKS || !PICKS.picks.length) { el.innerHTML = "<h2>Komite karnesi</h2><p class='mute'>Henüz kayıt yok. Her iş günü kapanıştan sonra (18:45) komitenin kararları kaydedilir.</p>"; return; }
+  const P = PICKS.picks, ex = (p, h) => p.r && p.r[h] != null && p.b && p.b[h] != null ? p.r[h] - p.b[h] : null;
+  const stat = (arr, h) => { const xs = arr.map(p => ex(p, h)).filter(x => x != null); return {n: xs.length, mean: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null, hit: xs.length ? xs.filter(x => x > 0).length / xs.length * 100 : null}; };
+  const cell = s => s.n ? `<span class="${sign(s.mean)}">${s.mean > 0 ? "+" : ""}${fmt(s.mean, 1)}%</span> · isabet %${fmt(s.hit, 0)} <span class="mute">(n=${s.n})</span>${s.n < 20 ? '<span class="few">az örnek</span>' : ""}` : "<span class='mute'>bekliyor</span>";
+  const grp = [["Komite: tüm adaylar", P.filter(p => p.src === "komite")], ["Komite: güçlü aday / izle (skor ≥ 1)", P.filter(p => p.src === "komite" && p.sc >= 1)],
+    ["Komite: nötr (skor 0)", P.filter(p => p.src === "komite" && p.sc === 0)], ["Komite: uzak dur (skor < 0)", P.filter(p => p.src === "komite" && p.sc < 0)],
+    ["Buffett ekranı", P.filter(p => p.src === "buffett")], ["Simons ekranı", P.filter(p => p.src === "simons")], ["Livermore ekranı", P.filter(p => p.src === "livermore")], ["Kellogg ekranı", P.filter(p => p.src === "kellogg")]];
+  const comm = P.filter(p => p.src === "komite" && p.v);
+  const votes = PERSONAS.map(([, n], i) => [n, comm.filter(p => p.v[i] > 0), comm.filter(p => p.v[i] < 0)]);
+  const days = [...new Set(P.map(p => p.d))].sort(), pending = P.filter(p => !p.r || p.r[5] == null).length;
+  const recent = [...P].sort((a, b) => b.d.localeCompare(a.d) || b.sc - a.sc).slice(0, 40);
+  const rcell = (p, h) => p.r && p.r[h] != null ? `<span class="${sign(p.r[h])}">${fmt(p.r[h], 1)}%</span>${p.b && p.b[h] != null ? ` <span class="mute">(${ex(p, h) > 0 ? "+" : ""}${fmt(ex(p, h), 1)})</span>` : ""}` : "<span class='mute'>–</span>";
+  el.innerHTML = `<h2>🏅 Komite karnesi <span class="sub">(${P.length} kayıt · ilk kayıt ${days[0]} · son ${days[days.length - 1]} · ${pending} kayıt sonuç bekliyor)</span></h2>
+    <p class="note">Her iş günü kapanışta (18:45) komitenin o günkü kararları ve efsane ekranları kaydedilir; 5/10/20 iş günü sonra hissenin getirisi, aynı dönemde 150 likit hissenin eşit ağırlıklı ortalamasıyla kıyaslanır. <b>Fazla getiri</b> = hisse − piyasa ortalaması. Kayıtlar varsayılan kurallarla tutulur (kural paneli karneyi etkilemez); maliyet yoktur. n&lt;20 ise sonuç istatistiksel olarak anlamsızdır.</p>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Grup</th><th>5 iş günü</th><th>10 iş günü</th><th>20 iş günü</th></tr></thead><tbody>
+    ${grp.map(([n, arr]) => `<tr><td style="text-align:left">${n} <span class="mute">(${arr.length} kayıt)</span></td>${[5, 10, 20].map(h => `<td>${cell(stat(arr, h))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <h2 style="margin-top:16px">Efsane oyları isabetli mi? <span class="sub">(komite adaylarında, 10 iş günü fazla getiri)</span></h2>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Efsane</th><th>Olumlu oy verdiğinde</th><th>Olumsuz oy verdiğinde</th></tr></thead><tbody>
+    ${votes.map(([n, pos, neg]) => `<tr><td style="text-align:left">${n}</td><td>${cell(stat(pos, 10))}</td><td>${cell(stat(neg, 10))}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">İyi bir efsane için beklenti: olumlu oyda fazla getiri pozitif, olumsuz oyda negatif.</p>
+    <h2 style="margin-top:16px">Son kayıtlar</h2>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Tarih</th><th style="text-align:left">Kaynak</th><th style="text-align:left">Hisse</th><th>Giriş</th><th>5g</th><th>10g</th><th>20g</th></tr></thead><tbody>
+    ${recent.map(p => `<tr data-x="${esc(p.n)}"><td style="text-align:left">${p.d}</td><td style="text-align:left">${p.src === "komite" ? badge(p.sc) : esc({buffett: "Buffett ekranı", simons: "Simons ekranı", livermore: "Livermore ekranı", kellogg: "Kellogg ekranı"}[p.src] || p.src)}</td><td style="text-align:left"><b>${esc(p.n)}</b></td><td>${fmt(p.e)}</td>${[5, 10, 20].map(h => `<td>${rcell(p, h)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="note">Parantez içi: piyasa ortalamasına göre fazla getiri (puan).</p>`;
+}
+
+/* ---------- Genel Bakış: rejim ve takvim ---------- */
+function renderRegime() {
+  const el = $("regimeCard"); if (!el) return;
+  if (!REGIME) { el.innerHTML = ""; return; }
+  const g = REGIME, cls = g.trend === "bull" ? "up" : g.trend === "bear" ? "down" : "";
+  el.innerHTML = `<div class="card-h"><span class="badge">${ico("trend")}</span><h2>Piyasa Rejimi</h2></div>
+    <div class="kpi ${cls}">${g.label}</div>
+    <div class="kpi-sub">${g.idx ? `${g.idx.name}: ${fmt(g.idx.last, 0)} · SMA50 ${fmt(g.idx.m50, 0)} · SMA200 ${fmt(g.idx.m200, 0)} · 1 ay %${fmt(g.idx.ch1m, 1)}` : "Endeks verisi yok: hisse genişliğine göre tahmin"}</div>
+    <div class="kpi-sub">SMA50 üstündeki hisseler: %${fmt(g.a50, 0)}${g.a200 != null ? ` · SMA200 üstündekiler: %${fmt(g.a200, 0)}` : ""}</div>
+    <p class="note" style="margin-top:10px">${g.trend === "bear" ? "Ayı rejiminde Livermore uzun pozisyon açmaz ve Şeytanın Avukatı ek risk bayrağı kaldırır. Alt banda yakın hisselerin ucuz görünmesi tuzak olabilir." : g.trend === "bull" ? "Boğa rejimi: trend takipçileri (Livermore, Kellogg) için uygun zemin." : "Geçiş rejimi: yön net değil; küçük pozisyon ve teyit beklemek mantıklı."}</p>`;
+}
+function renderCalendar() {
+  const el = $("calCard"); if (!el) return;
+  const names = new Set([...baseResults.map(([s]) => s.name), ...FAVS]), ev = [];
+  UNIVERSE.filter(s => names.has(s.name)).forEach(s => {
+    if (s.nextEarn) { const d = (s.nextEarn * 1000 - NOW) / 864e5; if (d >= -1 && d <= 14) ev.push({s, d, t: "Bilanço (tahmini)"}); }
+    if (s.exDiv) { const d = (s.exDiv * 1000 - NOW) / 864e5; if (d >= -1 && d <= 14) ev.push({s, d, t: "Temettü kesim"}); }
+  });
+  ev.sort((a, b) => a.d - b.d);
+  el.innerHTML = `<div class="card-h"><span class="badge">${ico("news")}</span><h2>Yaklaşan Bilanço &amp; Temettü</h2></div><div class="note">Adaylar ve favoriler için, 14 gün içinde</div>
+    <div class="list" style="margin-top:8px">${ev.length ? ev.slice(0, 8).map(e => `<div class="li" style="cursor:pointer" data-x="${esc(e.s.name)}"><b>${esc(e.s.name)}</b><span class="mute">${e.t}</span><span class="v">${e.d < 1 ? "bugün/yarın" : fmt(e.d, 0) + " gün"}</span></div>`).join("") : "<span class='mute'>Yakın tarihli olay yok.</span>"}</div>`;
+}
+
+/* ---------- Pozisyon hesaplayıcı, detay yardımcıları ---------- */
+function actionsHtml(name) {
+  return `<div class="actions"><button data-cmp="${esc(name)}">⇄ ${CMP.includes(name) ? "Karşılaştırmadan çıkar" : "Karşılaştır"}</button><button data-share="${esc(name)}">🔗 Bağlantıyı kopyala</button><button data-print="1">🖨 PDF / Yazdır</button></div>`;
+}
+function eventsHtml(s) {
+  const bits = [];
+  if (s.nextEarn) { const d = (s.nextEarn * 1000 - NOW) / 864e5; bits.push(`Bilanço: ${d < -1 ? "geçti" : d < 1 ? "bugün/yarın" : fmt(d, 0) + " gün sonra"} (${new Date(s.nextEarn * 1000).toLocaleDateString("tr-TR")}, tahmini)`); }
+  if (s.exDiv) bits.push(`Temettü kesim: ${new Date(s.exDiv * 1000).toLocaleDateString("tr-TR")}`);
+  if (s.dy) bits.push(`Temettü verimi %${fmt(s.dy)}`);
+  return bits.length ? `<div class="note" style="margin-top:4px">📅 ${bits.join(" · ")}</div>` : "";
+}
+function calcHtml() {
+  return `<details class="calc" open><summary>🧮 Pozisyon hesaplayıcı</summary>
+    <div class="calcgrid"><label>Sermaye (TL)<input id="cCap" type="number" min="0" value="${store.get("cap", 100000)}"></label>
+    <label>İşlem başına risk (%)<input id="cRisk" type="number" step="0.25" min="0.1" value="${store.get("riskpct", 1)}"></label>
+    <label>Stop türü<select id="cType"><option value="atr">2 × ATR</option><option value="liv">Livermore: pivotun %3 altı</option><option value="kel">Kellogg: gün içi dip</option><option value="pct">Özel yüzde</option></select></label>
+    <label>Özel stop (%)<input id="cPct" type="number" value="${store.get("stoppct", 8)}"></label></div><div id="calcOut"></div></details>`;
+}
+function calcUpdate() {
+  const s = UNIVERSE.find(x => x.name === selected), out = $("calcOut"); if (!s || !out) return;
+  const cap = +$("cCap").value || 0, rk = +$("cRisk").value || 0, type = $("cType").value, pct = +$("cPct").value || 0;
+  store.set("cap", cap); store.set("riskpct", rk); store.set("stoptype", type); store.set("stoppct", pct);
+  const e = s.close, stop = type === "atr" ? (s.atr ? e - 2 * s.atr : null) : type === "liv" ? (s.h1m ? s.h1m * 0.97 : null) : type === "kel" ? s.lo : e * (1 - pct / 100);
+  if (stop == null || !(stop < e)) { out.innerHTML = "<p class='mute'>Bu stop türü için geçerli bir seviye yok (stop fiyatın altında olmalı). Başka bir stop türü seçin.</p>"; return; }
+  const rps = e - stop, riskTL = cap * rk / 100;
+  let lots = Math.floor(riskTL / rps); const maxLots = Math.floor(cap / e), capped = lots > maxLots; lots = Math.min(lots, maxLots);
+  const amt = lots * e, share = cap ? amt / cap * 100 : 0, loss = lots * rps;
+  const bt = btFor(s); let kelly = null; if (bt && bt.aw > 0 && bt.al < 0) { const p = bt.win / 100, b = bt.aw / -bt.al; kelly = p - (1 - p) / b; }
+  const warn = [];
+  if (capped) warn.push("Risk kuralı sermayeden büyük pozisyon verirdi; lot sermayeyle sınırlandı.");
+  if (share > 25) warn.push(`Tek hissede sermayenin %${fmt(share, 0)}'i: yoğunlaşma riski.`);
+  if (kelly != null && kelly > 0 && bt.edge >= R.sEdge && share > kelly * 50) warn.push(`Yarı-Kelly sınırı (%${fmt(kelly * 50, 1)}) aşılıyor.`);
+  if (bt && bt.edge < R.sEdge) warn.push("Geçmişte bu sinyalin tabana göre avantajı yok: Simons pozisyon önermezdi.");
+  const row = (a, b) => `<div class="row2"><span class="mute">${a}</span><b>${b}</b></div>`;
+  out.innerHTML = row("Giriş (son fiyat)", `${fmt(e)} TL`) + row("Stop fiyatı", `${fmt(stop)} TL (−%${fmt(rps / e * 100, 1)})`) + row("Hisse başına risk", `${fmt(rps)} TL`) +
+    row("Alınacak lot (adet)", fmt(lots, 0)) + row("Pozisyon tutarı", `${fmt(amt, 0)} TL (sermayenin %${fmt(share, 1)}'i)`) +
+    row("Stop'ta azami kayıp", `${fmt(loss, 0)} TL (sermayenin %${fmt(cap ? loss / cap * 100 : 0, 2)}'i)`) +
+    row("Hedef 2R / 3R", `${fmt(e + 2 * rps)} / ${fmt(e + 3 * rps)} TL`) +
+    (warn.length ? `<p class="down" style="margin:8px 0 0;font-size:12.5px">${warn.join(" ")}</p>` : "") +
+    `<p class="note" style="margin-top:6px">Simülasyondur; komisyon ve kayma yoktur. Yatırım tavsiyesi değildir.</p>`;
+}
+$("detail").addEventListener("input", e => { if (e.target.closest(".calc")) calcUpdate(); });
+
+/* ---------- Bildirimler ---------- */
+const notifyOn = () => store.get("notifOn", false) && "Notification" in window && Notification.permission === "granted";
+function checkAlerts() {
+  if (!baseResults.length) return;
+  const strong = baseResults.filter(([, r]) => r.score >= 3).map(([s]) => s.name);
+  document.title = (strong.length ? `(${strong.length}) ` : "") + "Borsa Komitesi";
+  const seen = new Set(store.get("strongSeen", [])), negNow = [...FAVS].filter(n => NEWS[n] && NEWS[n].score <= -2), negSeen = new Set(store.get("negSeen", []));
+  if (notifyOn() && store.get("alertsPrimed", false)) {
+    const fresh = strong.filter(n => !seen.has(n)), negNew = negNow.filter(n => !negSeen.has(n));
+    if (fresh.length) new Notification("Borsa Komitesi: yeni güçlü aday", {body: fresh.join(", ")});
+    if (negNew.length) new Notification("Favorilerde olumsuz haber", {body: negNew.join(", ")});
+  }
+  store.set("strongSeen", strong); store.set("negSeen", negNow); store.set("alertsPrimed", true);
+}
+function syncNotifUi() {
+  const c = $("notifChk"); if (!c) return;
+  c.checked = notifyOn();
+  $("notifState").textContent = !("Notification" in window) ? "Bu tarayıcı bildirimleri desteklemiyor." : Notification.permission === "denied" ? "Tarayıcı bildirimi engellemiş; adres çubuğundaki site ayarlarından izin verin." : "";
 }
 
 /* ---------- Detay paneli (sağdan açılan çekmece) ---------- */
@@ -751,11 +830,15 @@ function detail(name) {
     ${h ? `<canvas id="pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
     info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
-    (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
+    (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
+  $("detail").insertAdjacentHTML("afterbegin", actionsHtml(name));
+  const ev = eventsHtml(s); if (ev) $("detail").querySelector("h2").insertAdjacentHTML("afterend", ev);
+  $("detail").insertAdjacentHTML("beforeend", calcHtml());
+  $("cType").value = store.get("stoptype", "atr"); calcUpdate();
   if (h) priceChart(h);
   if (mc) hist(mc);
 }
@@ -849,7 +932,7 @@ function renderHero(res, up, dn) {
       <span class="mkt ${open ? "on" : ""}"><i></i>${open ? "Seans saatleri içinde" : "Seans dışında · son kapanış verisi"}</span>
       <p><b>${n}</b> hisse Bollinger alt bandına %${$("tol").value} yakın.</p>
       <p>Komite <b class="up">${strong}</b> hisseyi güçlü aday, <b>${watch}</b> hisseyi izlemeye değer buluyor.</p>
-      <p class="mute">Piyasa genişliği: ${up} yükselen / ${dn} düşen.${noEdge ? " Geçmişte alt banda değmek tek başına avantaj vermediği için komite temkinli." : ""}</p>
+      <p class="mute">Piyasa rejimi: <b class="${REGIME && REGIME.trend === "bull" ? "up" : REGIME && REGIME.trend === "bear" ? "down" : ""}">${REGIME ? REGIME.label : "–"}</b> (SMA50 üstü hisse %${REGIME ? fmt(REGIME.a50, 0) : "–"}). Piyasa genişliği: ${up} yükselen / ${dn} düşen.${noEdge ? " Geçmişte alt banda değmek tek başına avantaj vermediği için komite temkinli." : ""}</p>
     </div>
     <div>
       <h3>Komitenin öne çıkardıkları</h3>
@@ -868,6 +951,7 @@ function renderDashboard() {
   const R0 = baseResults;
   const up = UNIVERSE.filter(s => s.change > 0).length, dn = UNIVERSE.filter(s => s.change < 0).length;
   renderHero(R0, up, dn);
+  renderRegime(); renderCalendar();
   $("k1").textContent = fmt(UNIVERSE.length, 0);
   $("k1s").innerHTML = `<span class="up">↗ ${up} yükselen</span> · <span class="down">↘ ${dn} düşen</span>`;
   const sc = R0.map(([, r]) => r.score), strong = sc.filter(x => x >= 3).length, watch = sc.filter(x => x >= 1 && x < 3).length;
@@ -914,12 +998,15 @@ $("statCv").addEventListener("mouseleave", () => { statHover = null; drawStat();
 $("statOpen").addEventListener("click", () => { const n = $("statSel").value; if (n) openDetail(n); });
 
 /* ---------- Sayfalar (sol menü) ve detay çekmecesi ---------- */
-let view = "dashboard";
+let view = "dashboard", pendingOpen = null;
 const drawerOpen = () => $("drawer").classList.contains("open");
 function refreshView() {
   if (view === "dashboard") renderDashboard();
   else if (view === "haberler") renderNews();
   else if (view === "geritest") renderBacktest();
+  else if (view === "ekranlar") renderScreens();
+  else if (view === "karsilastir") renderCompare();
+  else if (view === "karne") renderKarne();
   if (selected && drawerOpen()) detail(selected);
 }
 function markRows() { document.querySelectorAll("#tbl tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.n === selected)); }
@@ -955,6 +1042,7 @@ const TOUR = [
   ["Genel Bakış", "Üstteki özet bugünün resmini verir: kaç hisse alt banda yakın, komite kimi öne çıkarıyor, Baş Denetçi nelere dikkat çekiyor. Kartlara tıklayarak ilgili listeye geçebilirsiniz."],
   ["Oyları okumak", "Her hissenin yanında B S L K Ş harfleri var: Buffett, Simons, Livermore, Kellogg ve Şeytanın Avukatı. Yeşil = olumlu, gri = nötr, kırmızı = olumsuz. Toplam oy 'Komite' sütunundadır."],
   ["Detay ve favori", "Bir hisseye tıklayınca sağdan detay paneli açılır: grafik, haberler, her efsanenin gerekçesi, Monte Carlo. ★ ile favoriye ekleyin. Eşikleri 'Efsane Kuralları' sayfasından değiştirebilirsiniz. Eğitim amaçlıdır, yatırım tavsiyesi değildir."],
+  ["Daha fazlası", "Efsane Ekranları: her efsanenin kendi taraması. Karşılaştır: 2-3 hisse yan yana. Komite Karnesi: komitenin geçmiş kararlarının gerçek sonucu. Haberler: KAP/haber türüne göre filtre. Detay panelinde pozisyon hesaplayıcı, bağlantı kopyalama ve PDF var."],
 ];
 let tourI = 0;
 function renderTour() {
@@ -1011,7 +1099,10 @@ async function loadData(refresh) {
     if (!res.ok) throw new Error(res.status);
     const d = await res.json();
     const changed = applyData(d);
-    if (changed || refresh || !HIST) { await loadAux(); mcCache = {}; render(); }
+    if (changed || refresh || !HIST) {
+      await loadAux(); mcCache = {}; screenCache = null; render(); checkAlerts();
+      if (pendingOpen && UNIVERSE.some(s => s.name === pendingOpen)) { openDetail(pendingOpen); pendingOpen = null; }
+    }
     banner(d.error ? "Son veri çekme denemesi başarısız (" + d.error + "). Önceki veri gösteriliyor." : "");
     $("status").textContent = `Veri: ${d.generated} · 15 dk'da bir yenilenir`;
   } catch (e) {
@@ -1030,6 +1121,13 @@ document.addEventListener("click", e => {
   const x = e.target.closest("[data-x]"); if (x) { openDetail(x.dataset.x); return; }
   const sc = e.target.closest("[data-sector]"); if (sc) { $("lab").value = ""; fillSectors(); $("sec").value = sc.dataset.sector; show("adaylar"); return; }
   const lb = e.target.closest("[data-lab]"); if (lb) { $("sec").value = ""; $("lab").value = lb.dataset.lab; show("adaylar"); return; }
+  const cm = e.target.closest("[data-cmp]"); if (cm) { toggleCmp(cm.dataset.cmp); return; }
+  const sh = e.target.closest("[data-share]"); if (sh) { const url = location.origin + location.pathname + "#h=" + encodeURIComponent(sh.dataset.share); (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast("Bağlantı kopyalandı"), () => window.prompt("Bağlantı:", url)); return; }
+  if (e.target.closest("[data-print]")) { document.body.classList.add("printing"); window.print(); setTimeout(() => document.body.classList.remove("printing"), 800); return; }
+  const stb = e.target.closest("[data-stab]"); if (stb) { screenTab = stb.dataset.stab; renderScreens(); return; }
+  const nt = e.target.closest("[data-ntag]"); if (nt) { newsTag = nt.dataset.ntag; renderNews(); return; }
+  if (e.target.closest("[data-cmpadd]")) { const n = ($("cmpAdd").value || "").trim().toUpperCase(); if (UNIVERSE.some(s => s.name === n)) { if (!CMP.includes(n)) toggleCmp(n); } else toast("Hisse bulunamadı"); return; }
+  const cr = e.target.closest("[data-cmprem]"); if (cr) { toggleCmp(cr.dataset.cmprem); return; }
   const sr = e.target.closest("[data-scroll]"); if (sr) { e.preventDefault(); $(sr.dataset.scroll).scrollIntoView({behavior: "smooth"}); }
 });
 $("tbl").addEventListener("click", e => {
@@ -1042,6 +1140,11 @@ $("scrim").addEventListener("click", closeDetail);
 $("dClose").addEventListener("click", closeDetail);
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeDetail(); if ($("tour").classList.contains("open")) endTour(); } });
 $("tourBtn").addEventListener("click", startTour);
+$("notifChk").addEventListener("change", e => {
+  if (!e.target.checked) { store.set("notifOn", false); syncNotifUi(); return; }
+  if (!("Notification" in window)) { e.target.checked = false; syncNotifUi(); return; }
+  Notification.requestPermission().then(p => { store.set("notifOn", p === "granted"); syncNotifUi(); if (p === "granted") toast("Bildirimler açıldı"); });
+});
 function applyTheme(t) {
   document.documentElement.dataset.theme = t; store.set("theme", t);
   $("theme").innerHTML = ico(t === "light" ? "sun" : "moon");
@@ -1052,8 +1155,10 @@ window.addEventListener("resize", () => { if (view === "dashboard") renderDashbo
 paintIcons();
 buildRules();
 applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
-const first = location.hash.slice(1);
-show(["dashboard", "adaylar", "favoriler", "haberler", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+let first = location.hash.slice(1);
+if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
+syncNotifUi();
+show(["dashboard", "adaylar", "ekranlar", "favoriler", "karsilastir", "haberler", "karne", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>
