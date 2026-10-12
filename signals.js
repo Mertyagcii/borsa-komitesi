@@ -36,14 +36,16 @@ if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
 
 /* ---- core.js'i bir vm içinde çalıştır (tarayıcıyla aynı mantık) ---- */
 const coreSrc = fs.readFileSync(path.join(__dirname, "core.js"), "utf8");
-const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news});
+const research = read("research.json", null);
+const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research});
 const out = vm.runInContext(`
 ${coreSrc}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
 NOW = Date.now();
 const UNI = __data.stocks.map(enrich);
 REGIME = computeRegime(UNI, HIST);
-current = UNI.filter(s => s.ok && s.rsi != null && s.close <= s.bb_lower * 1.03 && s.tl >= 5).sort((a, b) => a.bbDist - b.bbDist).slice(0, 25);
+RESEARCH = __research; rankUniverse(UNI);
+current = strengthList(UNI, 25, 5);
 const res = current.map(s => [s, committee(s)]);
 const sc = personaScreens(UNI, 8, []);
 ({

@@ -1,4 +1,4 @@
-﻿"""TradingView'den günlük fiyat geçmişi çeker (tvdatafeed) ve gerçek geri test istatistikleri üretir.
+"""TradingView'den günlük fiyat geçmişi çeker (tvdatafeed) ve gerçek geri test istatistikleri üretir.
 
 Sinyaller (Bollinger 20,2 alt bandı):
   A = kapanış alt banda değdi/altına indi
@@ -73,7 +73,7 @@ def summarize(rets: dict[int, list[float]], n_signals: int) -> dict:
 
 
 def build(names: list[str], log=print) -> dict:
-    from tvDatafeed import TvDatafeed
+    from tvDatafeed import Interval, TvDatafeed
     tv = TvDatafeed()
     stocks, pool = {}, {"A": {h: [] for h in HORIZONS}, "B": {h: [] for h in HORIZONS}, "C": {h: [] for h in HORIZONS}}
     pool_n = {"A": 0, "B": 0, "C": 0}
@@ -113,12 +113,21 @@ def build(names: list[str], log=print) -> dict:
         if idf is not None:
             index = {"name": sym, "last": str(idf.index[-1])[:10], "closes": [round(float(x), 2) for x in idf["close"].tail(260)]}
             break
+    macro = {}
+    for key, sym in (("rf10", "TR10Y"), ("rf2", "TR02Y")):
+        try:
+            mdf = tv.get_hist(sym, "TVC", interval=Interval.in_daily, n_bars=3)
+            if mdf is not None and len(mdf):
+                macro[key] = round(float(mdf["close"].iloc[-1]), 2)
+                macro["date"] = str(mdf.index[-1])[:10]
+        except Exception:
+            pass
     now = datetime.now(TZ)
     pooled = {key: summarize(pool[key], pool_n[key]) for key in "ABC"}
     pooled["base"] = summarize({h: np.concatenate(v).tolist() if v else [] for h, v in base.items()}, 0)
     return {
         "ts": int(time.time()), "generated": now.strftime("%Y-%m-%d %H:%M"),
-        "bars": N_BARS, "pooled": pooled, "index": index,
+        "bars": N_BARS, "pooled": pooled, "index": index, "macro": macro,
         "stocks": stocks,
     }
 
@@ -128,12 +137,17 @@ def is_stale() -> bool:
     if not OUT.exists():
         return True
     try:
-        age_h = (time.time() - json.loads(OUT.read_text(encoding="utf-8"))["ts"]) / 3600
+        data = json.loads(OUT.read_text(encoding="utf-8"))
+        age_h = (time.time() - data["ts"]) / 3600
+        idx_last = (data.get("index") or {}).get("last")
     except Exception:
         return True
     now = datetime.now(TZ)
     after_close = now.hour * 60 + now.minute >= 18 * 60 + 45
-    return age_h > 72 or (age_h > 23 and after_close and now.weekday() < 5)
+    trading_day = now.weekday() < 5
+    # kapanıştan sonra, endeksin son çubuğu bugünden eskiyse (bugünün kapanışı henüz yok) yenile; 3 saatte bir en fazla
+    new_bar = after_close and trading_day and idx_last is not None and idx_last < now.date().isoformat() and age_h > 3
+    return age_h > 72 or (age_h > 23 and after_close and trading_day) or new_bar
 
 
 def main() -> None:

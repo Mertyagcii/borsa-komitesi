@@ -1,13 +1,18 @@
-/* core.js: efsane mantığı. Tarayıcı ve Node (GitHub Actions karne/uyarı) ortak kullanır.
-   Dışarıdan beklenenler (çağrı anında): R, HIST, NEWS, current. */
+/* core.js v2: efsane/komite mantığı. Tarayıcı ve Node (GitHub Actions: karne + sanal portföyler) ortak kullanır.
+   Dışarıdan beklenenler (çağrı anında): R, HIST, NEWS, current.
+   Tasarım ilkeleri:
+   - Her efsane kendi "mandası" içinde karar verir (Buffett küçük/kârsız işletmeye bakmaz; Kellogg likit olmayan hisseye girmez ...).
+   - Eşikler sezgi değil, research.json (3 yıllık BIST testi) ve araştırılan yöntemlere dayanır. Kanıtı ters çıkan sinyalleri (RSI<30, panik satış) kimse almaz.
+   - Değerleme yüksek faiz/enflasyon ortamına göre yapılır: tahvil getirisi (TR10Y) iskonto oranıdır, EPS büyümesi enflasyonla sınırlanır. */
 const fmt = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("tr-TR", {minimumFractionDigits: d, maximumFractionDigits: d});
 
 const RULE_DEFS = [
-  ["Buffett (Hagstrom'un finansal ve değer ilkeleri)", [["bRoe", "ROE en az %", 15], ["bDe", "Borç/Özsermaye en çok", 0.5], ["bNm", "Net kâr marjı en az %", 10], ["bPe", "F/K en çok", 15], ["bPb", "PD/DD en çok", 1.5], ["bMos", "Güvenlik marjı en az %", 25]]],
-  ["Simons (istatistik)", [["sZ", "Sapma (z) en az", 1.8], ["sMinN", "Geri test min. sinyal", 5], ["sWin", "Min. kazanma % (10g)", 55], ["sEdge", "Taban üstü min. fark (puan)", 0.5]]],
-  ["Livermore (trend & pivot)", [["lPiv", "Pivota yakınlık %", 1], ["lVol", "Min. göreceli hacim", 1.2]]],
-  ["Kellogg (momentum)", [["kRvol", "Min. göreceli hacim", 2], ["kChg", "Gün içi hareket en az %", 3], ["kAtr", "Min. ATR %", 3]]],
-  ["Şeytanın Avukatı (risk)", [["dAtr", "Günlük oynaklık üst sınır %", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dMaxDd", "Son 1 yıl maks. düşüş % (üst sınır)", 35], ["dSector", "Aynı sektörden en fazla aday", 3], ["dFlags", "Karşı çıkma için bayrak sayısı", 2]]],
+  ["Makro varsayımlar (veri yoksa)", [["rf", "Tahvil getirisi % (veri yoksa)", 33], ["erp", "Hisse risk primi % (tahvilin üstü)", 6], ["infl", "Enflasyon beklentisi %", 30]]],
+  ["Buffett: işletme sahibi gibi", [["bMcap", "Min. piyasa değeri (milyar TL)", 10], ["bRoe", "Reel ROE en az %", 5], ["bNm", "Net kâr marjı en az %", 8], ["bGm", "Brüt marj en az % (fiyatlama gücü)", 25], ["bDe", "Borç/Özsermaye en çok", 0.6], ["bMos", "Güvenlik marjı en az %", 25]]],
+  ["Simons: model", [["sEdge", "Beklenen 10g fazla getiri en az %", 1], ["sRs", "Min. göreceli güç (RS) yüzdesi", 70], ["sKelly", "Kelly çarpanı (kesirli)", 0.25], ["sCap", "Tek hisse azami ağırlık %", 6]]],
+  ["Livermore: trend ve pivot", [["lRs", "Lider sayılmak için min. RS", 80], ["lPiv", "Pivota yakınlık %", 2], ["lVol", "Min. göreceli hacim", 1.2], ["lExt", "Aşırı uzama (SMA50 üstü) % üst sınır", 30]]],
+  ["Kellogg: momentum", [["kRvol", "Min. göreceli hacim", 2], ["kChg", "Gün içi itiş en az %", 4], ["kAtr", "Min. ATR %", 3], ["kTl", "Min. işlem hacmi (mn TL)", 30]]],
+  ["Şeytanın Avukatı: risk", [["dAtr", "Günlük oynaklık üst sınır %", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dMaxDd", "Son 1 yıl maks. düşüş % (üst sınır)", 35], ["dFomo", "1 ayda yükseliş % (kovalama)", 25], ["dSector", "Aynı sektörden en fazla aday", 3], ["dFlags", "Karşı çıkma için bayrak sayısı", 3], ["dPos", "Örnek pozisyon (bin TL, likidite için)", 500]]],
   ["Simülasyon", [["mDays", "Ufuk (iş günü)", 20], ["mStop", "Stop seviyesi %", 7]]],
 ];
 const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
@@ -18,8 +23,48 @@ function enrich(s) {
   s.smaDist = s.ok ? (s.close / s.sma50 - 1) * 100 : null;
   s.atrPct = s.atr != null && s.close > 0 ? s.atr / s.close * 100 : null;
   s.tl = s.close * s.volume / 1e6; // günlük işlem hacmi, milyon TL
+  s.dist52 = s.h52 > 0 ? (s.close / s.h52 - 1) * 100 : null;
   return s;
 }
+
+/* ---------- Zaman, makro, piyasa rejimi, göreceli güç ---------- */
+let NOW = Date.now();
+let REGIME = null;
+let RESEARCH = null;
+function macro() {
+  const m = HIST && HIST.macro;
+  return {rf: (m && m.rf10 ? m.rf10 : R.rf) / 100, rf2: (m && m.rf2 ? m.rf2 : R.rf) / 100, erp: R.erp / 100, infl: R.infl / 100, live: !!(m && m.rf10)};
+}
+function computeRegime(universe, hist) {
+  const ok = universe.filter(s => s.ok);
+  if (!ok.length) return null;
+  const a50 = ok.filter(s => s.close > s.sma50).length / ok.length * 100;
+  const s200 = ok.filter(s => s.sma200 != null);
+  const a200 = s200.length ? s200.filter(s => s.close > s.sma200).length / s200.length * 100 : null;
+  let idx = null;
+  if (hist && hist.index && hist.index.closes && hist.index.closes.length >= 200) {
+    const c = hist.index.closes, n = c.length, avg = k => c.slice(n - k).reduce((x, y) => x + y, 0) / k;
+    const last = c[n - 1], m50 = avg(50), m200 = avg(200);
+    idx = {name: hist.index.name, last, m50, m200, ch1m: (last / c[n - 22] - 1) * 100,
+      trend: last > m50 && m50 > m200 ? "bull" : last < m50 && last < m200 ? "bear" : "mixed"};
+  }
+  const trend = idx ? idx.trend : a50 >= 60 ? "bull" : a50 <= 40 ? "bear" : "mixed";
+  return {trend, label: {bull: "Boğa", bear: "Ayı", mixed: "Geçiş"}[trend], a50, a200, idx};
+}
+/* Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getirinin yüzdelik ortalaması (research.py ile aynı bileşim) */
+function rankUniverse(uni) {
+  const el = uni.filter(s => s.ok && s.tl >= 5 && s.h52 > 0);
+  el.forEach(s => { s._rk = []; });
+  for (const key of ["dist52", "p6m", "p1m"]) {
+    const arr = el.filter(s => s[key] != null && !Number.isNaN(s[key])).map(s => [s[key], s]).sort((a, b) => a[0] - b[0]);
+    arr.forEach(([, s], i) => { s._rk.push(arr.length > 1 ? i / (arr.length - 1) * 100 : 50); });
+  }
+  el.forEach(s => { s.rs = s._rk.length >= 2 ? s._rk.reduce((a, b) => a + b, 0) / s._rk.length : null; delete s._rk; });
+  const inEl = new Set(el);
+  uni.forEach(s => { if (!inEl.has(s)) s.rs = null; });
+}
+const rsDecile = s => s.rs == null ? null : Math.min(9, Math.floor(s.rs / 10));
+const trendUp = s => s.sma200 == null ? null : s.close > s.sma50 && s.sma50 > s.sma200;
 
 /* ---------- Monte Carlo (GBM, drift=0). Oynaklık: gerçek geçmiş (sigma60) varsa o, yoksa 0.8×ATR% ---------- */
 let mcCache = {};
@@ -51,20 +96,18 @@ function monteCarlo(s, n = 2000) {
     probLoss: sorted.filter(x => x < 0).length / n * 100, probStop: stopHit / n * 100, finals: sorted };
 }
 
-/* ---------- Geri test (history.json'dan) ---------- */
+/* ---------- Eski geri test (history.json): Geri Test sayfası ve hesaplayıcı kullanır ---------- */
 function btFor(s) {
   if (!HIST) return null;
   const own = HIST.stocks[s.name] && HIST.stocks[s.name].bt, base = HIST.pooled.base, pooled = HIST.pooled.A;
-  const useOwn = own && own.n >= R.sMinN && own.h10;
+  const useOwn = own && own.n >= 5 && own.h10;
   const b = useOwn ? own : pooled;
   if (!b || !b.h10 || !base || !base.h10) return null;
   return { own: !!useOwn, n: b.n, win: b.h10.win, mean: b.h10.mean, med: b.h10.med, p10: b.h10.p10, aw: b.h10.aw, al: b.h10.al,
     baseWin: base.h10.win, baseMean: base.h10.mean, edge: b.h10.mean - base.h10.mean };
 }
 
-/* ---------- Efsaneler: her biri gerçek yatırım felsefesinin kontrol listesiyle çalışır ----------
-   Kaynaklar (ikincil): Hagstrom "The Warren Buffett Way", Zuckerman "The Man Who Solved the Market", Livermore "Reminiscences of a Stock Operator"
-   özetleri, Kellogg röportaj/özetleri. Kesin kural setleri kamuya açık değildir; burada yorumlanmış, ölçülebilir karşılıkları kullanılır. */
+/* ---------- Kontrol listesi yardımcıları ---------- */
 const OK = 1, BAD = -1, NA = 0;
 const chk = (c, t, val) => ({s: c == null ? NA : c ? OK : BAD, t, val: val ?? ""});
 const pc = v => v == null || Number.isNaN(v) ? "–" : "%" + fmt(v, 1);
@@ -74,165 +117,251 @@ function tally(checks) {
 }
 const isFin = s => s.sector === "Finance";
 const graham = s => s.eps > 0 && s.bvps > 0 ? Math.sqrt(22.5 * s.eps * s.bvps) : null;
+const evidence = id => RESEARCH && RESEARCH.signals ? RESEARCH.signals.find(x => x.id === id) : null;
 
+/* Adil değer (büyüyen kalıcı gelir): iskonto oranı = tahvil getirisi + hisse risk primi; büyüme = son EPS büyümesinin %75'i,
+   [0, enflasyon] aralığıyla sınırlı (yüksek enflasyonda kazançlar uzun vadede enflasyondan hızlı büyüyemez).
+   İki tahmin: kazanç (EPS) ve sahip kazancı (FCF/hisse; banka dışı). Temkinli olan alınır. */
+function intrinsic(s) {
+  const m = macro(), r = m.rf + m.erp, fin = isFin(s);
+  const g = Math.max(0, Math.min((s.epsg ?? 0) / 100 * 0.75, m.infl, r - 0.08));
+  const out = {g, r, fvEps: null, fvOe: null, fv: null, mos: null, gn: graham(s)};
+  if (s.eps > 0) out.fvEps = s.eps * (1 + g) / (r - g);
+  if (!fin && s.fcf > 0 && s.mcap > 0 && s.close > 0) out.fvOe = (s.fcf / (s.mcap / s.close)) * (1 + g) / (r - g);
+  const c = [out.fvEps, out.fvOe].filter(v => v != null);
+  out.fv = c.length ? Math.min(...c) : null;
+  out.mos = out.fv ? (out.fv - s.close) / out.fv * 100 : null;
+  return out;
+}
+
+/* =====================================================================================
+   WARREN BUFFETT: işletmenin sahibi gibi düşünür. Piyasa fiyatı (Mr. Market) bir tekliftir, görüş değil.
+   Manda: anlayabileceği, kârlı, yeterince büyük işletmeler. Kalite + fiyat disiplini; neredeyse hiç satmaz. */
 function buffett(s) {
-  const fin = isFin(s), gn = graham(s), mos = gn ? (gn - s.close) / gn * 100 : null;
+  const m = macro(), fin = isFin(s), iv = intrinsic(s);
+  const real = x => x == null ? null : ((1 + x / 100) / (1 + m.infl) - 1) * 100;
+  const roeReal = real(s.roe), nd = s.debt != null && s.ebitda > 0 ? (s.debt - (s.cash || 0)) / s.ebitda : null;
+  const ey = s.pe > 0 ? 100 / s.pe : null, fcfy = !fin && s.fcf != null && s.mcap > 0 ? s.fcf / s.mcap * 100 : null;
+  const gyo = /GYO$/.test(s.name); // GYO kazancı çoğunlukla değer artışıdır, işletme kazancı değildir
+  const inCircle = s.mcap >= R.bMcap * 1e9 && s.eps > 0 && !gyo;
   const checks = [
-    chk(s.roe == null ? null : s.roe >= R.bRoe, `Özsermaye getirisi (ROE) ≥ %${R.bRoe}`, pc(s.roe)),
-    chk(fin || s.de == null ? null : s.de <= R.bDe, `Borç/Özsermaye ≤ ${R.bDe}`, fin ? "banka/finans: geçerli değil" : fmt(s.de)),
-    chk(s.nm == null || s.nm > 100 ? null : s.nm >= R.bNm, `Net kâr marjı ≥ %${R.bNm}`, s.nm > 100 ? `anormal (${pc(s.nm)}): değerleme/tek seferlik kalem olabilir` : pc(s.nm)),
-    chk(fin || s.fcf == null ? null : s.fcf > 0, "Serbest nakit akışı pozitif (owner earnings vekili)", fin ? "banka/finans: geçerli değil" : s.fcf == null ? "–" : s.fcf > 0 ? "pozitif" : "negatif"),
-    chk(s.epsg == null ? null : s.epsg > 0, "Hisse başı kazanç büyüyor (nominal)", pc(s.epsg)),
-    chk(s.pe == null ? null : s.pe > 0 && s.pe <= R.bPe, `F/K ≤ ${R.bPe}`, fmt(s.pe, 1)),
-    chk(s.pb == null ? null : s.pb <= R.bPb, `PD/DD ≤ ${R.bPb}`, fmt(s.pb)),
-    chk(mos == null ? null : mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos} (Graham sayısı ${gn ? fmt(gn) + " TL" : "–"})`, pc(mos)),
-    chk(null, "Rekabet avantajı (moat), basit iş modeli, uzun vadeli beklenti", "veriyle ölçülemez: kendiniz doğrulayın"),
+    chk(inCircle, `Yeterince büyük, kârlı ve anlaşılır işletme (piyasa değeri ≥ ${R.bMcap} mlr TL, EPS > 0, GYO değil)`, gyo ? "GYO: kazanç değer artışı kaynaklı" : `${s.mcap ? fmt(s.mcap / 1e9, 0) + " mlr TL" : "–"}, EPS ${fmt(s.eps)}`),
+    chk(roeReal == null ? null : roeReal >= R.bRoe, `Reel özsermaye getirisi ≥ %${R.bRoe} (enflasyon düşülmüş)`, `${pc(s.roe)} nominal → ${pc(roeReal)} reel`),
+    chk(s.nm == null || s.nm > 100 ? null : s.nm >= R.bNm, `Net kâr marjı ≥ %${R.bNm}`, s.nm > 100 ? `anormal (${pc(s.nm)})` : pc(s.nm)),
+    chk(fin || s.gm == null ? null : s.gm >= R.bGm, `Brüt marj ≥ %${R.bGm} (fiyatlama gücü vekili)`, fin ? "banka/finans: geçerli değil" : pc(s.gm)),
+    chk(fin || s.de == null ? null : s.de <= R.bDe && (nd == null || nd <= 2.5), `Borç/Özsermaye ≤ ${R.bDe} ve net borç/FAVÖK ≤ 2,5`, fin ? "banka/finans: geçerli değil" : `${fmt(s.de)} / ${nd == null ? "–" : fmt(nd, 1)}`),
+    chk(fin || s.fcf == null ? null : s.fcf > 0, "Serbest nakit akışı pozitif (sahip kazancı)", fin ? "banka/finans: geçerli değil" : s.fcf == null ? "–" : s.fcf > 0 ? `pozitif (getiri ${pc(fcfy)})` : "negatif"),
+    chk(s.epsg == null ? null : s.epsg >= m.infl * 100, "Kazanç büyümesi enflasyonu karşılıyor (reel büyüme ≥ 0)", `${pc(s.epsg)} vs enflasyon ${pc(m.infl * 100)}`),
+    chk(iv.mos == null ? null : iv.mos >= R.bMos, `Güvenlik marjı ≥ %${R.bMos}: adil değer ${iv.fv ? fmt(iv.fv) + " TL" : "–"} (iskonto: tahvil %${fmt(m.rf * 100, 1)} + risk primi %${fmt(m.erp * 100, 0)}, büyüme %${fmt(iv.g * 100, 0)})`, pc(iv.mos)),
+    chk(ey == null ? null : ey >= m.rf * 100 * 0.5, "Kazanç getirisi (1/FK) tahvil faizinin yarısından fazla (kalanı büyümeyle gelir)", `${pc(ey)} vs tahvil ${pc(m.rf * 100)}`),
+    chk(null, "Kalıcı rekabet avantajı (moat), basit iş modeli, yetenek çevresi", "veriyle ölçülemez: kendiniz doğrulayın"),
     chk(null, "Dürüst ve yetenekli yönetim", "veriyle ölçülemez"),
   ];
-  const k = tally(checks);
-  const v = k.n >= 5 && k.score >= 70 ? 1 : k.n >= 4 && k.score < 40 ? -1 : 0;
-  const t = v > 0 ? `Rakamlar kaliteli ve makul fiyatlı bir işletmeye benziyor (${k.ok}/${k.n} ölçülebilir ilke geçti).`
-    : v < 0 ? `Ölçülebilir ilkelerin çoğu başarısız (${k.ok}/${k.n} geçti): ya iş zayıf ya da fiyat pahalı. "Harika bir işletmeyi makul fiyata" arıyorum; bu o değil.`
-    : `Karışık tablo (${k.ok}/${k.n} geçti). Bariz bir iskonto ya da bariz bir kusur yok; acele etmem.`;
-  const cap = gn ? gn * (1 - R.bMos / 100) : null;
-  const plan = cap ? `${fmt(cap)} TL altını makul alım sayardı (Graham sayısı ${fmt(gn)} TL − %${R.bMos} güvenlik marjı). Stop kullanmaz; fiyat düşerse işletmenin değerini yeniden sorgular, uzun vadeli tutar.`
-    : "Güvenlik marjı hesaplanamadı (EPS/defter değeri eksik). Stop kullanmaz; işletmeyi uzun vadeli sahiplik gözüyle değerlendirir.";
-  return {v, score: k.score, checks, t, plan};
+  const quality = tally(checks.slice(1, 8)), all = tally(checks);
+  const v = !inCircle ? (s.eps <= 0 ? -1 : 0) : quality.n >= 4 && quality.score >= 65 && iv.mos != null && iv.mos >= R.bMos ? 1 : quality.n >= 4 && quality.score < 35 ? -1 : 0;
+  const hurdle = `Tahvil %${fmt(m.rf * 100, 1)} getiri veriyor; hisse bundan fazlasını vaat etmeli.`;
+  let t;
+  if (!inCircle) t = gyo ? "Gayrimenkul ortaklığının kazancı çoğu zaman değer artışından gelir; bu işletme kazancı değil, defter hareketidir. Anlamadığım yere girmem." : s.eps <= 0 ? "Kazanç yok. Bir işletmenin kâr etmediğini görünce kalemi bırakırım; hikâye anlatan şirketlerle işim olmaz." : "Bu işletme benim için fazla küçük; büyük bir pozisyon alamayacağım yere zaman harcamam.";
+  else if (v > 0) t = `Kaliteli bir işletme ve fiyatı makul: adil değere göre %${fmt(iv.mos, 0)} iskonto var. ${hurdle} Burada var. Alır ve unuturum.`;
+  else if (v < 0) t = `İş zayıf görünüyor (kalite ölçütlerinin ${quality.ok}/${quality.n}'i geçiyor). Ucuz diye zayıf işletme almam; ucuzluk bazen sadece ucuzluktur.`;
+  else t = iv.mos != null && iv.mos < R.bMos ? `İşletme fena değil ama fiyat bana yer bırakmıyor (güvenlik marjı %${fmt(iv.mos, 0)}). Güzel bir işletmeyi yanlış fiyata almak hata olur; bekleyebilirim. ${hurdle}` : `Tablo karışık (${quality.ok}/${quality.n}). Anlamadığım ya da emin olmadığım yerde pas geçerim.`;
+  const cap = iv.fv ? iv.fv * (1 - R.bMos / 100) : null;
+  const plan = cap ? `En fazla ${fmt(cap)} TL'ye alırdım (adil değer ${fmt(iv.fv)} TL − %${R.bMos} güvenlik marjı). Stop kullanmam; fiyat düşerse işletmenin değeri değişti mi diye bakarım. Fiyat adil değere ulaşırsa ya da iş bozulursa satarım, aksi halde yıllarca tutarım.`
+    : "Adil değer hesaplanamadı (EPS/nakit akışı eksik): bu yüzden fiyat veremem. Stop kullanmam; uzun vadeli sahiplik gözüyle bakarım.";
+  return {v, score: all.score, checks, t, plan, fv: iv.fv, mos: iv.mos, cap, quality: quality.score};
 }
 
+/* =====================================================================================
+   JIM SIMONS: hikâye yok, model var. "Bu şirket ne yapıyor" sorusuyla ilgilenmez; "bu örüntü geçmişte para kazandırdı mı?" der.
+   Model: göreceli güç (RS) dilimine göre beklenen fazla getiri (research.json). Kanıtı ters çıkan sinyalleri (RSI<30, panik satış) cezalandırır.
+   Küçük avantajı kesirli Kelly ile boyutlar; modeli tek bir hisse için ezmez. */
 function simons(s) {
-  const mc = monteCarlo(s), bt = btFor(s), h = HIST && HIST.stocks[s.name];
-  const sd = (s.bb_upper - s.bb_lower) / 4, z = sd > 0 ? (s.close - (s.bb_upper + s.bb_lower) / 2) / sd : null;
+  const dec = rsDecile(s), tab = RESEARCH && RESEARCH.rs_deciles, sg = sigmaOf(s);
+  let exp = dec != null && tab ? tab[dec] : null;
+  const pen = [];
+  if (exp != null) {
+    const ev1 = evidence("rsi30"), ev2 = evidence("dusus_hacim");
+    if (s.rsi != null && s.rsi < 30 && ev1 && ev1.verdict === "ters kanıt") { exp += ev1.h10.excess; pen.push(`RSI<30 (geçmiş ${fmt(ev1.h10.excess, 1)}%)`); }
+    if (s.change <= -5 && s.rvol >= 2 && ev2 && ev2.verdict === "ters kanıt") { exp += ev2.h10.excess; pen.push(`hacimli panik düşüş (geçmiş ${fmt(ev2.h10.excess, 1)}%)`); }
+  }
+  const s10 = sg ? sg.v * Math.sqrt(10) * 100 : null, edge = exp != null && s10 ? exp / s10 : null;
+  const f = exp != null && s10 ? exp / 100 / ((s10 / 100) ** 2) : null;
+  const w = f != null && f > 0 ? Math.min(R.sCap, R.sKelly * f * 100) : 0;
+  const top = RESEARCH && RESEARCH.rs_top_trend, tr = trendUp(s);
   const checks = [
-    chk(z == null ? null : z <= -R.sZ, `Fiyat 20 günlük ortalamadan ≥ ${R.sZ} standart sapma aşağıda (z-skoru)`, z == null ? "–" : fmt(z, 2)),
-    chk(bt ? bt.n >= R.sMinN : null, `Geçmişte yeterli örnek (≥ ${R.sMinN} sinyal)`, bt ? `${bt.n} sinyal (${bt.own ? "bu hisse" : "tüm hisseler"})` : "geçmiş yok"),
-    chk(bt ? bt.win >= R.sWin : null, `10 gün sonra kazanma oranı ≥ %${R.sWin}`, bt ? `${pc(bt.win)} (taban ${pc(bt.baseWin)})` : "–"),
-    chk(bt ? bt.edge >= R.sEdge : null, `Ort. getiri tabanın ≥ ${R.sEdge} puan üstünde`, bt ? `${pc(bt.mean)} / taban ${pc(bt.baseMean)}` : "–"),
-    chk(h && h.ac1 != null ? (h.ac1 <= -0.03 ? true : h.ac1 >= 0.08 ? false : null) : null, "Ortalamaya dönüş rejimi: günlük getirilerin otokorelasyonu negatif", h && h.ac1 != null ? fmt(h.ac1, 2) : "–"),
-    chk(h ? h.sigma60 <= 1.5 * h.sigma250 : null, "Oynaklık rejimi sakin (60g σ ≤ 1,5 × 250g σ)", h ? `${pc(h.sigma60 * 100)} / ${pc(h.sigma250 * 100)}` : "–"),
-    chk(mc ? mc.probStop < R.dStop : null, `Simülasyonda stop olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
+    chk(exp == null ? null : exp >= R.sEdge, `Model beklentisi: 10 günde piyasa ortalamasının ≥ %${R.sEdge} üstü`, exp == null ? "araştırma yok" : `${exp > 0 ? "+" : ""}${fmt(exp, 2)}% (RS dilimi ${dec == null ? "–" : dec + 1}/10)`),
+    chk(s.rs == null ? null : s.rs >= R.sRs, `Göreceli güç yüzdesi ≥ ${R.sRs} (52 hafta yakınlığı + 6 ay + 1 ay)`, s.rs == null ? "–" : fmt(s.rs, 0)),
+    chk(tr, "Yükselen trend filtresi (SMA50 > SMA200): araştırmada en iyi sonuç bu filtreyle", tr == null ? "–" : tr ? "evet" : "hayır"),
+    chk(pen.length ? false : (exp == null ? null : true), "Kanıtı ters çıkan sinyal yok (RSI<30, hacimli panik)", pen.length ? pen.join("; ") : "yok"),
+    chk(edge == null ? null : edge >= 0.1, "Beklenti/oynaklık oranı ≥ 0,1 (gürültüye göre sinyal)", edge == null ? "–" : fmt(edge, 2)),
+    chk(top ? top.n >= 20 : null, "Model yeterli gözlemle test edilmiş (≥ 20 örtüşmeyen dönem)", top ? `${top.n} dönem, isabet ${pc(top.win)}` : "–"),
+    chk(s.tl >= R.kTl / 2, "Likit (modelin işlem yapabileceği boyut)", `${fmt(s.tl, 0)} mn TL`),
   ];
   const k = tally(checks);
-  let kelly = null; if (bt && bt.aw > 0 && bt.al < 0) { const p = bt.win / 100, b = bt.aw / -bt.al; kelly = p - (1 - p) / b; }
   let v = 0;
-  if ((mc && mc.probStop >= 65) || (bt && bt.edge <= -R.sEdge)) v = -1;
-  else if (bt && bt.edge >= R.sEdge && bt.win >= R.sWin && z != null && z <= -R.sZ && k.score >= 60) v = 1;
-  const t = v > 0 ? "Duygu yok, sadece sayı: sapma aşırı, geçmişte bu sinyal tabana göre pozitif sonuç vermiş. Yine de bu tek bir küçük avantaj; tek hisseye bahis değil, çok sayıda küçük avantajın toplamı kazandırır."
-    : v < 0 ? "Sayılar aleyhine: ya geçmişte sinyal tabandan kötü sonuç vermiş ya da oynaklık stop'a değme ihtimalini çok yükseltiyor."
-    : "Matematiksel olarak ayırt edilebilir bir avantaj göremiyorum. Avantaj yoksa işlem yok.";
-  const plan = kelly == null ? "Geçmiş verisi (kazanç/kayıp oranı) yok; Kelly pozisyon büyüklüğü hesaplanamadı."
-    : bt && bt.edge < R.sEdge ? `Tabana göre avantaj yok: pozisyon önerilmez. (Mutlak Kelly %${fmt(kelly * 100, 1)} görünse de bu, piyasanın nominal yükseliş eğiliminden gelir, sinyalden değil.)`
-    : kelly > 0 ? `Kelly oranı %${fmt(kelly * 100, 1)}, yarı-Kelly %${fmt(kelly * 50, 1)}: pozisyon bu orandan büyük olmamalı (ekip Kelly'yi pozisyon boyutlamada kullanmıştır). Sinyal ufku ~10 iş günü.`
-    : "Kelly ≤ 0: geçmiş veriye göre matematiksel avantaj yok, pozisyon önerilmez.";
-  return {v, score: k.score, checks, t, plan};
+  if (exp != null && (exp <= -0.8 || pen.length)) v = -1;
+  else if (exp != null && exp >= R.sEdge && s.rs >= R.sRs && !pen.length) v = 1;
+  const t = v > 0 ? `Model "al" diyor: RS dilimi ${dec + 1}/10, beklenen fazla getiri ${exp > 0 ? "+" : ""}${fmt(exp, 2)}% / 10 gün. Bunu bir hikâyeye bağlamıyorum; örüntü geçmişte (${top ? top.n : "?"} dönemde) kazandırdı. Tek işlemde haklı olmak zorunda değilim; küçük avantajı çok işleme yayarım.`
+    : v < 0 ? `Model karşı: ${pen.length ? pen.join(", ") + " geçmişte tutarlı biçimde kaybettirdi" : "RS dilimi en alt grupta, beklenti negatif"}. Modelin dediğini yaparım, kendi fikrimi araya sokmam.`
+    : "Beklenti avantaj eşiğinin altında. Avantaj yoksa işlem yok; modeli zorlamam.";
+  const plan = w > 0 ? `Önerilen ağırlık %${fmt(w, 1)} (kesirli Kelly ${R.sKelly}, tavan %${R.sCap}). Ufuk 10 iş günü; süre dolunca ya da model skoru bozulunca çıkar. Aşırı sapmaya karşı −%8 emniyet stopu.`
+    : "Ağırlık sıfır: model bu hissede avantaj görmüyor.";
+  return {v, score: k.score, checks, t, plan, exp, edge, w, dec};
 }
 
+/* =====================================================================================
+   JESSE LIVERMORE: tahmin etmez, teyit bekler. "En az direnç çizgisi" yukarıysa ve fiyat pivotu hacimle kırdıysa girer.
+   Önce küçük test alımı (hedef pozisyonun ~%25'i), kazanıyorsa ekler (piramit), kaybedene asla eklemez. Trend bozulunca çıkar.
+   Ayı piyasasında yalnızca en güçlü liderlere bakar; net fırsat yoksa işlem yapmaz. */
 function livermore(s) {
-  const trend = s.sma200 == null ? null : s.close > s.sma50 && s.sma50 > s.sma200, pivot = s.h1m, np = pivot ? s.close / pivot : null;
+  const tr = trendUp(s), pivot = s.h1m, np = pivot ? s.close / pivot : null;
+  const bear = REGIME && REGIME.trend === "bear";
+  const nearPivot = np != null && np >= 1 - R.lPiv / 100;
+  const leader = s.rs != null && s.rs >= (bear ? 90 : R.lRs);
+  const extended = s.smaDist != null && s.smaDist > R.lExt;
   const checks = [
-    chk(trend, "Ana trend yukarı: fiyat > SMA50 > SMA200", `${fmt(s.close)} / ${fmt(s.sma50)} / ${s.sma200 ? fmt(s.sma200) : "–"}`),
-    chk(np == null ? null : np >= 1 - R.lPiv / 100 ? true : np < 0.95 ? false : null, `Pivot noktası (1 aylık zirve ${pivot ? fmt(pivot) : "–"}) kırılıyor ya da üstünde`, np == null ? "–" : `zirvenin ${pc(np * 100 - 100)}`),
+    chk(tr, "En az direnç çizgisi yukarı: fiyat > SMA50 > SMA200", `${fmt(s.close)} / ${fmt(s.sma50)} / ${s.sma200 ? fmt(s.sma200) : "–"}`),
+    chk(s.rs == null ? null : leader, `Lider hisse: göreceli güç ≥ ${bear ? 90 : R.lRs}${bear ? " (ayı rejimi: yalnızca en güçlüler)" : ""}`, s.rs == null ? "–" : fmt(s.rs, 0)),
+    chk(np == null ? null : nearPivot ? true : np < 0.95 ? false : null, `Pivot (1 aylık zirve ${pivot ? fmt(pivot) : "–"}) kırılıyor ya da %${R.lPiv} içinde`, np == null ? "–" : `zirvenin ${pc(np * 100 - 100)}`),
     chk(s.rvol == null ? null : s.rvol >= R.lVol ? s.change > 0 : null, `Kırılım hacimle teyitli (göreceli hacim ≥ ${R.lVol}x ve fiyat artıyor)`, `${fmt(s.rvol, 1)}x, ${pc(s.change)}`),
     chk(s.close >= s.sma50 ? true : s.sma20 != null && s.close < s.sma20 ? false : null, "Düşen bıçak değil (SMA50 üstünde ya da toparlanıyor)", `SMA50'ye ${pc(s.smaDist)}`),
-    chk(s.h52 ? s.close >= 0.85 * s.h52 : null, "Zirveye yakın: 52 hafta zirvesinin %85'i üstünde", s.h52 ? pc((s.close / s.h52 - 1) * 100) : "–"),
-    chk(s.p3m == null ? null : s.p3m > 0, "Son 3 ayda fiyat artmış (en az direnç çizgisi yukarı)", pc(s.p3m)),
-    chk(REGIME ? REGIME.trend !== "bear" : null, "Piyasa rejimi ayı değil (endeks trendi ve genişlik)", REGIME ? `${REGIME.label} · SMA50 üstü hisse %${fmt(REGIME.a50, 0)}` : "–"),
+    chk(s.dist52 == null ? null : s.dist52 >= -10, "Zirveye yakın: 52 hafta zirvesinin %10 içinde", pc(s.dist52)),
+    chk(s.smaDist == null ? null : !extended, `Pivottan çok uzaklaşmamış (SMA50 üstü ≤ %${R.lExt}): kovalamam`, pc(s.smaDist)),
+    chk(REGIME ? !bear || s.rs >= 90 : null, "Piyasa rejimi uygun (ayıda yalnızca en güçlü liderler)", REGIME ? REGIME.label : "–"),
   ];
   const k = tally(checks);
-  let v = k.n >= 4 && k.score >= 70 && trend !== false ? 1 : k.n >= 4 && k.score < 35 ? -1 : 0;
-  if (REGIME && REGIME.trend === "bear" && v > 0) v = 0; // ayı piyasasında uzun pozisyon açmaz
-  const t = v > 0 ? "Trend dostum: fiyat en az direnç çizgisinde, pivot üstünde ve hacim eşlik ediyor. Beklenti değil teyit arıyorum, burada teyit var."
-    : v < 0 ? "Düşen bıçak tutulmaz. Trend aşağı ya da pivot çok uzakta; bu hisseye şimdi girmek umut ticaretidir."
-    : "Net bir fırsat yok. Açık bir kırılım olmadan işlem yapmam; beklemek de bir pozisyondur.";
-  const plan = pivot && np >= 0.95 ? `Pivot ${fmt(pivot)} TL üstünde hacimli kapanışta ilk küçük alım. Pozisyon kâra geçtikçe eklenir (piramit), zarardakine asla eklenmez. Yanılma noktası (stop): pivotun %3 altı ≈ ${fmt(pivot * 0.97)} TL; stop alım öncesinde belirlenir.`
-    : "Şu an pivotun belirgin altında: işlem yok. Pivotu hacimle aşan bir kapanış beklenir; stop ancak alımdan önce belirlenirse anlamlıdır.";
-  return {v, score: k.score, checks, t, plan};
+  let v = tr && leader && k.score >= 70 && (nearPivot || (s.dist52 != null && s.dist52 >= -5)) && !extended ? 1 : (tr === false && s.close < s.sma50) || k.score < 30 ? -1 : 0;
+  if (bear && v > 0 && !(s.rs >= 90)) v = 0;
+  const t = v > 0 ? `Tape'e bakıyorum: trend yukarı, ${s.name} lider grupta (RS ${fmt(s.rs, 0)}) ve pivot ${nearPivot ? "kırılıyor" : "yakında"}${s.rvol >= R.lVol ? ", hacim de eşlik ediyor" : ""}. Burada beklentiye değil teyide oynuyorum; teyit geldi.`
+    : v < 0 ? "Düşen bıçak tutulmaz. Trend aşağı ya da hisse liderlerin arasında değil; böyle yerde 'ucuz' diye alan umut ticareti yapıyordur."
+    : bear ? "Piyasa ayı rejiminde; bu hisse yeterince güçlü bir lider değil. Beklemek de bir pozisyondur. Net fırsat yoksa işlem yapmam."
+    : "Net bir fırsat yok: ya pivot kırılmadı ya hacim teyit etmedi ya da hisse çok uzamış. Acele edip yanlış zamanda girmem.";
+  const unit = 25;
+  const plan = pivot && np >= 0.9 ? `Test alımı: hedef pozisyonun %${unit}'i, pivot ${fmt(pivot)} TL üstünde hacimli kapanışta. Fiyat +%5 ilerledikçe birim ekler (en çok 3 ekleme), zarardaki pozisyona asla eklemez. Yanılma noktası pivotun %3 altı ≈ ${fmt(pivot * 0.97)} TL; çıkış: SMA20 altı kapanış ya da zirveden %8 geri verme.`
+    : `Pivotun belirgin altında: işlem yok. Pivotu (≈ ${pivot ? fmt(pivot) : "–"} TL) hacimle aşan kapanışı bekler; stop alımdan önce belirlenir.`;
+  return {v, score: k.score, checks, t, plan, pivot};
 }
 
+/* =====================================================================================
+   JACK KELLOGG: hızlı hareket eden, hacmi patlayan hisselerde kısa-orta vadeli momentum (birkaç gün–hafta).
+   Basit araçlar: destek/direnç, hacim. Kaybı hızla keser, zarardakine asla eklemez, kazananı kademeli satar (scale out), likiditeyi önemser.
+   Kesin kural seti kamuya açık değildir; eşikler yorumdur ve araştırmayla (kırılımlı itişin boğa rejiminde +, ayıda − olması) uyumludur. */
 function kellogg(s) {
-  const rv = s.rvol, brk = s.h1m ? s.close >= s.h1m * 0.98 : null;
+  const rv = s.rvol, bear = REGIME && REGIME.trend === "bear";
+  const brk = s.h1m ? s.close >= s.h1m * 0.98 : null;
+  const nn = NEWS[s.name], catalyst = nn && nn.items && nn.items.some(i => NOW / 1000 - i.ts < 2 * 86400 && i.s > 0);
+  const thrust = s.change >= R.kChg && rv >= R.kRvol;
   const checks = [
     chk(rv == null ? null : rv >= R.kRvol, `Olağandışı hacim: göreceli hacim ≥ ${R.kRvol}x`, `${fmt(rv, 1)}x`),
-    chk(s.change == null ? null : s.change >= R.kChg ? true : s.change <= -R.kChg ? false : null, `Güçlü hareket: gün içi ≥ %${R.kChg}`, pc(s.change)),
-    chk(brk, "Kırılım: 1 aylık zirvenin %2 yakınında ya da üstünde", s.h1m ? pc((s.close / s.h1m - 1) * 100) : "–"),
-    chk(s.pw == null ? null : s.pw > 0, "Haftalık momentum pozitif", pc(s.pw)),
-    chk(s.atrPct == null ? null : s.atrPct >= R.kAtr, `Hareket kapasitesi: ATR ≥ %${R.kAtr}`, pc(s.atrPct)),
-    chk(s.tl >= R.dTl, `Likidite/spread: günlük hacim ≥ ${R.dTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
+    chk(s.change == null ? null : s.change >= R.kChg ? true : s.change <= -R.kChg ? false : null, `Güçlü itiş: gün içi ≥ %${R.kChg}`, pc(s.change)),
+    chk(brk, "Kırılım: 1 aylık zirvenin %2 yakınında ya da üstünde (direnç aşılıyor)", s.h1m ? pc((s.close / s.h1m - 1) * 100) : "–"),
+    chk(s.pw == null ? null : s.pw > 0 && (s.p1m == null || s.p1m > 0), "Haftalık ve aylık momentum pozitif", `${pc(s.pw)} / ${pc(s.p1m)}`),
+    chk(s.atrPct == null ? null : s.atrPct >= R.kAtr, `Hareket kapasitesi: ATR ≥ %${R.kAtr} (kısa vadede kâr için hareket lazım)`, pc(s.atrPct)),
+    chk(s.tl >= R.kTl, `Likidite/spread: günlük hacim ≥ ${R.kTl} mn TL`, `${fmt(s.tl, 0)} mn TL`),
+    chk(REGIME ? !bear : null, "Piyasa ayıda değil (kırılımlar ayıda tutmuyor)", REGIME ? REGIME.label : "–"),
+    chk(catalyst ? true : null, "Katalizör: son 2 günde olumlu haber/KAP", catalyst ? "var" : "yok (zorunlu değil)"),
   ];
-  const k = tally(checks), big = rv != null && rv >= R.kRvol;
-  const v = big && s.change > 0 && k.score >= 60 ? 1 : big && s.change < 0 ? -1 : 0;
-  const t = v > 0 ? "Hacim patladı, fiyat kırılıyor: momentum teyitli. Hızlı hareket eden hisse, kısa vadeli fırsat."
-    : v < 0 ? "Hacim yüksek ama fiyat düşüyor: bu dağıtım, alıcı değil satıcı baskın."
-    : "Hacim ve kırılım yok; ilgi görmeyen hissede vakit kaybetmem.";
-  const plan = s.lo ? `Stop: gün içi dip ${fmt(s.lo)} TL (fiyatın ${pc((s.lo / s.close - 1) * 100)} altı). Birkaç gün–hafta tutulur; kâr kademeli satılır (scale out), kayıp hızla kesilir, zarardaki pozisyona ekleme yapılmaz.` : "Stop için gün içi dip verisi yok.";
-  return {v, score: k.score, checks, t, plan};
+  const k = tally(checks);
+  const v = thrust && brk !== false && s.tl >= R.kTl && !bear && k.score >= 60 ? 1 : rv >= R.kRvol && s.change <= -R.kChg ? -1 : 0;
+  const t = v > 0 ? `Hacim ${fmt(rv, 1)}x, fiyat %${fmt(s.change, 1)} itiyor ve direnç ${brk ? "aşılıyor" : "yakın"}: momentum canlı${catalyst ? ", üstüne haber de var" : ""}. Hızlı hareket eden yerde olmak isterim; ama stop'um hazır.`
+    : v < 0 ? "Hacim yüksek ama fiyat sert düşüyor: bu dağıtım, alıcı yok satıcı var. Kimse bıçağı tutmaz; uzak dururum."
+    : bear ? "Piyasa ayı rejiminde; kırılımlar bu ortamda sık sık geri dönüyor. Yavaş piyasada kenarda beklerim."
+    : "Hacim patlaması ve kırılım birlikte yok. Kimsenin ilgilenmediği hissede vakit kaybetmem.";
+  const stopPx = s.lo ? Math.max(s.lo, s.close * 0.93) : s.close * 0.93;
+  const plan = `Giriş ${fmt(s.close)} TL civarı; stop ${fmt(stopPx)} TL (gün içi dip ya da −%7, hangisi yakınsa; fiyatın ${pc((stopPx / s.close - 1) * 100)} altı). Pozisyon, sermayenin %1'i riske girecek şekilde boyutlanır. +%10'da yarısını satar (scale out), kalanı takip eden stopla taşır; en geç 8 iş gününde çıkar. Kaybı hızla keser, zarardaki pozisyona eklemez.`;
+  return {v, score: k.score, checks, t, plan, stopPx};
 }
 
+/* =====================================================================================
+   ŞEYTANIN AVUKATI (Munger tarzı tersine çevirme + risk yöneticisi): "Bu hisse nasıl para kaybettirir?" diye sorar,
+   kontrol listesiyle hataları önler, psikolojik tuzakları (kovalama/FOMO, sürü) işaretler. Pozisyonu stop mesafesinden boyutlar.
+   Veto: bilanço eşiğinde, çıkış likiditesi zayıfken ya da stop olasılığı aşırıyken işlemi durdurur. */
 function devil(s, others) {
   const mc = monteCarlo(s), n = NEWS[s.name], h = HIST && HIST.stocks[s.name], sg = mc ? mc.sigma : s.atrPct;
   const secN = current.filter(x => x.sector === s.sector).length;
-  const days = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null;
+  const days = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null, exd = s.exDiv ? (s.exDiv * 1000 - NOW) / 864e5 : null;
   const stopPct = s.atrPct != null ? 2 * s.atrPct : null, maxPos = stopPct ? Math.min(100, 100 / stopPct) : null;
+  const exitDays = s.tl > 0 ? (R.dPos / 1000) / (0.1 * s.tl) : null; // pozisyonu günlük hacmin %10'u ile kaç günde satarım
+  const pos = others ? others.filter(o => o.v > 0).length : 0, neg = others ? others.filter(o => o.v < 0).length : 0;
   const checks = [
     chk(mc ? mc.probStop < R.dStop : null, `${mc ? mc.days : R.mDays} günde %${R.mStop} stop'a değme olasılığı < %${R.dStop}`, mc ? pc(mc.probStop) : "–"),
     chk(sg == null ? null : sg <= R.dAtr, `Günlük oynaklık ≤ %${R.dAtr}`, pc(sg)),
-    chk(s.tl >= R.dTl, `Likidite: günlük hacim ≥ ${R.dTl} mn TL (çıkış kolay)`, `${fmt(s.tl, 0)} mn TL`),
+    chk(exitDays == null ? null : exitDays <= 1, `Çıkış likiditesi: ${R.dPos} bin TL'yi günlük hacmin %10'uyla ≤ 1 günde satabilirim`, exitDays == null ? "–" : `${fmt(exitDays, 2)} gün (hacim ${fmt(s.tl, 0)} mn TL)`),
     chk(s.smaDist >= -5, "Fiyat SMA50'nin %5'ten fazla altında değil", pc(s.smaDist)),
     chk(s.l52 ? s.close >= 1.1 * s.l52 : null, "52 hafta dibine %10'dan fazla uzak (dipte değil)", s.l52 ? pc((s.close / s.l52 - 1) * 100) : "–"),
     chk(h && h.dd250 != null ? h.dd250 >= -R.dMaxDd : null, `Son 1 yılda maks. düşüş ≤ %${R.dMaxDd}`, h && h.dd250 != null ? pc(h.dd250) : "–"),
     chk(s.pe == null ? null : s.pe > 0, "Şirket kâr ediyor (F/K tanımlı)", fmt(s.pe, 1)),
     chk(n && n.ok ? n.score > -2 : null, "Haber akışı olumsuz değil", n && n.ok ? `skor ${n.score}` : "haber yok"),
     chk(secN <= R.dSector, `Sektör yoğunlaşması: aynı sektörden ≤ ${R.dSector} aday`, `${secN} aday`),
-    chk(s.rsi == null ? null : s.rsi <= 70, "RSI aşırı alımda değil", fmt(s.rsi, 0)),
-    chk(days == null ? null : !(days >= -1 && days <= 5), "Yaklaşan bilanço yok (5 gün içinde)", days == null ? "–" : days < -1 ? "geçti" : `${fmt(days, 0)} gün sonra (tahmini)`),
+    chk(s.p1m == null ? null : s.p1m <= R.dFomo, `Kovalama (FOMO) değil: son 1 ayda ≤ %${R.dFomo} yükselmiş`, pc(s.p1m)),
+    chk(s.rsi == null ? null : s.rsi <= 80, "RSI aşırı alımda değil (≤ 80)", fmt(s.rsi, 0)),
+    chk(days == null ? null : !(days >= -1 && days <= 5), "Yaklaşan bilanço yok (5 gün içinde): sürpriz riski", days == null ? "–" : days < -1 ? "geçti" : `${fmt(days, 0)} gün sonra (tahmini)`),
+    chk(exd == null ? null : !(exd >= 0 && exd <= 3), "Temettü kesim tarihi yakın değil (fiyat düşer)", exd == null ? "–" : `${fmt(exd, 0)} gün`),
     chk(REGIME ? REGIME.trend !== "bear" : null, "Piyasa rejimi ayı değil", REGIME ? REGIME.label : "–"),
+    chk(s.beta == null ? null : s.beta <= 1.3, "Piyasa duyarlılığı (beta) ≤ 1,3", s.beta == null ? "–" : fmt(s.beta, 2)),
+    chk(others ? !(pos >= 2 && neg >= 1) : null, "Efsaneler arasında uzlaşmazlık yok (karar bölünmüş değil)", others ? `${pos} olumlu / ${neg} olumsuz` : "–"),
   ];
   const k = tally(checks), bads = checks.filter(c => c.s === BAD);
-  const v = bads.length >= R.dFlags ? -1 : 0;
-  const t = bads.length ? `Pre-mortem: bu işlem batarsa nedenleri şunlar olur → ${bads.slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "")).join("; ")}.${v < 0 ? " Karşı çıkıyorum." : " Henüz itiraz sınırında değil."}`
-    : "Pre-mortem'de belirgin bir başarısızlık nedeni bulamadım; ama makro şokta (kur, faiz, jeopolitik) BIST'te korelasyonlar 1'e gider.";
-  const plan = stopPct ? `Stres testi: ATR stopu (2×ATR) ≈ %${fmt(stopPct, 1)}. Portföyün %1'ini riske atma kuralıyla azami pozisyon ≈ portföyün %${fmt(maxPos, 1)}. Hisse −%10 gap açarsa zarar portföyün ≈ %${fmt(maxPos * 0.1, 2)}'i olur.` : "ATR verisi yok; stres testi yapılamadı.";
-  return {v, score: k.score, checks, t, plan};
+  const severe = [];
+  if (days != null && days >= -1 && days <= 2) severe.push("bilanço 2 gün içinde");
+  if (exitDays != null && exitDays > 2) severe.push("çıkış likiditesi çok zayıf");
+  if (mc && mc.probStop >= 65) severe.push("stop olasılığı aşırı yüksek");
+  const veto = severe.length > 0;
+  const v = veto || bads.length >= R.dFlags ? -1 : 0;
+  const t = veto ? `VETO: ${severe.join("; ")}. Bu koşulda işlem yapılmaz; tersini düşünün, bu pozisyon nasıl para kaybettirir? Tam da buradan.`
+    : bads.length ? `Tersini düşündüm: bu hisse şunlarla para kaybettirir → ${bads.slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "").replace(/:.*$/, "")).join("; ")}.${v < 0 ? " Karşı çıkıyorum." : " Henüz itiraz sınırında değil; ama izliyorum."}`
+    : "Tersini düşündüm ve belirgin bir batma nedeni bulamadım. Yine de makro şokta (kur, faiz, jeopolitik) korelasyonlar 1'e gider; pozisyon küçük olsun.";
+  const plan = stopPct ? `Stres testi: ATR stopu (2×ATR) ≈ %${fmt(stopPct, 1)}. Sermayenin %1'ini riske atma kuralıyla azami pozisyon ≈ portföyün %${fmt(maxPos, 1)}. −%10 gap açarsa zarar portföyün ≈ %${fmt(maxPos * 0.1, 2)}'i. ${veto ? "Veto sürdükçe pozisyon açılmaz." : ""}`
+    : "ATR verisi yok; stres testi yapılamadı.";
+  return {v, score: k.score, checks, t, plan, veto, severe, maxPos, stopPct};
 }
+
 function committee(s) {
   const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
   l.seytan = devil(s, Object.values(l));
-  const score = Object.values(l).reduce((a, x) => a + x.v, 0);
-  const label = score >= 3 ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
-  return { l, score, label };
+  const score = Object.values(l).reduce((a, x) => a + x.v, 0), veto = l.seytan.veto;
+  const label = score >= 3 && !veto ? "GÜÇLÜ ADAY" : score >= 1 ? "İZLE" : score === 0 ? "NÖTR" : "UZAK DUR";
+  return { l, score, label, veto };
 }
 
-/* ---------- Zaman, piyasa rejimi ve efsane ekranları ---------- */
-let NOW = Date.now();
-let REGIME = null;
-function computeRegime(universe, hist) {
-  const ok = universe.filter(s => s.ok);
-  if (!ok.length) return null;
-  const a50 = ok.filter(s => s.close > s.sma50).length / ok.length * 100;
-  const s200 = ok.filter(s => s.sma200 != null);
-  const a200 = s200.length ? s200.filter(s => s.close > s.sma200).length / s200.length * 100 : null;
-  let idx = null;
-  if (hist && hist.index && hist.index.closes && hist.index.closes.length >= 200) {
-    const c = hist.index.closes, n = c.length, avg = k => c.slice(n - k).reduce((x, y) => x + y, 0) / k;
-    const last = c[n - 1], m50 = avg(50), m200 = avg(200);
-    idx = {name: hist.index.name, last, m50, m200, ch1m: (last / c[n - 22] - 1) * 100,
-      trend: last > m50 && m50 > m200 ? "bull" : last < m50 && last < m200 ? "bear" : "mixed"};
-  }
-  const trend = idx ? idx.trend : a50 >= 60 ? "bull" : a50 <= 40 ? "bear" : "mixed";
-  return {trend, label: {bull: "Boğa", bear: "Ayı", mixed: "Geçiş"}[trend], a50, a200, idx};
+/* ---------- Masa toplantısı: efsaneler birbirine yanıt verir (her cümle verideki bir sonuca bağlıdır) ---------- */
+function pickOne(arr, s) { return arr[hash(s.name) % arr.length]; }
+function meeting(s, r) {
+  const L = r.l, lines = [], say = (who, text) => lines.push({who, text});
+  const sm = L.simons, lv = L.livermore, kl = L.kellogg, bf = L.buffett, dv = L.seytan;
+  say("simons", sm.v > 0 ? `${s.name} için modelim pozitif: RS dilimi ${sm.dec != null ? sm.dec + 1 : "–"}/10, beklenen fazla getiri ${sm.exp != null ? (sm.exp > 0 ? "+" : "") + fmt(sm.exp, 2) + "%" : "–"} (10 gün). Önerilen ağırlık %${fmt(sm.w, 1)}.`
+    : sm.v < 0 ? `${s.name}: model negatif. ${sm.t}` : `${s.name}: modelde ayırt edilebilir bir avantaj yok. Beklenti ${sm.exp != null ? fmt(sm.exp, 2) + "%" : "–"}; eşik altı.`);
+  say("livermore", lv.v > 0 ? pickOne([`Tape güçlü. ${s.name} liderlerden biri, pivot ${fmt(lv.pivot)} civarında. Küçük bir test alımıyla başlarım, hisse bana doğru yürürse eklerim.`, `Hisse piyasadan güçlü ve en az direnç yönünde ilerliyor. Pivot ${fmt(lv.pivot)}; teyit var, beklemek için sebebim yok.`], s)
+    : lv.v < 0 ? `Bu hisse düşen tarafta. ${s.name}'de ucuzluk aramam; trend dönmeden bıçağı tutmam.` : `${s.name}'de net bir giriş noktası görmüyorum. Pivotu bekler, o zamana kadar oturur izlerim.`);
+  if (bf.v <= 0 && (lv.v > 0 || kl.v > 0 || sm.v > 0)) say("buffett", bf.v < 0 ? `${s.name} bana göre bir işletme olarak zayıf${bf.mos != null && bf.mos < 0 ? " ve pahalı" : ""}. Fiyat yükseliyor diye değer artmıyor.` : `İşletme fena değil ama fiyat bana güvenlik marjı bırakmıyor${bf.mos != null ? ` (%${fmt(bf.mos, 0)})` : ""}. Ben beklemekten rahatsız olmam.`);
+  else say("buffett", bf.v > 0 ? `Bu bir işletme gibi görünüyor: kalite ölçütleri iyi ve adil değere göre %${fmt(bf.mos, 0)} iskonto var. ${fmt(bf.cap)} TL altında alırım ve unuturum.` : `${s.name} benim ilgi alanımın dışında ya da tablo net değil; pas geçiyorum.`);
+  if (bf.v <= 0 && lv.v > 0) say("livermore", "Warren, tape fiyatın değer olup olmadığıyla ilgilenmez; yalnızca nereye gittiğini söyler. Ben yönü izliyorum, sen işletmeyi izliyorsun; ikimiz de haklı olabiliriz.");
+  if (bf.v <= 0 && sm.v > 0) say("simons", "Şirketin ne sattığını bilmiyorum, bilmem de gerekmiyor. Bu örüntü geçmişte kazandırdı; modelim bu kadarını söylüyor.");
+  say("kellogg", kl.v > 0 ? `Hacim ${fmt(s.rvol, 1)}x ve fiyat %${fmt(s.change, 1)} gidiyor. Hızlı hareket burada. Stop ${fmt(kl.stopPx)} TL; yarısını +%10'da satar, kalanı taşırım.`
+    : kl.v < 0 ? "Hacimli düşüş var; bu satıcı baskısı. Ben uzağım." : `Benim için ${s.name}'de hacim ve kırılım birlikte yok; ilgi çekmeyen yerde vakit harcamam.`);
+  say("seytan", dv.veto ? `Durun. ${dv.severe.join(" ve ")}. Bu koşulda işlem olmaz.` : dv.v < 0 ? `Tersini düşünelim: ${s.name} nasıl para kaybettirir? ${dv.checks.filter(c => c.s === BAD).slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "").replace(/:.*$/, "")).join("; ")}. Karşıyım.`
+    : `Tersini düşündüm; büyük bir batma nedeni görmüyorum. Ama pozisyon, stop mesafesine göre en çok %${fmt(dv.maxPos, 1)} olsun.`);
+  const verdict = r.veto && r.score >= 3 ? "Karar: güçlü ama Şeytanın Avukatı veto etti; masa işlem yapmıyor." : r.score >= 3 ? "Karar: masa uzlaştı, güçlü aday." : r.score >= 1 ? "Karar: izleme listesi; teyit bekleniyor." : r.score === 0 ? "Karar: net değil, bekleyelim." : "Karar: uzak durulacak.";
+  return {lines, verdict};
 }
+
+/* ---------- Efsane ekranları ---------- */
 function personaScreens(uni, n, exclude) {
   const ex = new Set(exclude || []), rest = uni.filter(s => s.ok && s.tl >= 5 && !ex.has(s.name));
   const top = (fn, tie, pre) => (pre ? rest.filter(pre) : rest).map(s => [s, fn(s)]).filter(([, p]) => p.v > 0)
     .sort((a, b) => (b[1].score - a[1].score) || tie(a[0], b[0])).slice(0, n);
   return {
     buffett: top(buffett, (a, b) => b.tl - a.tl),
-    simons: top(simons, (a, b) => a.bbDist - b.bbDist, s => { const sd = (s.bb_upper - s.bb_lower) / 4; return sd > 0 && HIST && HIST.stocks[s.name] && (s.close - (s.bb_upper + s.bb_lower) / 2) / sd <= -R.sZ; }),
-    livermore: top(livermore, (a, b) => b.tl - a.tl),
+    simons: top(simons, (a, b) => (b.rs ?? 0) - (a.rs ?? 0), s => s.rs != null && s.rs >= R.sRs),
+    livermore: top(livermore, (a, b) => (b.rs ?? 0) - (a.rs ?? 0)),
     kellogg: top(kellogg, (a, b) => (b.rvol ?? 0) - (a.rvol ?? 0)),
   };
 }
 function riskRadar(uni, n) {
-  return uni.filter(s => s.ok && s.tl >= 20).map(s => { const p = devil(s, []); return [s, p, p.checks.filter(c => c.s === BAD).length]; })
+  return uni.filter(s => s.ok && s.tl >= 20).map(s => { const p = devil(s, null); return [s, p, p.checks.filter(c => c.s === BAD).length]; })
     .sort((a, b) => b[2] - a[2] || a[0].tl - b[0].tl).slice(0, n);
+}
+/* Güç listesi: araştırmanın en güçlü bulgusu (RS lideri + yükselen trend). Aday Hisseler sayfasının varsayılan kaynağı. */
+function strengthList(uni, n, minTl) {
+  return uni.filter(s => s.ok && s.rs != null && s.tl >= (minTl ?? 5) && trendUp(s)).sort((a, b) => b.rs - a.rs).slice(0, n);
 }

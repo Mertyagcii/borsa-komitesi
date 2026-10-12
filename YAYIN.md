@@ -2,12 +2,15 @@
 
 Yayin: `main` dalina yapilan her push siteyi otomatik gunceller (Actions). Veri 15 dakikada bir kendiliginden yenilenir.
 
-Dosyalar: fetcher.py, news.py, history.py, build_site.py, signals.js, core.js, template.html, requirements.txt,
-.github/workflows/pages.yml (+ history.json, picks.json, snapshots.json: Actions tarafindan guncellenir).
+Dosyalar: fetcher.py, news.py, history.py, research.py, build_site.py, core.js (efsane mantigi), engine_core.js + engine.js (sanal portfoyler),
+signals.js (karne), template.html, requirements.txt, .github/workflows/pages.yml
+Actions tarafindan guncellenenler: history.json (gunluk), research.json (haftalik), picks.json, snapshots.json, portfolios.json (her is gunu kapanisinda).
 
-Komite karnesi: her is gunu kapanistan sonra (18:45 TR) signals.js komitenin kararlarini picks.json'a yazar.
+Is gunu kapanisindan sonra (18:45 TR): once history.json yenilenir (endeksin son cubugu bugune ulasinca), sonra
+  - signals.js: komitenin kararlarini picks.json'a yazar (karne)
+  - engine.js: sanal portfoylerde dunku emirleri bugunun acilisinda doldurur, stop/hedefleri kontrol eder, NAV yazar, yarin icin emir uretir.
 
-Telegram uyarisi (istege bagli): GitHub deposunda Settings > Secrets and variables > Actions > New repository secret:
-  TELEGRAM_BOT_TOKEN  (BotFather'dan alinan token)
-  TELEGRAM_CHAT_ID    (botla konusup https://api.telegram.org/bot<TOKEN>/getUpdates adresinden chat id)
-Tanimlaninca her kapanista yeni "guclu aday" varsa mesaj gelir.
+Telegram uyarisi (istege bagli, en sona birakildi): GitHub deposunda Settings > Secrets and variables > Actions:
+  TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID  -> tanimlaninca her kapanista yeni "guclu aday" varsa mesaj gelir.
+
+Yerel: python server.py -> http://localhost:8765 ; research.py ilk kez 6-8 dk surer (3 yillik gunluk veri ceker, cache/ icinde saklanir).
