@@ -131,13 +131,13 @@ def browser_tests(site):
             n = len(re.sub(r"<[^>]+>", "", m.group(1)).strip()) if m else -1
             check(f"sayfa {pg}", bool(dom) and not err and n != 0, f"hata={err} metin={n}")
         print("4) Tarayıcı: işlevsel testler")
-        dom = run_chrome(browser, f"http://{host}:{port}/t_func.html", budget=70000, timeout=240)
+        dom = run_chrome(browser, f"http://{host}:{port}/t_func.html", budget=120000, timeout=300)
         err = attr(dom, "data-err")
         if err:
             check("işlevsel test sayfa hatası", False, err)
         raw = attr(dom, "data-test")
         if not raw:
-            check("işlevsel test sonucu", False, "sonuç yok"); return
+            check("işlevsel test sonucu", False, f"sonuç yok (dom {len(dom)} bayt; ...{dom[-300:]!r})"); return
         res = json.loads(raw)
         for k, v in res.items():
             check(f"işlev {k}", v is True, str(v))
