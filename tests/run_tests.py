@@ -153,6 +153,7 @@ def browser_tests(site):
 
 def script_tests(site):
     print("2b) Betikler: alarms.js ve archive.js")
+    site = str(Path(site).resolve())
     tmp = Path(tempfile.mkdtemp(prefix="bk_scr_"))
     try:
         r = subprocess.run(["node", str(ROOT / "archive.js"), "--site", site, "--out", str(tmp / "Arsiv"), "--force", "--nopublish"], capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
