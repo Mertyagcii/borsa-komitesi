@@ -72,6 +72,16 @@ setTimeout(async function () {
     ok("halkaarz_eklendi", IPOU().length === 1 && $("ipoView").innerHTML.indexOf("Test Enerji") >= 0); $("ivP").value = "20"; $("ivE").value = "2"; document.querySelector("[data-ivcalc]").click(); ok("halkaarz_hesap", $("ivOut").innerHTML.indexOf("F/K") >= 0);
     document.querySelector("[data-ipdel]").click(); ok("halkaarz_silindi", IPOU().length === 0);
     ok("bebek_alanlari", UNIVERSE.filter(function (s) { return s.nipos8 != null; }).length > 100 && UNIVERSE.filter(function (s) { return s.eqg != null; }).length > 100);
+    /* ---- Genisletilmis kurul (4 yeni uzman) ---- */
+    openDetail(lead.name); var d2 = $("detail").innerHTML;
+    ok("kurul2_detay_baslik", d2.indexOf("Geni") >= 0 && d2.indexOf("kurul") >= 0); ok("kurul2_dort_uzman", ["Makro", "Akıllı Para", "Volatilite", "Psikoloji"].every(function (n) { return d2.indexOf(n) >= 0; }));
+    ok("kurul2_karar_karti_satiri", d2.indexOf("yeni uzmanlar") >= 0 || d2.indexOf("Geni") >= 0);
+    ok("kurul2_komite", committee(lead).k2 && ["makro", "akilli", "vol", "psiko"].every(function (k) { return committee(lead).k2[k].t.length > 20; }));
+    show("dashboard"); var mc = $("macroCard").innerHTML; ok("makro_kalkan_karti", mc.indexOf("Makro Kalkan") >= 0 && mc.indexOf("Piyasa psikolojisi") >= 0);
+    var msh = macroShield(); ok("makro_kalkan_yapi", msh.items.length === 7 && msh.count >= 0 && msh.count <= 7 && ["Düşük", "Orta", "Yüksek", "Şiddetli"].indexOf(msh.level) >= 0);
+    var cmr = crowdMeter(); ok("kalabalik_olcer", !!cmr && cmr.idx >= 0 && cmr.idx <= 100);
+    var mtgOk = false; UNIVERSE.filter(function (s) { return s.ok && s.tl >= 20; }).slice(0, 120).forEach(function (s) { var mm = meeting(s, committee(s)); if (mm.lines.some(function (x) { return ["makro", "akilli", "vol", "psiko"].indexOf(x.who) >= 0; })) mtgOk = true; }); ok("kurul2_toplantida_konusur", mtgOk);
+    ok("kurul2_alerts", Array.isArray(computeAlerts()));
     /* ---- Paylasim, tarama karnesi, sektor akisi, lot simulasyonu ---- */
     var sh = { v: 1, zf: [{ id: "zz1", name: "Paylasim testi", conds: [{ f: "mtf_w", op: ">=", v: 80 }], sort: { f: "mtf_w", dir: -1 } }], sp: { haftalik: { wMin: 85 } } };
     var rt = shareDecode(shareEncode(sh)); ok("paylas_gidis_donus", JSON.stringify(rt) === JSON.stringify(sh));

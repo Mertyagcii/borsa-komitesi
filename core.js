@@ -13,6 +13,7 @@ const RULE_DEFS = [
   ["Livermore: trend ve pivot", [["lRs", "Lider sayılmak için min. RS", 80], ["lPiv", "Pivota yakınlık %", 2], ["lVol", "Min. göreceli hacim", 1.2], ["lExt", "Aşırı uzama (SMA50 üstü) % üst sınır", 30]]],
   ["Kellogg: momentum", [["kRvol", "Min. göreceli hacim", 2], ["kChg", "Gün içi itiş en az %", 4], ["kAtr", "Min. ATR %", 3], ["kTl", "Min. işlem hacmi (mn TL)", 30]]],
   ["Şeytanın Avukatı: risk", [["dAtr", "Günlük oynaklık üst sınır %", 4], ["dTl", "Min. hacim (mn TL)", 20], ["dStop", "Stop olasılığı % uyarı", 50], ["dMaxDd", "Son 1 yıl maks. düşüş % (üst sınır)", 35], ["dFomo", "1 ayda yükseliş % (kovalama)", 25], ["dSector", "Aynı sektörden en fazla aday", 3], ["dFlags", "Karşı çıkma için bayrak sayısı", 3], ["dPos", "Örnek pozisyon (bin TL, likidite için)", 500]]],
+  ["Genişletilmiş kurul (4 yeni uzman)", [["k2veto", "İtiraz vetosu: yeni uzmanların net oyu ≤ −2 ise güçlü aday olmaz (1/0)", 1], ["makroVeto", "Makro kalkan alım vetosu (1/0; geçmişte kanıtsız, varsayılan kapalı)", 0], ["makroN", "Makro veto için en az risk-off bayrağı", 4], ["zHi", "Z-skor aşırı uzama eşiği", 2.5], ["zLo", "Z-skor aşırı düşüş eşiği", -2.5]]],
   ["Simülasyon", [["mDays", "Ufuk (iş günü)", 20], ["mStop", "Stop seviyesi %", 7]]],
 ];
 const DEFAULTS = Object.fromEntries(RULE_DEFS.flatMap(([, f]) => f.map(([k, , v]) => [k, v])));
@@ -462,12 +463,156 @@ function devil(s, others) {
   return {v, score: k.score, checks, t, plan, veto, severe, maxPos, stopPct};
 }
 
+/* =====================================================================================
+   GENİŞLETİLMİŞ KURUL: 4 yeni uzman (Makro & Jeopolitik, Akıllı Para, Opsiyon & Volatilite, Piyasa Psikolojisi).
+   ÖNEMLİ: Elimizde gerçek takas/aracı kurum (AKD) verisi, opsiyon zımni oynaklığı ve sosyal medya verisi YOKTUR; uzmanlar fiyat-hacim-makro VEKİLLERİYLE çalışır
+   ve vekiller geçmişte test edilmiştir (kurul2_research.json, macro_research.json). Bir uzman yalnızca kanıtı ters çıkmayan sinyalle oy kullanır.
+   Araştırma bulguları (BIST 2023-26): panik satışları ve "ayı tuzağı" sıçramaları DEVAM etti (düşen bıçak); dağıtım ve para çıkışı olumsuz sinyaldi; aşırı uzama
+   (z-skor > 2,5) ortalamaya DÖNMEDİ (momentum sürdü); makro risk-off bayrakları BIST'in sonraki getirisini düşürmedi (nominal TL piyasasında kur şoku dönemlerinde hisseler yükseldi).
+   Yeni uzmanların oyları mevcut komite skoruna KARIŞMAZ (sanal portföylerin kaydı bozulmasın); net oy ve itiraz vetosu ayrıca gösterilir. */
+let KUR2 = null, MACRO_R = null; // kurul2_research.json, macro_research.json (tarayıcı yükler)
+const k2sig = id => KUR2 && KUR2.signals ? KUR2.signals[id] : null;
+const k2ev = id => { const e = k2sig(id); if (!e || !e.h10) return "kanıt yok"; return `${e.verdict}: 10g ${e.h10.excess > 0 ? "+" : ""}${fmt(e.h10.excess, 2)}% (t ${fmt(e.h10.t, 1)}, n ${e.h10.n})`; };
+const k2bad = id => { const e = k2sig(id); return !!(e && e.verdict === "ters kanıt"); };   // sinyalin tersi doğru çıktı
+const k2good = id => { const e = k2sig(id); return !e || e.verdict !== "ters kanıt"; };        // kanıt yoksa ya da ters değilse kullanılabilir
+
+function macroShield() {
+  const m = (HIST && HIST.macro) || {}, items = [], push = (id, name, val, on, hint) => items.push({id, name, val, on: !!on, hint});
+  const has = k => m[k] != null;
+  push("usdtry5", "Dolar/TL 5 günde", has("usdtry_d5") ? `%${fmt(m.usdtry_d5, 1)}` : "–", m.usdtry_d5 > 3, "Kur şoku (eşik > %3)");
+  push("vix", "VIX (korku endeksi)", has("vix") ? fmt(m.vix, 1) : "–", m.vix > 25, "Küresel risk iştahı (eşik > 25)");
+  push("brent", "Brent petrol 20 günde", has("brent_d20") ? `%${fmt(m.brent_d20, 1)}` : "–", m.brent_d20 > 15, "Enerji maliyeti şoku (eşik > %15)");
+  push("dxy", "Dolar endeksi 20 günde", has("dxy_d20") ? `%${fmt(m.dxy_d20, 1)}` : "–", m.dxy_d20 > 2, "Güçlü dolar: gelişen piyasa baskısı (eşik > %2)");
+  push("gold", "Altın 20 günde", has("gold_d20") ? `%${fmt(m.gold_d20, 1)}` : "–", m.gold_d20 > 6, "Sığınma talebi (eşik > %6)");
+  push("tr10", "TR 10 yıllık faiz 20 günde", has("rf10_d20") ? `${m.rf10_d20 > 0 ? "+" : ""}${fmt(m.rf10_d20, 1)} puan` : "–", m.rf10_d20 > 1.5, "Yerel faiz şoku (eşik > +1,5 puan)");
+  push("us10", "ABD 10 yıllık faiz 20 günde", has("us10y_d20") ? `${m.us10y_d20 > 0 ? "+" : ""}${fmt(m.us10y_d20, 2)} puan` : "–", m.us10y_d20 > 0.3, "Küresel faiz baskısı (eşik > +0,3 puan)");
+  const count = items.filter(x => x.on).length, inverted = has("rf2") && has("rf10") && m.rf2 > m.rf10;
+  const level = count >= 4 ? "Şiddetli" : count >= 3 ? "Yüksek" : count >= 2 ? "Orta" : "Düşük";
+  const cn = MACRO_R && MACRO_R.count ? MACRO_R.count[String(Math.min(count, 3))] : null;
+  const geo = macroNewsHeat();
+  return {items, count, level, inverted, live: !!m.date, date: m.date || null, geo, evidence: cn ? `Geçmişte (${MACRO_R.from} → ${MACRO_R.to}) ${count >= 3 ? "3+" : count} bayrak olduğunda BIST 100 sonraki 20 günde ortalama ${cn.ret20 > 0 ? "+" : ""}${fmt(cn.ret20, 1)}% getirdi (n ${cn.n}, isabet %${fmt(cn.hit, 0)}).` : "Geçmiş test verisi yüklenmedi."};
+}
+/* Jeopolitik: veri kaynağı yok; likit hisse haberlerinde son 3 günde jeopolitik/makro anahtar kelime yoğunluğu (zayıf vekil) */
+function macroNewsHeat() {
+  const re = /savaş|saldırı|yaptırım|gerilim|çatışma|abluka|ateşkes|seçim|kriz|faiz kararı|enflasyon|merkez bankası|tcmb|fed |opec/;
+  let n = 0, tot = 0; const now = (typeof NOW === "number" ? NOW : Date.now()) / 1000;
+  Object.values(NEWS || {}).forEach(v => (v.items || []).forEach(i => { if (now - i.ts < 3 * 86400) { tot++; if (re.test(trLower(i.t))) n++; } }));
+  return {n, tot};
+}
+function macroP(s) {
+  const sh = macroShield(), beta = s.beta, hi = beta != null && beta > 1.2;
+  const veto = !!(R.makroVeto && sh.count >= R.makroN);
+  const v = veto ? -1 : 0;
+  const checks = sh.items.map(x => chk(x.on ? false : (x.val === "–" ? null : true), `${x.name}: ${x.hint}`, x.val)).concat([
+    chk(sh.inverted ? false : true, "Getiri eğrisi normal (2 yıllık < 10 yıllık)", sh.inverted ? "ters: kısa vade faizi uzundan yüksek" : "normal"),
+    chk(beta == null ? null : !hi, "Piyasa duyarlılığı (beta) ≤ 1,2: makro şokta hisse fazla savrulmaz", beta == null ? "–" : fmt(beta, 2))]);
+  const t = sh.count >= 3
+    ? `Dikkat: makro tablo ${sh.level.toLowerCase()} risk gösteriyor (${sh.count}/7 bayrak). Ama sayılara dürüst olalım: ${sh.evidence} Bu piyasada kur şoku dönemlerinde hisse enflasyon ve kur koruması gibi davranıyor; bu yüzden ${veto ? "vetomu açtım" : "alım vetosu koymuyorum"}, yalnızca pozisyonu küçültmenizi öneririm${hi ? "; üstelik bu hisse yüksek betalı" : ""}.`
+    : sh.count === 2 ? `Makro tablo orta düzeyde karışık (${sh.count}/7 bayrak). Büyük resim alım kararını engellemiyor ama haber akışını izleyin; ${sh.evidence}`
+    : `Makro tabloda belirgin bir stres yok (${sh.count}/7 bayrak${sh.inverted ? "; getiri eğrisi ters, para sıkı" : ""}). ${sh.geo.tot ? `Son 3 günün haberlerinin ${sh.geo.n}/${sh.geo.tot}'i jeopolitik/makro konulu (zayıf bir gösterge).` : ""} Rüzgâr ne lehe ne aleyhte; karar hissenin kendi hikâyesine kalıyor.`;
+  const plan = sh.count >= 3 ? "Pozisyon boyutunu normalin yarısına indirin; stop'u önceden belirleyin; yeni alımları kademeli yapın." : "Makro nedeniyle ek bir kısıt yok; her zamanki risk kuralları geçerli.";
+  return {v, score: tally(checks).score, checks, t, plan, shield: sh, veto};
+}
+
+/* Z-skor, ortalamaya dönüş yarı ömrü (AR(1)) ve oynaklık sıkışması; HIST kapanışlarından */
+function volStats(s) {
+  const h = HIST && HIST.stocks && HIST.stocks[s.name], c = h && h.closes && h.closes.length >= 90 ? h.closes.slice(-130) : null;
+  const sd = s.bb_upper != null && s.bb_lower != null ? (s.bb_upper - s.bb_lower) / 4 : null;
+  const z20 = sd > 0 && s.sma20 > 0 ? (s.close - s.sma20) / sd : null;
+  let half = null, ratio = null, z60 = null;
+  if (c) {
+    const n = c.length, zs = [];
+    for (let i = 20; i < n; i++) { const w = c.slice(i - 19, i + 1), m = w.reduce((a, b) => a + b, 0) / 20, sdv = Math.sqrt(w.reduce((a, b) => a + (b - m) ** 2, 0) / 20); zs.push(sdv > 0 ? (c[i] - m) / sdv : 0); }
+    const z = zs.slice(-61); let sxy = 0, sxx = 0; for (let i = 1; i < z.length; i++) { sxy += z[i] * z[i - 1]; sxx += z[i - 1] ** 2; }
+    const b = sxx > 0 ? Math.min(0.995, Math.max(0.05, sxy / sxx)) : null; half = b ? -Math.LN2 / Math.log(b) : null;
+    const r = c.slice(1).map((v, i) => v / c[i] - 1), sig = a => { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+    const s5 = sig(r.slice(-5)), s60 = sig(r.slice(-60)); ratio = s60 > 0 ? s5 / s60 : null;
+    const w60 = c.slice(-60), m60 = w60.reduce((a, b) => a + b, 0) / 60, sd60 = Math.sqrt(w60.reduce((a, b) => a + (b - m60) ** 2, 0) / 60); z60 = sd60 > 0 ? (s.close - m60) / sd60 : null;
+  }
+  return {z20, z60, half, ratio};
+}
+function volP(s, simonsVote) {
+  const vs = volStats(s), tr = trendUp(s) === true, z = vs.z20;
+  const healthy = z != null && z > 0.5 && z < 1.8 && tr, squeeze = vs.ratio != null && vs.ratio < 0.5 && tr, knife = z != null && z < R.zLo && !tr, stretched = z != null && z > R.zHi;
+  let v = 0; if ((healthy && k2good("z_ort_trend")) || (squeeze && k2good("vol_sikisma"))) v = 1; else if (knife && k2bad("z_asiri_alt")) v = -1;
+  const checks = [
+    chk(z == null ? null : Math.abs(z) < R.zHi, `Z-skor (20 gün) aşırı değil (|z| < ${R.zHi})`, z == null ? "–" : fmt(z, 2)),
+    chk(z == null ? null : healthy ? true : null, "Sağlıklı trend: z-skor 0,5-1,8 ve yükselen trend", healthy ? "evet · " + k2ev("z_ort_trend") : "hayır"),
+    chk(vs.ratio == null ? null : squeeze ? true : null, "Oynaklık sıkışması: son 5 gün σ < 0,5 × 60 gün σ ve trend yukarı", vs.ratio == null ? "–" : `${fmt(vs.ratio, 2)}x${squeeze ? " · " + k2ev("vol_sikisma") : ""}`),
+    chk(z == null ? null : !knife, `Düşen bıçak değil: z-skor < ${R.zLo} ve trend aşağı olmasın`, knife ? "evet · " + k2ev("z_asiri_alt") : "hayır"),
+    chk(vs.half == null ? null : null, "Ortalamaya dönüş yarı ömrü (AR(1), 60 gün)", vs.half == null ? "–" : `${fmt(vs.half, 1)} gün`),
+    chk(null, "Zımni oynaklık (opsiyon): veri kaynağı yok", "gerçekleşen oynaklık kullanıldı")];
+  let stance = "tarafsız", reply;
+  if (simonsVote > 0) {
+    if (v > 0) { stance = "destekler"; reply = `Jim'in modelini destekliyorum: z-skor ${fmt(z, 2)}, trend sağlıklı${squeeze ? ", üstüne oynaklık sıkışmış" : ""}. Aşırı uzama yok; model pozitifken risk de makul.`; }
+    else if (stretched) { stance = "çürütmez"; reply = `Z-skor ${fmt(z, 2)}: aşırı uzamış görünüyor ama Jim'in modelini çürütmüyorum. Hesapladım: BIST'te z > 2,5 sonrası ortalamaya dönüş yok (${k2ev("z_asiri_ust")}); yani "çok uzadı, satın" demek veriyle desteklenmiyor. Sadece stop'u sıkı tutun.`; }
+    else if (knife) { stance = "çürütür"; reply = `Jim, modelin pozitif ama z-skor ${fmt(z, 2)} ve trend aşağı: düşen bıçak. Geçmişte bu koşulda hisse piyasanın gerisinde kaldı (${k2ev("z_asiri_alt")}). Modeli çürütüyorum.`; }
+    else { reply = `Z-skor ${z == null ? "–" : fmt(z, 2)}: modelin işaretiyle çelişen bir sapma görmüyorum; ne destek ne itiraz.`; }
+  } else if (simonsVote < 0) { reply = knife ? `Jim'le aynı fikirdeyim: z-skor ${fmt(z, 2)}, trend aşağı. Aşırı satım bile alım sinyali değil; geçmişte düşüş sürdü.` : `Jim'in modeli negatif; z-skor ${z == null ? "–" : fmt(z, 2)}, ben bir karşı argüman bulamadım.`; }
+  else reply = `Model nötr. Z-skor ${z == null ? "–" : fmt(z, 2)}${vs.half != null ? `, yarı ömür ${fmt(vs.half, 1)} gün` : ""}; sayılarda belirgin bir uç yok.`;
+  const t = `Rakamlara bakıyorum: z-skor ${z == null ? "–" : fmt(z, 2)}${vs.z60 != null ? ` (60 günde ${fmt(vs.z60, 2)})` : ""}, 5g/60g oynaklık oranı ${vs.ratio == null ? "–" : fmt(vs.ratio, 2)}. ${v > 0 ? "Sağlıklı, sıkışmış bir trend: geçmişte iyi sonuç veren bir yapı." : v < 0 ? "Düşen bıçak: ortalamaya dönüş umudu geçmişte kaybettirdi." : "Ayırt edici bir uç yok."} (Not: opsiyon zımni oynaklığı yok, gerçekleşen oynaklık kullanıyorum.)`;
+  return {v, score: tally(checks).score, checks, t, plan: v < 0 ? "Düşen bıçağı tutmayın; trend dönene kadar bekleyin." : "Oynaklık stop'unu (2,5×ATR) kullanın; z-skor 2,5'ı aşarsa pozisyonu büyütmeyin.", vs, stance, reply, stretched, knife, healthy};
+}
+function akilliP(s) {
+  const cmf = s.cmf, cmfw = s.cmf_w, rv = s.rvol, ch = s.change, tr = trendUp(s) === true, vt = s.av10 > 0 && s.av60 > 0 ? s.av10 / s.av60 : null;
+  const dist = rv != null && rv >= 2 && ch != null && Math.abs(ch) <= 1.5 && cmf != null && cmf < -0.1, acc = rv != null && rv >= 2 && ch != null && Math.abs(ch) <= 1.5 && cmf != null && cmf > 0.1;
+  const strong = cmf != null && cmf > 0.15 && tr, weak = cmf != null && cmf < -0.15;
+  let v = 0; if (strong && k2good("cmf_guclu")) v = 1; else if ((weak && k2bad("cmf_zayif")) || (dist && k2bad("dagitim"))) v = -1;
+  const checks = [
+    chk(cmf == null ? null : cmf > 0, "Para akışı (CMF günlük) pozitif: alıcı baskın", cmf == null ? "–" : fmt(cmf, 2)),
+    chk(cmfw == null ? null : cmfw > 0, "Haftalık para akışı pozitif: birikim sürüyor", cmfw == null ? "–" : fmt(cmfw, 2)),
+    chk(strong ? true : null, "Güçlü para girişi: CMF > 0,15 ve yükselen trend", strong ? "evet · " + k2ev("cmf_guclu") : "hayır"),
+    chk(weak ? false : null, "Para çıkışı: CMF < −0,15", weak ? "evet · " + k2ev("cmf_zayif") : "hayır"),
+    chk(dist ? false : null, "Dağıtım: yüksek hacim, fiyat yerinde, CMF negatif", dist ? "evet · " + k2ev("dagitim") : "hayır"),
+    chk(acc ? true : null, "Emilim (birikim): yüksek hacim, fiyat yerinde, CMF pozitif", acc ? "evet · " + k2ev("birikim") + " (kanıtsız)" : "hayır"),
+    chk(vt == null ? null : vt >= 1, "Hacim eğilimi (10g/60g) ≥ 1: ilgi artıyor", vt == null ? "–" : fmt(vt, 2) + "x"),
+    chk(s.ff == null ? null : s.ff >= 20, "Halka açıklık ≥ %20: tahtayı birkaç elin oynatması zor", s.ff == null ? "–" : "%" + fmt(s.ff, 0)),
+    chk(null, "Aracı kurum dağılımı, takas, kurumsal fon hareketi: veri kaynağı yok", "vekil göstergelerle çalışıyor")];
+  const t = v > 0 ? `Tahtanın izini sürüyorum: CMF ${fmt(cmf, 2)}${cmfw != null ? ` (haftalık ${fmt(cmfw, 2)})` : ""} ve trend yukarı; para içeri giriyor. Geçmişte bu yapı piyasayı geçti (${k2ev("cmf_guclu")}). Kimin aldığını (aracı kurum/takas) göremiyorum, yalnızca parasal akışın yönünü.`
+    : v < 0 ? `Tahta bana ${dist ? "dağıtım" : "para çıkışı"} gösteriyor: ${dist ? "hacim yüksek ama fiyat yerinde, CMF negatif: biri sessizce mal veriyor" : `CMF ${fmt(cmf, 2)}`}. Geçmişte bu sinyal olumsuz çıktı (${k2ev(dist ? "dagitim" : "cmf_zayif")}). Büyük oyuncunun kim olduğunu bilmiyorum ama yönü çıkışa bakıyor.`
+    : acc ? `Hacim yüksek, fiyat yerinde, CMF pozitif: emilim izi var. Ama dürüst olayım, bu "birikim" sinyali geçmişte kanıtlanmadı (${k2ev("birikim")}); izleme listesine alırım.`
+    : "Tahtada belirgin bir izi yok: ne güçlü bir para girişi ne de dağıtım var. Gerçek takas verisi olmadan daha fazlasını söylemem.";
+  return {v, score: tally(checks).score, checks, t, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
+}
+/* Piyasa coşku/korku göstergesi (tüm piyasa): sosyal medya yerine fiyat davranışından */
+function crowdMeter() {
+  const u = UNIVERSE && UNIVERSE.length ? UNIVERSE.filter(x => x.ok && x.tl >= 5 && x.change != null) : [];
+  if (!u.length) return null;
+  const up = u.filter(x => x.change >= 3).length / u.length * 100, dn = u.filter(x => x.change <= -3).length / u.length * 100, tav = u.filter(x => x.change >= 9.5).length, tab = u.filter(x => x.change <= -9.5).length;
+  const idx = Math.max(0, Math.min(100, 50 + (up - dn) * 2 + (tav - tab) * 0.6));
+  return {idx, up, dn, tav, tab, label: idx >= 70 ? "AŞIRI COŞKU" : idx >= 58 ? "Coşkulu" : idx <= 30 ? "PANİK" : idx <= 42 ? "Korku" : "Dengeli"};
+}
+function psikoP(s) {
+  const h = HIST && HIST.stocks && HIST.stocks[s.name], today = new Date().toISOString().slice(0, 10), c = h && h.closes && h.closes.length >= 30 ? h.closes : null;
+  let brkUp = null, brkDn = null;
+  if (c) { const incl = h.last === today, n = c.length, yest = incl ? c[n - 2] : c[n - 1], prior = incl ? c.slice(n - 22, n - 2) : c.slice(n - 21, n - 1); brkUp = yest > Math.max(...prior); brkDn = yest < Math.min(...prior); }
+  const trapBull = brkUp === true && s.change <= -2 && s.rvol >= 1.5, trapBear = brkDn === true && s.change >= 2 && s.rvol >= 1.5;
+  const fomoStrict = s.rsi > 78 && s.p1m > 25 && s.rvol >= 2, fomo = s.sma20 > 0 && (s.close / s.sma20 - 1) > 0.15 && s.rsi > 75;
+  const panic = s.change <= -6 && s.rvol >= 2.5 && s.rsi < 30, cm = crowdMeter();
+  let v = 0; if ((panic && k2bad("panik")) || (trapBear && k2bad("ayi_tuzagi"))) v = -1;
+  const checks = [
+    chk(fomoStrict ? false : null, "FOMO: RSI > 78, 1 ayda > %25, hacim ≥ 2x", fomoStrict ? "evet · " + k2ev("fomo") : "hayır"),
+    chk(fomo ? false : null, "Aşırı coşku: SMA20'nin %15 üstünde ve RSI > 75", fomo ? "evet · " + k2ev("fomo_kismi") : "hayır"),
+    chk(panic ? false : null, "Panik satışı: gün ≤ −%6, hacim ≥ 2,5x, RSI < 30", panic ? "evet · " + k2ev("panik") : "hayır"),
+    chk(trapBull ? false : null, "Boğa tuzağı: dün 20g zirve kırılımı, bugün ≤ −%2 ve hacimli", brkUp == null ? "geçmiş yok" : trapBull ? "evet · " + k2ev("boga_tuzagi") : "hayır"),
+    chk(trapBear ? false : null, "Ayı tuzağı sıçraması: dün 20g dip kırılımı, bugün ≥ +%2 ve hacimli", brkDn == null ? "geçmiş yok" : trapBear ? "evet · " + k2ev("ayi_tuzagi") : "hayır"),
+    chk(cm ? !(cm.idx >= 70 || cm.idx <= 30) : null, "Piyasa geneli coşku/korku dengeli", cm ? `${cm.label} (${fmt(cm.idx, 0)}/100; tavan ${cm.tav}, taban ${cm.tab})` : "–"),
+    chk(null, "Sosyal medya ve yatırımcı forumları: veri kaynağı yok", "fiyat davranışı vekili kullanıldı")];
+  const t = panic ? `Panik: hisse günde %${fmt(s.change, 1)} düştü, hacim ${fmt(s.rvol, 1)}x, RSI ${fmt(s.rsi, 0)}. Herkes çıkıyor, "dip" diye atlamak cazip. Verim ne diyor? Geçmişte böyle panikten sonra hisse 10 günde ortalama ${k2sig("panik") && k2sig("panik").h10 ? fmt(k2sig("panik").h10.excess, 1) : "?"}% daha geride kaldı: panik çoğu zaman devam ediyor. Düşen bıçağı tutmayın.`
+    : trapBear ? `Dikkat, "ayı tuzağı" sıçraması: dün 20 günlük dibi kırdı, bugün %${fmt(s.change, 1)} sıçradı. Rahatlama gibi görünüyor ama geçmişte bu tür sıçramalar tutmadı (${k2ev("ayi_tuzagi")}). Teyit gelmeden güvenmeyin.`
+    : trapBull ? `Olası boğa tuzağı: dün 20 günlük zirveyi kırdı, bugün %${fmt(s.change, 1)} geri verdi ve hacimli. Dürüst olayım: geçmişte bu tek başına anlamlı bir sinyal çıkmadı (${k2ev("boga_tuzagi")}); ama kırılımın tutmadığını not ediyorum, Livermore'un pivotu bu yüzden bozuldu.`
+    : fomoStrict || fomo ? `Coşku var (RSI ${fmt(s.rsi, 0)}, SMA20'nin %${fmt((s.close / s.sma20 - 1) * 100, 0)} üstü). "Herkes alıyor" cümlesi beni ürkütür, ama veriye bakınca: BIST'te bu kadar coşkulu hisseler geçmişte çoğu zaman yükselmeye devam etti (${k2ev("fomo_kismi")}). Yani coşku tek başına satış nedeni değil; sadece geç kalmış alıcı olmayın.`
+    : `Kalabalık davranışında uç bir işaret görmüyorum: ne FOMO ne panik ne de tuzak. Piyasa geneli: ${cm ? cm.label.toLowerCase() : "–"}. (Sosyal medyayı tarayamıyorum; yalnızca fiyat ve hacim davranışına bakıyorum.)`;
+  return {v, score: tally(checks).score, checks, t, plan: v < 0 ? "Teyit gelene kadar bekleyin; tuzak ya da panik sürüyorsa yeni alım yapmayın." : "Kalabalığa karşı çıkmak için bir neden yok; kendi planınıza sadık kalın.", panic, trapBull, trapBear, fomo: fomoStrict || fomo, crowd: cm};
+}
+const PERSONAS2_KEYS = ["makro", "akilli", "vol", "psiko"];
 function committee(s) {
   const l = { buffett: buffett(s), simons: simons(s), livermore: livermore(s), kellogg: kellogg(s) };
   l.seytan = devil(s, Object.values(l));
   const score = Object.values(l).reduce((a, x) => a + x.v, 0), veto = l.seytan.veto;
   const label = score >= 3 && !veto ? "GÜÇLÜ ADAY" : score === 2 && !veto ? "ADAY" : score >= 1 ? "İZLE" : score >= -1 ? "NÖTR" : "UZAK DUR";
-  return { l, score, label, veto };
+  let memo = null; const K = () => memo || (memo = (() => { const k2 = {makro: macroP(s), akilli: akilliP(s), vol: volP(s, l.simons.v), psiko: psikoP(s)}, net2 = PERSONAS2_KEYS.reduce((a, k) => a + k2[k].v, 0); return {k2, net2, veto2: !!((R.k2veto && net2 <= -2) || k2.makro.veto)}; })());
+  return { l, score, label, veto, get k2() { return K().k2; }, get net2() { return K().net2; }, get veto2() { return K().veto2; } }; // yeni uzmanlar tembel hesaplanır
 }
 
 /* ---------- Masa toplantısı: efsaneler birbirine yanıt verir (her cümle verideki bir sonuca bağlıdır) ---------- */
@@ -496,8 +641,23 @@ function meeting(s, r) {
   } else if (tier && tier.id === "toparlanan") {
     say("kellogg", `Dipte toparlanma izi var: günlük skor ${fmt(mt.d, 0)}, para girişi (CMF ${fmt(s.cmf, 2)}). Haftalık trend henüz oturmadı; bu bir erken dönüş denemesi, kanıtlı bir kural değil. Küçük pozisyon, sıkı stop.`);
   }
+  const k2 = r.k2;
+  if (k2) {
+    const act = lv => lv.v > 0 || (typeof lv.v === "number" && lv.v >= 1);
+    if (k2.vol.reply && (sm.v !== 0 || k2.vol.v !== 0 || k2.vol.stretched || k2.vol.knife)) say("vol", k2.vol.reply);
+    if (k2.akilli.v !== 0 || k2.akilli.acc || (kl.v > 0 || lv.v > 0)) {
+      if (kl.v > 0 && k2.akilli.v < 0) say("akilli", `Jack, hacim ${fmt(s.rvol, 1)}x diyorsun ama kimin aldığına bak: tahta ${k2.akilli.dist ? "dağıtım" : "para çıkışı"} gösteriyor (CMF ${fmt(s.cmf, 2)}). Hacim her zaman alım demek değildir; bu hacimde biri mal veriyor olabilir.`);
+      else if (kl.v > 0 && k2.akilli.v > 0) say("akilli", `Jack'in hacmini teyit ediyorum: CMF ${fmt(s.cmf, 2)}, alıcı baskın. Bu hacim satıcı hacmi değil; para içeri giriyor.`);
+      else if (lv.v > 0 && k2.akilli.v < 0) say("akilli", `Jesse, tape yukarı diyor ama tahtanın altında para çıkışı var (CMF ${fmt(s.cmf, 2)}). Kırılımlar böyle zayıf elde tutmaz; ben şüpheliyim.`);
+      else say("akilli", k2.akilli.t);
+    }
+    if (k2.psiko.panic || k2.psiko.trapBear || k2.psiko.trapBull || (k2.psiko.fomo && (lv.v > 0 || kl.v > 0 || sm.v > 0))) say("psiko", (k2.psiko.fomo && !k2.psiko.panic ? `Arkadaşlar, bu hissede coşku var ve hepimiz aynı kapıya bakıyoruz. ` : "") + k2.psiko.t);
+    if (k2.makro.shield.count >= 2 && (sm.v > 0 || lv.v > 0 || kl.v > 0 || bf.v > 0)) say("makro", `Önce rüzgâra bakalım: makro tabloda ${k2.makro.shield.count}/7 risk bayrağı var (${k2.makro.shield.items.filter(x => x.on).map(x => x.name.split(" ")[0]).join(", ") || "–"}). ${k2.makro.shield.evidence} ${R.makroVeto ? "Vetomu kullanıyorum." : "Veto koymuyorum ama pozisyonlar küçük olsun."}`);
+    if (r.veto2 && !r.veto && r.score >= 3) say("seytan", `Yeni uzmanların net oyu ${r.net2}: itirazları ciddiye alıyorum. Masa güçlü diyordu ama genişletilmiş kurul onay vermiyor.`);
+  }
   const verdict = r.veto && r.score >= 3 ? "Karar: güçlü ama Şeytanın Avukatı veto etti; masa işlem yapmıyor." : r.score >= 3 ? "Karar: masa uzlaştı, güçlü aday." : r.score === 2 ? "Karar: aday; masanın çoğu olumlu, kalan itirazlar not edildi." : r.score >= 1 ? "Karar: izleme listesi; teyit bekleniyor." : r.score === 0 ? "Karar: net değil, bekleyelim." : "Karar: uzak durulacak.";
-  return {lines, verdict};
+  const v2 = r.k2 && r.veto2 && !r.veto && r.score >= 3 ? " Genişletilmiş kurul: itiraz var (net " + r.net2 + "), güçlü aday ihtiyatla okunmalı." : "";
+  return {lines, verdict: verdict + v2};
 }
 
 /* ---------- Efsane ekranları ---------- */

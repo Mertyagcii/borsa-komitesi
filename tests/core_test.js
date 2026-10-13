@@ -2,12 +2,12 @@
 // Kullanım: node tests/core_test.js <site-klasörü>
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const site = process.argv[2] || "site", rd = f => JSON.parse(fs.readFileSync(path.join(site, f), "utf8"));
-const data = rd("data.json"), hist = rd("history.json"), news = rd("news.json").news || {}, research = rd("research.json"), mtfr = rd("mtf_composite.json");
-const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __NOW: Date.now()});
+const data = rd("data.json"), hist = rd("history.json"), news = rd("news.json").news || {}, research = rd("research.json"), mtfr = rd("mtf_composite.json"), k2r = rd("kurul2_research.json"), mr = rd("macro_research.json");
+const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: mr, __NOW: Date.now()});
 const out = vm.runInContext(`
 ${fs.readFileSync(path.join(__dirname, "..", "core.js"), "utf8")}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
-RESEARCH = __research; MTFR = __mtfr; NOW = __NOW;
+RESEARCH = __research; MTFR = __mtfr; KUR2 = __k2; MACRO_R = __mr; NOW = __NOW;
 const UNI = __data.stocks.map(enrich); rankUniverse(UNI); computeSectorStats(UNI); REGIME = computeRegime(UNI, HIST);
 UNIVERSE = UNI;
 current = strengthList(UNI, 25, 5);
@@ -33,6 +33,32 @@ for (const id of ["haftalik", "gunluk", "aylik", "bebek", "halkaarz"]) {
   if (id === "bebek" && !r.list.every(s => s.de <= P.maxDe && s.nipos8 >= P.minPosQ && s.p6m <= P.maxP6)) errs.push("bebek eşiği ihlal");
   stat["scan_" + id] = r.list.length;
 }
+// --- genişletilmiş kurul (4 yeni uzman) ---
+let k2n = 0, k2lines = 0, k2veto = 0;
+for (const s of UNI.filter(x => x.ok && x.tl >= 20).slice(0, 250)) {
+  try {
+    const r = committee(s), k = r.k2;
+    for (const key of PERSONAS2_KEYS) { if (!k[key] || ![-1, 0, 1].includes(k[key].v) || !Array.isArray(k[key].checks) || !k[key].t) errs.push(s.name + " yeni uzman bozuk: " + key); }
+    if (r.net2 !== PERSONAS2_KEYS.reduce((a, x) => a + k[x].v, 0)) errs.push(s.name + " net2 tutarsız");
+    if (r.veto2) k2veto++;
+    const m = meeting(s, r); if (m.lines.some(x => PERSONAS2_KEYS.includes(x.who))) k2lines++; k2n++;
+    if (typeof r.score !== "number" || r.score < -5 || r.score > 5) errs.push(s.name + " mevcut komite skoru bozuldu");
+  } catch (e) { errs.push(s.name + " k2: " + e.message); }
+}
+stat.k2 = k2n; stat.k2lines = k2lines; stat.k2veto = k2veto;
+if (k2lines < 5) errs.push("yeni uzmanlar toplantıda yeterince konuşmuyor: " + k2lines);
+// makro kalkan: sentetik makro verisi
+const savedMacro = HIST.macro; HIST.macro = {date: "2026-10-12", rf10: 32, rf2: 30, usdtry_d5: 5, vix: 30, brent_d20: 20, dxy_d20: 3, gold_d20: 8, rf10_d20: 2, us10y_d20: 0.5};
+const sh = macroShield(); if (!(sh.count === 7 && sh.level === "Şiddetli" && sh.items.length === 7)) errs.push("makro kalkan sentetik: " + sh.count + "/" + sh.level);
+const any = UNI.find(x => x.ok && x.tl >= 20);
+R.makroVeto = 0; if (macroP(any).veto) errs.push("makro veto kapalıyken veto verdi");
+R.makroVeto = 1; R.makroN = 4; if (!macroP(any).veto || !committee(any).veto2) errs.push("makro veto açıkken veto vermedi"); R.makroVeto = 0;
+HIST.macro = {date: "2026-10-12", rf10: 32, rf2: 30, usdtry_d5: 0.2, vix: 14, brent_d20: 1, dxy_d20: 0, gold_d20: 0, rf10_d20: 0, us10y_d20: 0}; if (macroShield().count !== 0) errs.push("makro sakin sentetik 0 olmalı");
+HIST.macro = savedMacro;
+// psikoloji: panik sentetik
+const fake = Object.assign({}, any, {change: -8, rvol: 3.2, rsi: 22, name: "SENTETIK"}); const pp = psikoP(fake); if (!pp.panic) errs.push("panik tespit edilmedi"); if (pp.v !== -1 && KUR2.signals.panik.verdict === "ters kanıt") errs.push("panik oyu −1 olmalı");
+// akıllı para: dağıtım sentetik
+const fd = Object.assign({}, any, {rvol: 3, change: 0.5, cmf: -0.3}); const ap = akilliP(fd); if (ap.v !== -1) errs.push("dağıtım −1 olmalı");
 const dh = dataHealth(5); if (!(dh.score >= 0 && dh.score <= 100)) errs.push("veri sağlığı aralık dışı");
 if (!(tierId(80, 90, 70) === "uyumlu" && tierId(10, 85, 10) === "hlider" && tierId(50, 20, 50) === "zayif" && tierId(50, 50, 50) === "notr" && tierId(null, null, null) === null)) errs.push("tierId tanımı bozuk");
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})

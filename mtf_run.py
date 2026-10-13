@@ -36,6 +36,13 @@ try:
     ipo_research.main()
 except Exception as e:
     print("tavan/taban ya da halka arz araştırması başarısız:", e)
+try:  # yeni uzmanların vekil sinyalleri ve makro kalkan kanıtı
+    import macro_research
+    macro_research.main()
+    import kurul2_research
+    kurul2_research.main()
+except Exception as e:
+    print("kurul2/makro araştırması başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward

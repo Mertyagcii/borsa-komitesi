@@ -207,7 +207,7 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .say{display:flex;gap:10px;margin:10px 0;align-items:flex-start}
 .say>div{min-width:0;font-size:13px}.say b{font-size:12px}
 .av{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff}
-.av-buffett{background:#3b82f6}.av-simons{background:#a855f7}.av-livermore{background:#f59e0b}.av-kellogg{background:#ec4899}.av-seytan{background:#ef4444}.av-masa{background:var(--accent)}.av-zaman{background:#14b8a6}
+.av-buffett{background:#3b82f6}.av-simons{background:#a855f7}.av-livermore{background:#f59e0b}.av-kellogg{background:#ec4899}.av-seytan{background:#ef4444}.av-masa{background:var(--accent)}.av-makro{background:#0ea5e9}.av-akilli{background:#84cc16}.av-vol{background:#06b6d4}.av-psiko{background:#d946ef}.av-zaman{background:#14b8a6}
 .verdict{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-weight:600;font-size:13px}
 .lgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:10px 0}
 .lcard{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer}
@@ -320,6 +320,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-dashboard">
       <section class="card hero" id="hero"></section>
       <section class="card" id="briefCard"></section>
+      <section class="card" id="macroCard"></section>
       <div class="row r1">
         <div class="card">
           <div class="card-h"><span class="badge"><i data-ico="trend"></i></span><h2>Taranan Hisse</h2></div>
@@ -619,6 +620,8 @@ const personaCard = (n, p) => `<div class="persona ${p.v > 0 ? "p1" : p.v < 0 ? 
   <span>${esc(p.t)}</span>
   <details open><summary>Kontrol listesi</summary><ul class="chk">${p.checks.map(c => `<li class="c${c.s > 0 ? "ok" : c.s < 0 ? "bad" : "na"}"><i>${c.s > 0 ? "✓" : c.s < 0 ? "✗" : "–"}</i><span>${esc(c.t)}</span><em>${esc(c.val)}</em></li>`).join("")}</ul></details>
   <div class="plan"><b>Plan:</b> ${esc(p.plan)}</div></div>`;
+const PERSONAS2 = [["makro", "Makro & Jeopolitik Uzmanı", "M"], ["akilli", "Akıllı Para Takipçisi", "A"], ["vol", "Opsiyon & Volatilite Uzmanı", "V"], ["psiko", "Piyasa Psikolojisi Analisti", "P"]];
+const chips2Of = r => PERSONAS2.map(([k, n, ch]) => `<span class="chip ${r.k2[k].v > 0 ? "v1" : r.k2[k].v < 0 ? "vm" : "v0"}" title="${n}">${ch}</span>`).join("");
 const PERSONAS = [["buffett", "Warren Buffett", "B"], ["simons", "Jim Simons", "S"], ["livermore", "Jesse Livermore", "L"],
   ["kellogg", "Jack Kellogg", "K"], ["seytan", "Şeytanın Avukatı", "Ş"]];
 
@@ -1198,7 +1201,7 @@ function scanHowHtml() {
   const P = k => R[k], row = (a, b, c, d) => `<tr><td style="text-align:left;white-space:normal"><b>${a}</b></td><td style="text-align:left;white-space:normal">${b}</td><td style="text-align:left;white-space:normal">${c}</td><td style="text-align:left;white-space:normal">${d}</td></tr>`;
   return `<div class="note" style="margin:8px 0">Bu sayfa, uygulamanın bir hisseye nasıl baktığını ve komiteye ne sunduğunu açıklar. Kısaca: <b>önce taramalar aday çıkarır, sonra komite adayları yorumlar, sonunda Karar Kartı bir plan verir.</b> Hangi adımın kanıtlı, hangisinin yorum olduğu ayrıca belirtilir.</div>
     <h3 style="margin:10px 0 4px">Akış</h3>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0">${["1 Veri (TradingView, ~1900 alan, 15 dk gecikmeli)", "2 Zenginleştirme (RS, ATR, seans düzeltmeli hacim, haftalık/aylık göstergeler)", "3 Çok zamanlı skor (Günlük·Haftalık·Aylık, 0-100)", "4 Tarama senaryoları (eleme hattı)", "5 Komite (4 efsane + Şeytanın Avukatı)", "6 Karar Kartı (plan: giriş/stop/hedef)", "7 Karne (canlı doğrulama)"].map((x, i, a) => `<span class="pill" style="white-space:normal">${x}</span>${i < a.length - 1 ? "→" : ""}`).join("")}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0">${["1 Veri (TradingView, ~1900 alan, 15 dk gecikmeli)", "2 Zenginleştirme (RS, ATR, seans düzeltmeli hacim, haftalık/aylık göstergeler)", "3 Çok zamanlı skor (Günlük·Haftalık·Aylık, 0-100)", "4 Tarama senaryoları (eleme hattı)", "5 Komite (4 efsane + Şeytanın Avukatı + 4 yeni uzman)", "6 Karar Kartı (plan: giriş/stop/hedef)", "7 Karne (canlı doğrulama)"].map((x, i, a) => `<span class="pill" style="white-space:normal">${x}</span>${i < a.length - 1 ? "→" : ""}`).join("")}</div>
     <h3 style="margin:12px 0 4px">Neye göre skor veriyoruz? <span class="mute" style="font-weight:400">(kanıta dayalı kısım)</span></h3>
     <div class="tw"><table><thead><tr><th style="text-align:left">Skor</th><th style="text-align:left">Hangi göstergeler</th><th style="text-align:left">Ufuk / rol</th><th style="text-align:left">Kanıt</th></tr></thead><tbody>
       ${row("Günlük (G)", "Göreceli güç (RS): 52 hafta zirvesine yakınlık + 6 ay + 1 ay getiri sıralaması", "1-5 gün · zamanlama", scanEv("wf:gunluk:rs"))}
@@ -1212,6 +1215,10 @@ function scanHowHtml() {
       ${row("Jim Simons", "Göreceli güç (RS) dilimine göre beklenen fazla getiri (research.json) + haftalık skor", `beklenen 10g fazla getiri ≥ %${P("sEdge")} ve RS ≥ ${P("sRs")} (ya da haftalık skor ≥ 80)`, "Modelin kendisi araştırmaya dayanır")}
       ${row("Jesse Livermore", "Trend (fiyat > SMA50 > SMA200), lider hisse, 1 aylık pivot kırılımı, hacim teyidi, haftalık trend", `RS ≥ ${P("lRs")}, pivotun %${P("lPiv")} içinde, hacim ≥ ${P("lVol")}x`, "Ayı rejiminde yalnızca RS ≥ 90 liderler")}
       ${row("Jack Kellogg", "Olağandışı hacim, güçlü gün içi itiş, kırılım, likidite, para girişi", `hacim ≥ ${P("kRvol")}x, gün içi ≥ %${P("kChg")}, ATR ≥ %${P("kAtr")}`, "Ayı rejiminde devre dışı (araştırma: ayıda kırılımlar tutmuyor)")}
+      ${row("Makro &amp; Jeopolitik Uzmanı", "Dolar/TL, VIX, Brent, dolar endeksi, altın, TR ve ABD faizi, getiri eğrisi; haber anahtar kelimeleri (zayıf)", "7 makro risk bayrağı; varsayılan olarak yalnızca uyarır", "Geçmişte bayraklar BIST'i düşürmedi: veto kapalı (kanıtsız)")}
+      ${row("Akıllı Para Takipçisi", "Para akışı (CMF), hacim anomalisi (dağıtım/emilim), hacim eğilimi, halka açıklık", "CMF > 0,15 ve trend yukarı", "Gerçek takas/AKD verisi YOK: vekil. Dağıtım ve para çıkışı olumsuz sinyal olarak doğrulandı")}
+      ${row("Opsiyon &amp; Volatilite Uzmanı", "Z-skor, ortalamaya dönüş yarı ömrü, oynaklık sıkışması (Jim Simons'a destek/itiraz)", "z-skor 0,5-1,8 + trend ya da oynaklık sıkışması", "Zımni oynaklık YOK. BIST'te aşırı uzama ortalamaya dönmedi; düşen bıçak devam etti")}
+      ${row("Piyasa Psikolojisi Analisti", "FOMO, panik, boğa/ayı tuzağı, piyasa geneli coşku-korku (fiyat davranışından)", "yalnızca olumsuz oy: panik satışı ve ayı tuzağı sıçraması", "Sosyal medya/forum verisi YOK: vekil. Coşku (FOMO) geçmişte çoğu zaman devam etti")}
       ${row("Şeytanın Avukatı", "Risk: stop olasılığı (Monte Carlo), oynaklık, likidite, bilanço yakınlığı, FOMO, sektör yoğunlaşması, rejim", `bayrak sayısı < ${P("dFlags")}; veto: bilanço ≤ 2 gün, çıkış likiditesi zayıf, stop olasılığı ≥ %65`, "Oy hakkı yalnızca olumsuz/veto")}</tbody></table></div>
     <p class="note"><b>Komite skoru</b> = dört efsanenin oylarının toplamı (+1/0/−1) ve Şeytan'ın olumsuz oyu. ≥ 3 GÜÇLÜ ADAY, 2 ADAY, 1 İZLE, 0/−1 NÖTR, ≤ −2 UZAK DUR; veto varsa güçlü aday olamaz. Efsane kurallarının eşikleri <b>Efsane Kuralları</b> sayfasından değişir. Komite, taramaların yerine geçmez: tarama "kim potansiyelli", komite "neden/neden değil ve nasıl riskleneriz" sorusunu yanıtlar.</p>
     <h3 style="margin:12px 0 4px">Hangi kısım ne kadar güvenilir?</h3>
@@ -1340,6 +1347,7 @@ function computeAlerts() {
   const K = riskCalc();
   if (K.P.length) { if (K.dayPct <= -K.dayLim) add("daylimit", 3, "🚨", `Günlük kayıp limiti aşıldı (%${fmt(K.dayPct, 2)} / −%${fmt(K.dayLim, 1)}): yeni işlem açmayın`); if (K.riskPct > K.totLim) add("totrisk", 2, "⚖", `Toplam açık risk %${fmt(K.riskPct, 1)}, limit %${fmt(K.totLim, 1)}`); }
   if (DH && DH.label !== "İYİ") add("health", DH.label === "KÖTÜ" ? 3 : 1, "🩺", `Veri sağlığı ${DH.label}: ${DH.issues.join("; ")}`);
+  try { const sh = macroShield(); if (sh.count >= 3) add("macro", 2, "🌐", `Makro kalkan ${sh.level}: ${sh.count}/7 risk bayrağı. Geçmişte BIST'i düşürmedi ama pozisyonları küçük tutun.`); const cm = crowdMeter(); if (cm && (cm.idx >= 70 || cm.idx <= 30)) add("crowd", 1, "🧠", `Piyasa psikolojisi: ${cm.label} (${fmt(cm.idx, 0)}/100)`); } catch (e) {}
   const H = scoreHealth(); if (H.status === "uyari") add("shealth", 3, "🧪", `${H.label}: ${H.detail}`); else if (H.status === "dikkat") add("shealth", 2, "🧪", `${H.label}: ${H.detail}`);
   [...FAVS].forEach(n => { const s = UNIVERSE.find(u => u.name === n), t = s && mtfTier(s); if (t && (t.id === "uyumlu" || t.id === "hlider")) add("favlead:" + n, 1, "📈", `${n} (favori): ${t.label}`, n); });
   const Z = PORT && PORT.p && PORT.p.zaman; if (Z) { const nb = Z.orders.filter(o => o.side === "buy").length, ns = Z.orders.filter(o => o.side === "sell").length; if (nb + ns) add("zaman", 1, "🧭", `Zaman Modeli yarın açılışta ${nb} alım, ${ns} satım planlıyor`); }
@@ -2715,7 +2723,7 @@ function valLine(s) {
   return `${cheapBadge(s)} 💰 Defter ${v.book ? fmt(v.book) : "–"} · Şimdi ${fmt(v.price)} · Olması gereken ${v.fair ? fmt(v.fair) + " TL (" + (v.upside >= 0 ? "+" : "") + fmt(v.upside, 0) + "%)" : "–"}`;
 }
 /* ---------- Masa toplantısı ---------- */
-const WHO = {zaman: ["Zaman Modeli", "Z"], buffett: ["Warren Buffett", "B"], simons: ["Jim Simons", "S"], livermore: ["Jesse Livermore", "L"], kellogg: ["Jack Kellogg", "K"], seytan: ["Şeytanın Avukatı", "Ş"]};
+const WHO = {makro: ["Makro & Jeopolitik Uzmanı", "M"], akilli: ["Akıllı Para Takipçisi", "A"], vol: ["Opsiyon & Volatilite Uzmanı", "V"], psiko: ["Piyasa Psikolojisi Analisti", "P"], zaman: ["Zaman Modeli", "Z"], buffett: ["Warren Buffett", "B"], simons: ["Jim Simons", "S"], livermore: ["Jesse Livermore", "L"], kellogg: ["Jack Kellogg", "K"], seytan: ["Şeytanın Avukatı", "Ş"]};
 function meetingHtml(s, r) {
   const m = meeting(s, r);
   return `<details class="meet" open><summary>🗣 Masa toplantısı</summary>${m.lines.map(l => `<div class="say"><span class="av av-${l.who}">${WHO[l.who][1]}</span><div><b>${WHO[l.who][0]}</b><div>${esc(l.text)}</div></div></div>`).join("")}<div class="verdict">${esc(m.verdict)}</div></details>`;
@@ -2743,6 +2751,7 @@ function decisionCard(s, r) {
   else if (lead) { v = "İZLE · itirazlar var"; cls = "mid"; why = veto ? "Şeytanın Avukatı veto etti: " + r.l.seytan.severe.join(", ") + "." : "Skorlar güçlü ama masanın oyu zayıf (" + (sc > 0 ? "+" : "") + sc + ")."; }
   else if ((t && t.id === "zayif") || sc <= -2) { v = "UZAK DUR"; cls = "down"; why = t && t.id === "zayif" ? "Haftalık skor zayıf: geçmişte bu grup piyasanın gerisinde kaldı." : "Masa olumsuz (" + sc + ")."; }
   else { v = "NÖTR"; cls = "mid"; why = "Belirgin bir üstünlük ya da zayıflık yok."; }
+  if (r.veto2 && cls === "up") { v = "İZLE · uzman itirazı"; cls = "mid"; why = `Genişletilmiş kurul (Makro, Akıllı Para, Volatilite, Psikoloji) net ${r.net2} oy verdi: ${PERSONAS2.filter(([k]) => r.k2[k].v < 0).map(([, n]) => n).join(", ") || "makro veto"}.`; }
   const atr = s.atr, stop = atr ? Math.max(s.close - 2.5 * atr, s.close * 0.90) : null, risk = stop ? s.close - stop : null, target = risk ? s.close + 2 * risk : null;
   const stopPct = risk ? risk / s.close * 100 : null, maxPos = stopPct ? Math.min(33, 1 / stopPct * 100) : null;
   const ex = mtfExpect(s), cost = (MTFR && MTFR.cost) || 0.5, ed = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null, vl = valuation(s);
@@ -2761,6 +2770,7 @@ function decisionCard(s, r) {
   const li = a => a.length ? `<ul style="margin:4px 0 0 16px">${a.slice(0, 4).map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : '<span class="mute"> –</span>';
   return `<div class="dcard"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="dverdict ${cls}">${v}</span><span class="mute">${esc(why)}</span></div>
     <div style="margin-top:8px"><b>Değerleme:</b> ${cheapBadge(s, true)}</div>
+    <div style="margin-top:6px"><b>Genişletilmiş kurul:</b> ${chips2Of(r)} <span class="mute">net ${r.net2 > 0 ? "+" : ""}${r.net2}</span> ${r.k2.makro.shield.count >= 3 ? `<span class="down">· makro ${r.k2.makro.shield.level.toLowerCase()} risk</span>` : ""}</div>
     <div class="dgrid"><div><div class="l">Giriş bölgesi</div><b>${fmt(s.close * 0.99)} – ${fmt(s.close * 1.01)}</b></div><div><div class="l">Stop (2,5×ATR)</div><b>${stop ? fmt(stop) : "–"}</b><div class="l">${stopPct ? "−%" + fmt(stopPct, 1) : ""}</div></div><div><div class="l">Hedef (2R)</div><b>${target ? fmt(target) : "–"}</b><div class="l">risk/getiri 1:2</div></div><div><div class="l">Azami pozisyon</div><b>${maxPos ? "%" + fmt(maxPos, 0) : "–"}</b><div class="l">portföyün (%1 risk)</div></div><div><div class="l">Tutma</div><b>3-20 gün</b><div class="l">haftalık skor bozulana dek</div></div>${ex != null ? `<div><div class="l">Geçmiş beklenti (20g)</div><b>${ex - cost > 0 ? "+" : ""}${fmt(ex - cost, 1)}%</b><div class="l">maliyet sonrası, piyasaya göre</div></div>` : ""}</div>
     <div style="display:flex;gap:18px;flex-wrap:wrap"><div style="flex:1;min-width:180px"><b class="up">Lehine</b>${li(pos)}</div><div style="flex:1;min-width:180px"><b class="down">Aleyhine</b>${li(neg)}</div></div>
     <p class="note" style="margin:8px 0 0">İsabet oranı %50 civarıdır; avantaj çok işleme yayıldığında görünür. Stop zorunludur. Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p></div>`;
@@ -2773,12 +2783,24 @@ function briefSentences() {
   const H = scoreHealth(), Z = PORT && PORT.p && PORT.p.zaman, nb = Z ? Z.orders.filter(o => o.side === "buy").length : 0, ns = Z ? Z.orders.filter(o => o.side === "sell").length : 0;
   const s1 = `Piyasa ${REGIME ? REGIME.label.toLowerCase() + " rejiminde" : "belirsiz"}: ${up} hisse yükselirken ${dn} hisse düşüyor${REGIME ? `, hisselerin yüzde ${fmt(REGIME.a50, 0)}'i 50 günlük ortalamanın üzerinde` : ""}.`;
   const s2 = `Likit hisselerde ${lead.length} lider kurulum var${top.length ? `, birleşik skorda öne çıkanlar ${top.join(", ")}` : ""}${mv ? `; günün en büyük hareketi ${mv.name}, yüzde ${fmt(mv.change, 1)}` : ""}.`;
-  const s3 = `${ed ? ed + " hissede 3 gün içinde bilanço var, dikkat. " : ""}${Z ? `Zaman Modeli yarın açılışta ${nb} alım ve ${ns} satım planlıyor. ` : ""}${H.status === "uyari" || H.status === "dikkat" ? "Skor sağlığı uyarı veriyor, pozisyonları küçük tutun." : "Her işlemde stop belirleyin; bu yatırım tavsiyesi değildir."}`;
+  const msh = (() => { try { return macroShield(); } catch (e) { return null; } })();
+  const s3 = `${msh && msh.count >= 2 ? `Makro kalkan ${msh.level.toLowerCase()} (${msh.count}/7 bayrak). ` : ""}${ed ? ed + " hissede 3 gün içinde bilanço var, dikkat. " : ""}${Z ? `Zaman Modeli yarın açılışta ${nb} alım ve ${ns} satım planlıyor. ` : ""}${H.status === "uyari" || H.status === "dikkat" ? "Skor sağlığı uyarı veriyor, pozisyonları küçük tutun." : "Her işlemde stop belirleyin; bu yatırım tavsiyesi değildir."}`;
   return [s1, s2, s3];
 }
 function speak(txt) { try { if (!("speechSynthesis" in window)) { toast("Bu tarayıcı sesli okumayı desteklemiyor"); return; } speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(txt); u.lang = "tr-TR"; u.rate = 1; speechSynthesis.speak(u); } catch (e) { toast("Sesli okuma açılamadı"); } }
 document.addEventListener("click", e => { const so = e.target.closest("[data-scanopen]"); if (so) { scanTab = so.dataset.scanopen; store.set("scanTab", scanTab); show("tarama"); } });
 document.addEventListener("click", e => { if (e.target.closest("[data-speak]")) speak(briefSentences().join(" ")); });
+function renderMacro() {
+  const el = $("macroCard"); if (!el) return; if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  const sh = macroShield(), cm = crowdMeter(), cls = sh.count >= 3 ? "down" : sh.count === 2 ? "" : "up";
+  el.innerHTML = `<div class="card-h"><span class="badge">${ico("shield")}</span><h2>Makro Kalkan &amp; Kalabalık Psikolojisi <span class="sub">${sh.date ? "veri " + sh.date : "makro veri yok"}</span></h2></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">
+      <div><div class="mute">Makro risk (7 bayrak)</div><b class="${cls}" style="font-size:20px">${sh.level} · ${sh.count}/7</b>
+        <div class="tw"><table><tbody>${sh.items.map(x => `<tr><td style="text-align:left">${x.on ? "🔴" : "🟢"} ${esc(x.name)}</td><td>${esc(String(x.val))}</td></tr>`).join("")}</tbody></table></div>
+        <div class="note" style="margin:4px 0">Getiri eğrisi: ${sh.inverted ? "TERS (kısa faiz uzundan yüksek: sıkı para)" : "normal"} · jeopolitik/makro haber yoğunluğu (son 3 gün): ${sh.geo.tot ? `${sh.geo.n}/${sh.geo.tot}` : "–"}</div></div>
+      <div><div class="mute">Geçmiş kanıt</div><div class="note" style="margin:4px 0">${esc(sh.evidence)}</div><div class="note" style="margin:4px 0;border-left:3px solid var(--warn);padding-left:8px"><b>Dürüst not:</b> Risk-off bayrakları BIST'in sonraki getirisini düşürmedi (nominal TL piyasasında kur şoku dönemlerinde hisseler yükseldi), bu yüzden makro kalkan varsayılan olarak <b>alım vetosu koymaz</b>; yalnızca uyarır ve pozisyon küçültmeyi önerir. Efsane Kuralları'ndan vetoyu açabilirsiniz.</div></div>
+      <div><div class="mute">Piyasa psikolojisi (fiyat davranışından)</div>${cm ? `<b class="${cm.idx >= 70 || cm.idx <= 30 ? "down" : ""}" style="font-size:20px">${cm.label} · ${fmt(cm.idx, 0)}/100</b><div class="note" style="margin:4px 0">Hisselerin %${fmt(cm.up, 0)}'i ≥ +%3, %${fmt(cm.dn, 0)}'i ≤ −%3 · tavan ${cm.tav} / taban ${cm.tab}</div><div class="note" style="margin:4px 0">Sosyal medya ve forumlar taranmaz (veri kaynağı yok). Panik satışları ve "ayı tuzağı" sıçramaları geçmişte devam etti; coşku ise çoğu zaman sürdü.</div>` : "–"}</div></div>`;
+}
 function renderBrief() {
   const el = $("briefCard"); if (!el) return;
   if (!UNIVERSE.length) { el.innerHTML = ""; return; }
@@ -2839,10 +2861,11 @@ function detail(name, target = "detail") {
   T.innerHTML = `<h2 style="padding-right:8px"><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}" title="Favori">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
-    <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)}</p>` +
+    <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)} <span class="mute">· yeni uzmanlar:</span> ${chips2Of(r)}</p>` +
     decisionCard(s, r) + similarHtml(s) + mtfBox(s) + meetingHtml(s, r) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
+    `<h2 style="margin-top:12px">Genişletilmiş kurul <span class="sub">4 yeni uzman · net oy ${r.net2 > 0 ? "+" : ""}${r.net2}${r.veto2 ? " · İTİRAZ VETOSU" : ""}</span></h2><div class="note">Bu uzmanların oyları komite skoruna karışmaz; vekil göstergelerle (fiyat-hacim-makro) çalışırlar ve yalnızca geçmişte test edilmiş sinyallerle oy kullanırlar. Takas/aracı kurum, zımni oynaklık ve sosyal medya verisi yoktur.</div>` + PERSONAS2.map(([k, n]) => personaCard(n, r.k2[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="${P}cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
@@ -3012,7 +3035,7 @@ $("statOpen").addEventListener("click", () => { const n = $("statSel").value; if
 let view = "dashboard", pendingOpen = null;
 const drawerOpen = () => $("drawer").classList.contains("open");
 function refreshView() {
-  if (view === "dashboard") { renderDashboard(); renderBrief(); renderHeat(); }
+  if (view === "dashboard") { renderDashboard(); renderBrief(); renderMacro(); renderHeat(); }
   else if (view === "haberler") renderNews();
   else if (view === "geritest") renderBacktest();
   else if (view === "ekranlar") renderScreens();
@@ -3125,6 +3148,8 @@ async function loadAux() {
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
   { const m = await getJson("scan_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) SLOG = m; }
+  if (!KUR2) { const m = await getJson("kurul2_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.signals) KUR2 = m; }
+  if (!MACRO_R) { const m = await getJson("macro_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.conds) MACRO_R = m; }
   if (!IPOR) { const m = await getJson("ipo_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.cond) IPOR = m; }
   if (!LIM) { const m = await getJson("limit_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tavan) LIM = m; }
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {

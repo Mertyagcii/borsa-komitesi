@@ -127,11 +127,17 @@ def build(names: list[str], log=print) -> dict:
                 c[i] = round(float(a), 3); v[i] = int(round(float(b2) / 1000))
         ohlcv["stocks"][nm] = {"c": c, "v": v}
     macro = {}
-    for key, sym in (("rf10", "TR10Y"), ("rf2", "TR02Y")):
+    # makro kalkan girdileri: son değer ve 5/20 günlük değişim (fiyatlarda %, faizlerde puan farkı)
+    for key, sym, ex, pp in (("rf10", "TR10Y", "TVC", True), ("rf2", "TR02Y", "TVC", True), ("us10y", "US10Y", "TVC", True), ("usdtry", "USDTRY", "FX_IDC", False),
+                             ("brent", "UKOIL", "TVC", False), ("vix", "VIX", "TVC", False), ("dxy", "DXY", "TVC", False), ("gold", "GOLD", "TVC", False)):
         try:
-            mdf = tv.get_hist(sym, "TVC", interval=Interval.in_daily, n_bars=3)
-            if mdf is not None and len(mdf):
-                macro[key] = round(float(mdf["close"].iloc[-1]), 2)
+            mdf = tv.get_hist(sym, ex, interval=Interval.in_daily, n_bars=30)
+            if mdf is not None and len(mdf) >= 3:
+                c = mdf["close"].astype(float)
+                macro[key] = round(float(c.iloc[-1]), 3)
+                for d in (5, 20):
+                    if len(c) > d:
+                        macro[f"{key}_d{d}"] = round(float(c.iloc[-1] - c.iloc[-1 - d]) if pp else float((c.iloc[-1] / c.iloc[-1 - d] - 1) * 100), 3)
                 macro["date"] = str(mdf.index[-1])[:10]
         except Exception:
             pass
