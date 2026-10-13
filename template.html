@@ -194,6 +194,12 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 #toast.on{opacity:1;transform:translate(-50%,0)}
 .karne td,.karne th{white-space:nowrap}
 .few{color:var(--warn);font-size:11px;margin-left:4px}
+.crit{margin-bottom:16px;border:2px solid var(--down);background:rgba(255,107,107,.12);border-radius:16px;padding:12px 14px}
+.crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
+.lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
+.factok{font-size:12px;color:var(--mute);margin:4px 0}
+.mdv{line-height:1.55;font-size:14px}.mdv h1{font-size:20px}.mdv h2{font-size:16px;margin-top:18px;border-bottom:1px solid var(--line);padding-bottom:3px}.mdv h3{font-size:14px}
+.mdv table{border-collapse:collapse;font-size:12.5px;margin:8px 0}.mdv td,.mdv th{border:1px solid var(--line);padding:3px 7px}.mdv blockquote{border-left:3px solid var(--warn);margin:8px 0;padding:2px 10px;color:var(--mute)}
 @media print{
   :root{--bg:#fff;--shell:#fff;--panel:#fff;--panel2:#f3f3f6;--line:#ccc;--text:#111;--mute:#555;--accent2:#0a8f68;--up:#1a7f37;--down:#c0262d;--warn:#8a5a00}
   body{background:#fff;padding:0}
@@ -293,6 +299,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="haberler"><i data-ico="news"></i>Haberler</a>
       <a data-view="kutu"><i data-ico="clipboard"></i>Haber Kutusu <span id="inboxBadge" class="vb good" style="margin-left:auto;display:none"></span></a>
       <a data-view="karne"><i data-ico="award"></i>Komite Karnesi</a>
+      <a data-view="arsiv"><i data-ico="clipboard"></i>Arşiv (Denetim Notları)</a>
       <a data-view="arastirma"><i data-ico="flask"></i>Sistem Araştırması</a>
       <a data-view="geritest"><i data-ico="bars"></i>Geri Test</a>
     </nav>
@@ -316,6 +323,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <div class="user"><span class="avatar">M</span><span>Mert<br><span class="sub">Komite başkanı</span></span></div>
     </div>
     <div id="banner" class="card" style="display:none;margin-bottom:16px;border-color:var(--warn)"></div>
+    <div id="critBanner" class="crit" style="display:none"></div>
 
     <!-- GENEL BAKIŞ -->
     <div class="view" id="v-dashboard">
@@ -419,6 +427,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-tarama"><section class="card" id="scnView"></section></div>
     <div class="view" id="v-halkaarz"><section class="card" id="ipoView"></section></div>
     <div class="view" id="v-ozelveri"><section class="card" id="ovView"></section></div>
+    <div class="view" id="v-arsiv"><section class="card" id="arView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -487,6 +496,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <li><b>Veri:</b> BIST fiyatları TradingView'den, 15 dakikaya kadar gecikmeli gelir ve 15 dakikada bir yenilenir. Fiyat geçmişi günde bir kez güncellenir.</li>
           <li><b>Efsaneler:</b> Buffett (değer), Simons (istatistik + geri test), Livermore (trend), Kellogg (momentum) ve Şeytanın Avukatı (risk) kurallara göre oy verir. Oylar toplanır: ≥3 GÜÇLÜ ADAY, ≥1 İZLE, 0 NÖTR, negatif UZAK DUR.</li>
           <li><b>Baş Denetçi:</b> Veri eksiklerini, eski veriyi, küçük örneklemi ve komite içi çelişkileri kontrol eder.</li>
+          <li><b>Hata Avcısı:</b> Ajanların metinlerindeki ve tablodaki rakamları (RSI, SMA, günlük değişim, 1 ay getiri, F/K, 52 hafta aralığı, z-skor) TradingView kapanış geçmişinden bağımsız yeniden hesaplar. Çelişki varsa o hissenin raporu KİLİTLENİR ve düzeltme talebi yazılır; veri düzelince kilit kalkar. Ajanlar kural tabanlıdır (yapay zekâ metni yok); bu kontrol veri/kod hatasını yakalar.</li>
+          <li><b>Alarm motoru:</b> Seans içinde ani hacim patlaması, 50 günlük ortalama kırılımı (hisse ve BIST 100), Şeytanın Avukatı vetosu ve piyasa paniği izlenir; kritik olanlar kırmızı "Kritik Piyasa Alarmı" bandında görünür, sunucu tarafında webhook/Telegram'a gider.</li>
+          <li><b>Arşiv:</b> Her seans kapanışında konsey tartışması, oylar, Monte Carlo, Baş Denetçi ve Hata Avcısı mührü Arsiv/ klasörüne Markdown olarak kaydedilir (Arşiv sayfasından okunur, PDF olarak kaydedilir).</li>
           <li><b>Geri test:</b> Bollinger alt bandına değen hisselerin sonraki 5/10/20 gün getirisi, her gün alma tabanıyla karşılaştırılır. Maliyet içermez, geçmiş geleceği garanti etmez.</li>
           <li><b>Haber skoru:</b> Başlıklardaki anahtar kelimelerle hesaplanan kaba bir göstergedir.</li>
         </ul>
@@ -701,11 +713,13 @@ function auditor(cands, results) {
     if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
     const n = NEWS[s.name]; if (r.score >= 3 && n && n.score <= -2) issues.push(`${s.name}: komite "GÜÇLÜ ADAY" diyor ama haber akışı olumsuz.`);
   });
-  AUDIT = {issues, ok: !issues.length};
+  let locks = 0;
+  results.slice(0, 40).forEach(([s, r]) => { const f = factCheck(s, r); if (f.locked) { locks++; issues.unshift(`🔒 Hata Avcısı: ${s.name} raporu KİLİTLİ: ${f.issues.map(i => i.msg).join("; ")}`); } });
+  AUDIT = {issues, ok: !issues.length, locks};
 }
 function renderAudit() {
   const {issues, ok} = AUDIT;
-  const label = ok == null ? "Bekleniyor" : ok ? "ONAY" : "ŞARTLI ONAY";
+  const label = ok == null ? "Bekleniyor" : AUDIT.locks ? "RED · KİLİT" : ok ? "ONAY" : "ŞARTLI ONAY";
   $("sideAudit").innerHTML = `${ico("shield")}<b>Baş Denetçi</b><span class="big">${label}</span><div style="opacity:.85;margin-top:2px">${ok == null ? "" : ok ? "Sorun bulunmadı" : issues.length + " uyarı"}</div>`;
   if (ok == null) { $("audit").innerHTML = "<h2>Baş Denetçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
   $("audit").innerHTML = `<h2>Baş Denetçi: <span class="${ok ? "audit-ok" : "audit-warn"}">${label}</span></h2>
@@ -767,6 +781,7 @@ function render() {
   renderAudit();
   paintHealth();
   try { updateAlertBadge(); } catch (e) {}
+  try { renderCrit(); } catch (e) {}
   refreshView();
 }
 function renderBacktest() {
@@ -1417,6 +1432,7 @@ function computeAlerts() {
   try { const sh = macroShield(); if (sh.count >= 3) add("macro", 2, "🌐", `Makro kalkan ${sh.level}: ${sh.count}/7 risk bayrağı. Geçmişte BIST'i düşürmedi ama pozisyonları küçük tutun.`); const cm = crowdMeter(); if (cm && (cm.idx >= 70 || cm.idx <= 30)) add("crowd", 1, "🧠", `Piyasa psikolojisi: ${cm.label} (${fmt(cm.idx, 0)}/100)`); } catch (e) {}
   const H = scoreHealth(); if (H.status === "uyari") add("shealth", 3, "🧪", `${H.label}: ${H.detail}`); else if (H.status === "dikkat") add("shealth", 2, "🧪", `${H.label}: ${H.detail}`);
   [...FAVS].forEach(n => { const s = UNIVERSE.find(u => u.name === n), t = s && mtfTier(s); if (t && (t.id === "uyumlu" || t.id === "hlider")) add("favlead:" + n, 1, "📈", `${n} (favori): ${t.label}`, n); });
+  try { marketAlarms({watch: [...FAVS]}).forEach(a => add("mk:" + a.id, a.sev, a.sev >= 3 ? "🚨" : a.type === "hacim" ? "📢" : "⚠", a.text, a.n)); } catch (e) {}
   const Z = PORT && PORT.p && PORT.p.zaman; if (Z) { const nb = Z.orders.filter(o => o.side === "buy").length, ns = Z.orders.filter(o => o.side === "sell").length; if (nb + ns) add("zaman", 1, "🧭", `Zaman Modeli yarın açılışta ${nb} alım, ${ns} satım planlıyor`); }
   return out.sort((a, b) => b.sev - a.sev);
 }
@@ -1433,6 +1449,73 @@ document.addEventListener("click", e => {
   const ack = alertAck(), today = new Date().toISOString().slice(0, 10), mark = id => { ack[id] = today; if (id.startsWith("alarm:")) { const al = store.get("alarms", []); const x = al.find(q => "alarm:" + q.id === id); if (x) { x.seen = true; store.set("alarms", al); } } };
   if (a) mark(a.dataset.alack); else computeAlerts().forEach(x => mark(x.id));
   store.set("alertAck", ack); updateAlertBadge(); renderAlerts();
+});
+
+
+/* ---------- Hata Avcısı kutusu, Kritik Piyasa Alarmı bandı, Arşiv sayfası ---------- */
+function factBox(fc) {
+  if (fc.locked) return `<div class="lockbox"><b style="color:var(--down)">🔒 RAPOR KİLİTLİ · Hata Avcısı</b><div style="margin-top:4px">Ajanların rakamları ham veriyle çelişiyor; karar kartı ve masa toplantısı yayınlanmadı. Oylar kayıtlı kalır, sanal portföyler etkilenmez.</div><ul>${fc.issues.map(i => `<li>${esc(i.msg)}</li>`).join("")}</ul><div class="note">${esc(fc.request || "")}</div></div>`;
+  return fc.stale ? `<div class="factok">Hata Avcısı: bu hissenin ham fiyat geçmişi yok/eski; rakamlar çapraz kontrol edilemedi.</div>` : `<div class="factok">✅ Hata Avcısı: ${fc.checked} rakam TradingView kapanış geçmişiyle çapraz kontrol edildi, çelişki yok.</div>`;
+}
+function renderCrit() {
+  const b = $("critBanner"); if (!b) return;
+  if (!UNIVERSE.length) { b.style.display = "none"; return; }
+  const ack = alertAck(), today = new Date().toISOString().slice(0, 10), A = marketAlarms({watch: [...FAVS]}), crit = A.filter(a => a.sev >= 3 && ack["mk:" + a.id] !== today);
+  if (!crit.length) { b.style.display = "none"; b.innerHTML = ""; return; }
+  b.style.display = "";
+  b.innerHTML = `<b class="t">🚨 Kritik Piyasa Alarmı</b> <span class="mute">${crit.length} kritik · ${A.filter(a => a.sev === 2).length} önemli · veri ${esc(DATA && DATA.generated || "")}</span>
+    <ul>${crit.slice(0, 6).map(a => `<li>${a.n ? `<a href="#" data-x="${esc(a.n)}" style="color:inherit"><b>${esc(a.n)}</b></a>: ${esc(a.text.slice(a.n.length + 2))}` : esc(a.text)}</li>`).join("")}${crit.length > 6 ? `<li class="mute">… ve ${crit.length - 6} alarm daha</li>` : ""}</ul>
+    <button data-critack="1">Bugünlük gizle</button> <button data-go="uyari">Uyarı Merkezi</button> <span class="mute" style="font-size:12px">Eğitim amaçlıdır; bu bir al/sat çağrısı değildir.</span>`;
+  b.querySelector("[data-go]").addEventListener("click", () => show("uyari"));
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest("[data-critack]")) return;
+  const ack = alertAck(), today = new Date().toISOString().slice(0, 10); marketAlarms({watch: [...FAVS]}).forEach(a => { if (a.sev >= 3) ack["mk:" + a.id] = today; });
+  store.set("alertAck", ack); renderCrit(); updateAlertBadge();
+});
+function mdToHtml(md) {
+  const L = String(md).split("\n"), out = []; let tbl = null, ul = false;
+  const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
+  const flush = () => { if (tbl) { out.push("<table>" + tbl.map((r, i) => "<tr>" + r.map(c => i === 0 ? `<th>${inl(c)}</th>` : `<td>${inl(c)}</td>`).join("") + "</tr>").join("") + "</table>"); tbl = null; } if (ul) { out.push("</ul>"); ul = false; } };
+  for (const ln of L) {
+    if (/^\|/.test(ln)) { if (/^\|[\s:|-]+\|?$/.test(ln)) continue; (tbl = tbl || []).push(ln.replace(/^\||\|$/g, "").split("|").map(s => s.trim())); continue; }
+    if (tbl) flush();
+    let m;
+    if ((m = ln.match(/^(#{1,3}) (.*)/))) { flush(); out.push(`<h${m[1].length}>${inl(m[2])}</h${m[1].length}>`); }
+    else if (/^---+$/.test(ln)) { flush(); out.push("<hr>"); }
+    else if ((m = ln.match(/^> ?(.*)/))) { flush(); out.push(`<blockquote>${inl(m[1])}</blockquote>`); }
+    else if ((m = ln.match(/^\s*- (.*)/))) { if (!ul) { out.push("<ul>"); ul = true; } out.push(`<li>${inl(m[1])}</li>`); }
+    else if (!ln.trim()) { flush(); }
+    else { flush(); out.push(`<p>${inl(ln)}</p>`); }
+  }
+  flush(); return out.join("\n");
+}
+let ARCH = null, ARCH_DAY = null;
+async function renderArsiv() {
+  const el = $("arView");
+  el.innerHTML = `<h2>Arşiv: Denetim ve Yatırım Notları <span class="sub">her seans kapanışında otomatik</span></h2><p class="note">Konsey tartışması, efsane oyları, Monte Carlo sonuçları, Baş Denetçi ve Hata Avcısı mührü, gün içi alarmlar ve geri test skor kartı. Dosyalar depoda <b>Arsiv/</b> klasöründe de saklanır (Markdown + geri test için JSON). Yüklüyor…</p>`;
+  if (!ARCH) { ARCH = (await getJson("Arsiv/index.json?t=" + Math.floor(Date.now() / 36e5))) || {days: []}; }
+  const AL = (await getJson("alarm_log.json?t=" + Math.floor(Date.now() / 6e4))) || {alarms: []};
+  if (view !== "arsiv") return;
+  const days = ARCH.days.slice().reverse();
+  el.innerHTML = `<h2>Arşiv: Denetim ve Yatırım Notları <span class="sub">${days.length} rapor</span></h2>
+    <p class="note">Her seans kapanışında (hafta içi 18:45'ten sonra) otomatik üretilir. Dosyalar depoda <b>Arsiv/</b> klasöründe (Markdown + geri test için JSON). Eğitim amaçlıdır, yatırım tavsiyesi değildir.</p>
+    ${days.length ? `<div class="nlist">${days.map(d => `<div class="nitem" style="align-items:center"><b>${esc(d.d)}</b> <span class="vt ${d.audit.startsWith("RED") ? "down" : d.audit === "ONAY" ? "up" : ""}">${esc(d.audit)}</span> <span class="mute" style="flex:1;margin-left:8px">${esc(d.regime || "")} · ${d.n} aday${d.strong.length ? " · güçlü: " + esc(d.strong.join(", ")) : ""}${d.locked.length ? " · 🔒 " + esc(d.locked.join(", ")) : ""}${d.alarms ? " · " + d.alarms + " alarm" : ""}</span><button data-ardoc="${esc(d.d)}">Oku</button> <a href="Arsiv/${esc(d.file)}" download>.md</a></div>`).join("")}</div>` : '<p class="mute">Henüz arşiv yok: ilk rapor bir sonraki seans kapanışında oluşur.</p>'}
+    <div id="arDoc"></div>
+    <h3 style="margin:14px 0 4px">Gün içi alarm geçmişi <span class="sub">son ${Math.min(30, AL.alarms.length)}</span></h3>
+    ${AL.alarms.length ? `<div class="nlist">${AL.alarms.slice(-30).reverse().map(a => `<div class="nitem"><span class="vt ${a.sev >= 3 ? "down" : ""}">${a.sev >= 3 ? "Kritik" : "Önemli"}</span> <span class="mute">${esc(a.d)} ${esc(a.t)}</span> <span style="margin-left:6px">${esc(a.text)}</span></div>`).join("")}</div>` : '<p class="mute">Kayıtlı alarm yok.</p>'}`;
+  if (ARCH_DAY && days.some(d => d.d === ARCH_DAY)) arOpen(ARCH_DAY);
+}
+async function arOpen(d) {
+  ARCH_DAY = d; const box = $("arDoc"); if (!box) return; box.innerHTML = '<p class="mute">Yükleniyor…</p>';
+  try { const r = await fetch("Arsiv/" + d + ".md?t=" + Date.now(), {cache: "no-store"}); if (!r.ok) throw new Error(r.status); const md = await r.text();
+    box.innerHTML = `<div style="margin:10px 0"><button data-arpdf="${esc(d)}">PDF olarak kaydet / yazdır</button></div><div class="mdv" id="arMd">${mdToHtml(md)}</div>`; box.scrollIntoView({behavior: "smooth"}); }
+  catch (e) { box.innerHTML = '<p class="down">Rapor yüklenemedi.</p>'; }
+}
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-ardoc]"); if (o) { arOpen(o.dataset.ardoc); return; }
+  const p = e.target.closest("[data-arpdf]"); if (p) { const h = $("arMd"); if (!h) return; const w = window.open("", "_blank"); if (!w) { toast("Açılır pencere engellendi"); return; }
+    w.document.write(`<!doctype html><meta charset="utf-8"><title>Borsa Komitesi ${esc(p.dataset.arpdf)}</title><style>body{font:13px/1.5 Arial,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;font-size:11px}td,th{border:1px solid #bbb;padding:2px 5px}h2{border-bottom:1px solid #ccc}blockquote{border-left:3px solid #c80;margin:6px 0;padding-left:8px;color:#555}</style>${h.innerHTML}`); w.document.close(); w.focus(); setTimeout(() => w.print(), 400); }
 });
 
 /* ---------- Senaryo / Stres testi: piyasa şoku altında pozisyonlar ---------- */
@@ -2924,13 +3007,13 @@ function mtfBox(s) {
 function detail(name, target = "detail") {
   const s = UNIVERSE.find(x => x.name === name); if (!s) return;
   const T = $(target), P = target === "detail" ? "" : "an_";
-  const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s);
+  const r = committee(s), mc = monteCarlo(s), h = HIST && HIST.stocks[name], fn = fundamentalNews(s), fc = factCheck(s, r);
   const info = (t, b) => `<div class="persona pi"><b>${t}</b><span>${b}</span></div>`;
   T.innerHTML = `<h2 style="padding-right:8px"><span class="star ${FAVS.has(name) ? "on" : ""}" data-fav="${name}" title="Favori">${FAVS.has(name) ? "★" : "☆"}</span>${esc(s.name)} <span class="sub">${esc(s.description)} · ${esc(trSector(s.sector))}</span></h2>
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)} <span class="mute">· yeni uzmanlar:</span> ${chips2Of(r)}</p>` +
-    decisionCard(s, r) + similarHtml(s) + mtfBox(s) + meetingHtml(s, r) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     `<h2 style="margin-top:12px">Genişletilmiş kurul <span class="sub">4 yeni uzman · net oy ${r.net2 > 0 ? "+" : ""}${r.net2}${r.veto2 ? " · İTİRAZ VETOSU" : ""}</span></h2><div class="note">Bu uzmanların oyları komite skoruna karışmaz; vekil göstergelerle (fiyat-hacim-makro) çalışırlar ve yalnızca geçmişte test edilmiş sinyallerle oy kullanırlar. Takas/aracı kurum, zımni oynaklık ve sosyal medya verisi yoktur.</div>` + PERSONAS2.map(([k, n]) => personaCard(n, r.k2[k])).join("") +
@@ -3120,6 +3203,7 @@ function refreshView() {
   else if (view === "gunici") renderGunIci();
   else if (view === "tarama") renderScan();
   else if (view === "ozelveri") renderOzelVeri();
+  else if (view === "arsiv") renderArsiv();
   else if (view === "halkaarz") renderIpo();
   else if (view === "gunluk") renderJournal();
   else if (view === "risk") renderRisk();
@@ -3245,7 +3329,7 @@ async function loadData(refresh) {
     const d = await res.json();
     const changed = applyData(d);
     if (changed || refresh || !HIST) {
-      await loadAux(); mcCache = {}; screenCache = null; render(); checkAlerts(); checkAlarms(); accTick(); updateInboxBadge();
+      await loadAux(); mcCache = {}; fcReset(); screenCache = null; render(); checkAlerts(); checkAlarms(); accTick(); updateInboxBadge();
       if (Object.values(store.get("scrSaved", {})).some(x => x.watch)) loadScreener().then(() => { buildComp(false); scrSavedWatchCheck(); });
       if (pendingOpen && UNIVERSE.some(s => s.name === pendingOpen)) { openDetail(pendingOpen); pendingOpen = null; }
     }
@@ -3328,7 +3412,7 @@ if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).to
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

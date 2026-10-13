@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = ["dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
-         "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
+         "arsiv", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
 fails, passes = [], 0
 
 
@@ -151,6 +151,35 @@ def browser_tests(site):
                 pass
 
 
+def script_tests(site):
+    print("2b) Betikler: alarms.js ve archive.js")
+    tmp = Path(tempfile.mkdtemp(prefix="bk_scr_"))
+    try:
+        r = subprocess.run(["node", str(ROOT / "archive.js"), "--site", site, "--out", str(tmp / "Arsiv"), "--force", "--nopublish"], capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
+        md = sorted((tmp / "Arsiv").glob("2*.md"))
+        ok = r.returncode == 0 and len(md) == 1 and (tmp / "Arsiv" / "index.json").exists() and len(list((tmp / "Arsiv").glob("2*.json"))) == 1
+        check("arşiv betiği dosya üretti", ok, (r.stdout + r.stderr)[-300:])
+        if md:
+            txt = md[0].read_text(encoding="utf-8")
+            check("arşiv raporu içeriği", "Baş Denetçi" in txt and "Hata Avcısı" in txt and "Monte Carlo" in txt and "Masa tartışması" in txt, "bölüm eksik")
+            idx = json.loads((tmp / "Arsiv" / "index.json").read_text(encoding="utf-8"))
+            check("arşiv dizini", len(idx["days"]) == 1 and idx["days"][0]["file"].endswith(".md"), str(idx)[:200])
+        # aynı gün ikinci çalışma (zorlamasız, seans içi/dışı fark etmez) indeksi bozmamalı
+        r2 = subprocess.run(["node", str(ROOT / "archive.js"), "--site", site, "--out", str(tmp / "Arsiv"), "--nopublish"], capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
+        idx2 = json.loads((tmp / "Arsiv" / "index.json").read_text(encoding="utf-8"))
+        check("arşiv tekrar çalışınca çoğalmıyor", r2.returncode == 0 and len(idx2["days"]) == 1, (r2.stdout + r2.stderr)[-200:])
+        a = subprocess.run(["node", str(ROOT / "alarms.js"), "--site", site, "--state", str(tmp / "st.json"), "--log", str(tmp / "log.json"), "--force", "--nopublish"], capture_output=True, text=True, encoding="utf-8", cwd=str(tmp))
+        check("alarm betiği çalıştı", a.returncode == 0 and (tmp / "st.json").exists() and (tmp / "log.json").exists(), (a.stdout + a.stderr)[-300:])
+        st1 = json.loads((tmp / "st.json").read_text(encoding="utf-8"))
+        a2 = subprocess.run(["node", str(ROOT / "alarms.js"), "--site", site, "--state", str(tmp / "st.json"), "--log", str(tmp / "log.json"), "--force", "--nopublish"], capture_output=True, text=True, encoding="utf-8", cwd=str(tmp))
+        lg = json.loads((tmp / "log.json").read_text(encoding="utf-8"))
+        ids = [(x["d"], x["id"]) for x in lg["alarms"]]
+        check("alarm tekrarı yok (aynı alarm bir kez)", a2.returncode == 0 and len(ids) == len(set(ids)), "yinelenen kayıt")
+        check("alarm durum dosyası", "sent" in st1 and "date" in st1, str(st1)[:100])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--site", default=str(ROOT / "site"))
@@ -160,6 +189,7 @@ def main():
     if not (Path(a.site) / "data.json").exists():
         print("site/data.json yok: önce `python build_site.py` çalıştırın."); sys.exit(2)
     core_test(a.site)
+    script_tests(a.site)
     if not a.quick:
         browser_tests(a.site)
     print(f"\nSONUÇ: {passes} geçti, {len(fails)} başarısız" + (": " + ", ".join(fails) if fails else ""))

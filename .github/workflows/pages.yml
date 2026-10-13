@@ -59,11 +59,28 @@ jobs:
         run: node signals.js
       - name: Gun ici 15 dakikalik cubuklar (yalnizca islenecek yeni islem gunu varsa)
         run: python intraday.py
+      - name: Anlik alarm motoru (seans icinde; yeni kritik alarm varsa webhook ve Telegram)
+        env:
+          ALARM_WEBHOOK_URL: ${{ secrets.ALARM_WEBHOOK_URL }}
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          node alarms.js
+          if [ -f alarms.txt ]; then
+            if [ -n "$ALARM_WEBHOOK_URL" ]; then
+              python -c "import json,sys;t=open('alarms.txt',encoding='utf-8').read();print(json.dumps({'text':t,'content':t}))" | curl -s -X POST -H "Content-Type: application/json" -d @- "$ALARM_WEBHOOK_URL" > /dev/null || true
+            fi
+            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
+              curl -s "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" --data-urlencode "chat_id=${TG_CHAT}" --data-urlencode "text=$(cat alarms.txt)" > /dev/null || true
+            fi
+          fi
       - name: Sanal portfoyler (gunde bir kez, kapanistan sonra)
         run: node engine.js
+      - name: Seans kapanisi arsivi (Arsiv/*.md, gunde bir kez, kapanistan sonra)
+        run: node archive.js
       - name: picks/snapshots/portfolios degistiyse kaydet
         run: |
-          FILES=""; for f in picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json scan_log.json kurul2_research.json macro_research.json viop.json viop_research.json newsmood.json newsmood_log.json geo.json news_log.json fundamentals; do [ -e "$f" ] && FILES="$FILES $f"; done
+          FILES=""; for f in picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json scan_log.json kurul2_research.json macro_research.json viop.json viop_research.json newsmood.json newsmood_log.json geo.json news_log.json alarm_log.json alarm_state.json Arsiv fundamentals; do [ -e "$f" ] && FILES="$FILES $f"; done
           if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"

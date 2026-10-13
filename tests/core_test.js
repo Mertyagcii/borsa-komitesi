@@ -69,6 +69,51 @@ const fake = Object.assign({}, any, {change: -8, rvol: 3.2, rsi: 22, name: "SENT
 const fd = Object.assign({}, any, {rvol: 3, change: 0.5, cmf: -0.3}); const ap = akilliP(fd); if (ap.v !== -1) errs.push("dağıtım −1 olmalı");
 const dh = dataHealth(5); if (!(dh.score >= 0 && dh.score <= 100)) errs.push("veri sağlığı aralık dışı");
 if (!(tierId(80, 90, 70) === "uyumlu" && tierId(10, 85, 10) === "hlider" && tierId(50, 20, 50) === "zayif" && tierId(50, 50, 50) === "notr" && tierId(null, null, null) === null)) errs.push("tierId tanımı bozuk");
+// --- Hata Avcısı (Fact-Checker) ---
+fcReset();
+const liqs = UNI.filter(x => x.ok && x.tl >= 10), lockedReal = liqs.filter(s => factCheck(s, committee(s), {nocache: true}).locked);
+stat.fcLocked = lockedReal.length + "/" + liqs.length;
+if (lockedReal.length > Math.max(2, liqs.length * 0.03)) errs.push("Hata Avcısı gerçek veride çok fazla kilit (yanlış alarm?): " + lockedReal.map(s => s.name).join(","));
+const fcS = liqs.find(s => { const f = factCheck(s, committee(s), {nocache: true}); return !f.stale && !f.locked && f.checked >= 4; });
+if (!fcS) errs.push("Hata Avcısı için ham verisi olan hisse bulunamadı");
+else {
+  const rr = committee(fcS), orig = {rsi: fcS.rsi, sma50: fcS.sma50, change: fcS.change, close: fcS.close};
+  fcS.rsi = (fcS.rsi > 50 ? 12 : 88); let f1 = factCheck(fcS, rr, {nocache: true});
+  if (!f1.locked || !f1.issues.some(i => i.field === "rsi" && i.kind === "veri")) errs.push("uydurma RSI yakalanmadı");
+  if (!/Düzeltme talebi/.test(f1.request || "")) errs.push("kilitte düzeltme talebi yok");
+  fcS.rsi = orig.rsi; fcS.sma50 = orig.sma50 * 1.2; f1 = factCheck(fcS, rr, {nocache: true}); if (!f1.locked || !f1.issues.some(i => i.field === "sma50")) errs.push("uydurma SMA50 yakalanmadı");
+  fcS.sma50 = orig.sma50; fcS.change = orig.change + 6; f1 = factCheck(fcS, rr, {nocache: true}); if (!f1.locked) errs.push("uydurma günlük değişim yakalanmadı");
+  fcS.change = orig.change;
+  const rawRsi = fcRecalc(fcS).rsi[0], fakeR = Object.assign({}, rr, {l: Object.assign({}, rr.l, {kellogg: Object.assign({}, rr.l.kellogg, {t: "Hacim güçlü, RSI " + Math.round(rawRsi > 50 ? 5 : 95) + " ile aşırı."})})});
+  f1 = factCheck(fcS, fakeR, {nocache: true}); if (!f1.locked || !f1.issues.some(i => i.kind === "metin")) errs.push("metindeki uydurma rakam yakalanmadı");
+  const okR = Object.assign({}, rr, {l: Object.assign({}, rr.l, {kellogg: Object.assign({}, rr.l.kellogg, {t: "RSI " + Math.round(rawRsi) + " ile normal."})})});
+  f1 = factCheck(fcS, okR, {nocache: true}); if (f1.issues.some(i => i.kind === "metin")) errs.push("doğru metin rakamı yanlışlıkla işaretlendi");
+  f1 = factCheck(fcS, rr, {nocache: true}); if (f1.locked) errs.push("veri düzelince kilit kalkmadı");
+  stat.fcChecked = f1.checked;
+}
+// --- Alarm motoru ---
+const al0 = marketAlarms().length;
+const aS = UNI.find(s => s.ok && s.tl >= 30 && s.sma50 > 0 && s.change != null), aOrig = {rvol: aS.rvol, change: aS.change, tl: aS.tl, close: aS.close};
+aS.rvol = 6; aS.change = -5; aS.tl = 150; let am = marketAlarms();
+const av = am.find(a => a.id === "vol:" + aS.name); if (!av || av.sev !== 3) errs.push("hacim patlaması alarmı kritik değil: " + JSON.stringify(av));
+aS.change = 4; am = marketAlarms(); if (!am.find(a => a.id === "vol:" + aS.name)) errs.push("hacim patlaması (yükseliş) alarmı yok");
+aS.rvol = 1.2; am = marketAlarms(); if (am.find(a => a.id === "vol:" + aS.name)) errs.push("normal hacimde alarm üretildi");
+aS.rvol = 1; aS.change = -3; aS.close = aS.sma50 * 0.99; aS.change = (aS.close / (aS.sma50 * 1.02) - 1) * 100; am = marketAlarms(); if (!am.find(a => a.id === "sma50dn:" + aS.name)) errs.push("SMA50 aşağı kırılımı alarmı yok");
+Object.assign(aS, aOrig);
+const panicSave = UNI.map(s => s.change); UNI.forEach(s => { if (s.ok && s.tl >= 5) s.change = -4; }); am = marketAlarms(); if (!am.some(a => a.id === "breadth" && a.sev === 3)) errs.push("geniş satış alarmı yok"); if (!am.some(a => a.id === "taban" || a.id === "panic")) errs.push("piyasa panik alarmı yok");
+UNI.forEach((s, i) => { s.change = panicSave[i]; }); stat.alarms = al0;
+const dvS = current.find(s => devil(s, null).veto), dvAlarm = dvS && marketAlarms().find(a => a.id === "veto:" + dvS.name); if (dvS && !dvAlarm) errs.push("Şeytanın Avukatı vetosu alarm üretmedi");
+// --- Arşiv ---
+const dayA = archiveDay("2026-10-13", __data.ts), mdA = archiveMd(dayA, {alarms: [{t: "11:00", sev: 3, text: "deneme alarmı"}], scorecard: "skor kartı", portfolios: "portföy"});
+if (dayA.stocks.length !== current.length) errs.push("arşiv aday sayısı tutarsız");
+for (const k of ["# Borsa Komitesi Seans Raporu", "Baş Denetçi", "Hata Avcısı", "Monte Carlo", "Masa tartışması", "Geri test skor kartı", "Gün içi alarmlar", "deneme alarmı"]) if (mdA.indexOf(k) < 0) errs.push("arşivde eksik bölüm: " + k);
+if (!/^\| .* \| .* \|/m.test(mdA)) errs.push("arşiv özet tablosu yok");
+const lk = current[0], lkRsi = lk.rsi; lk.rsi = lkRsi > 50 ? 5 : 95; fcReset();
+const dayB = archiveDay("2026-10-13", __data.ts), mdB = archiveMd(dayB, {});
+if (!dayB.locks.includes(lk.name) || dayB.audit.indexOf("RED") !== 0) errs.push("kilitli hisse arşivde mühürü bozmadı");
+if ((mdB.match(/### Masa tartışması/g) || []).length !== (mdA.match(/### Masa tartışması/g) || []).length - 1 && committee(lk) && factCheck(lk, committee(lk)).stale === false) errs.push("kilitli hissenin tartışması arşive girdi");
+if (mdB.indexOf("RAPOR KİLİTLİ") < 0) errs.push("arşivde kilit notu yok");
+lk.rsi = lkRsi; fcReset();
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));

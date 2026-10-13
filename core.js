@@ -882,3 +882,216 @@ function scanNearMiss(id, P, limit) {
   out.sort((a, b) => SCAN_RANK[id](a.s, b.s));
   return out.slice(0, limit || 25);
 }
+
+/* =====================================================================================
+   HATA AVCISI (Fact-Checker): komitenin ürettiği rakamları BAĞIMSIZ bir kaynakla çapraz kontrol eder.
+   Not: bu sistemde ajanlar kural tabanlıdır (LLM yok), yani "halüsinasyon" yerine veri/kod hatası olur; ama aynı risk geçerlidir: metindeki rakam, ham veriyle uyuşmalı.
+   Karşılaştırma: anlık tablo (TradingView tarayıcı verisi, s.*) ile TradingView günlük kapanış geçmişi (HIST.closes) yeniden hesaplanır
+   (RSI-14 Wilder, SMA20/50, z-skor, günlük değişim, 1 ay getiri, F/K = fiyat/EPS, 52 hafta aralığı). Ayrıca ajan metinlerindeki rakamlar ("RSI 72", "z-skor 1,4" ...) ham değerle sınanır.
+   Çelişki varsa: rapor KİLİTLENİR (kilit nedeni + düzeltme talebi üretilir; oylar ve sanal portföyler değişmez, yalnızca "yayın" engellenir).
+   Veri sonradan düzelirse kilit kendiliğinden kalkar (her yenilemede yeniden hesaplanır). */
+const FC_TOL = {change: 0.9, rsi: 3.5, sma50: 1.2, sma20: 1.2, p1m: 4, z: 0.35, pe: 0.12, cmp: 0.02};
+let FC_MEMO = new Map();
+function fcReset() { FC_MEMO = new Map(); }
+function fcToday() { try { return new Date(typeof NOW === "number" ? NOW : Date.now()).toLocaleDateString("sv-SE", {timeZone: "Europe/Istanbul"}); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+function rsiWilder(c, n = 14) {
+  if (!c || c.length < n + 2) return null;
+  let g = 0, l = 0;
+  for (let i = 1; i <= n; i++) { const d = c[i] - c[i - 1]; g += Math.max(d, 0); l += Math.max(-d, 0); }
+  g /= n; l /= n;
+  for (let i = n + 1; i < c.length; i++) { const d = c[i] - c[i - 1]; g = (g * (n - 1) + Math.max(d, 0)) / n; l = (l * (n - 1) + Math.max(-d, 0)) / n; }
+  return l === 0 ? 100 : 100 - 100 / (1 + g / l);
+}
+const fcAvg = a => a.reduce((x, y) => x + y, 0) / a.length;
+const fcSd = a => { const m = fcAvg(a); return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+/* Ham seri: geçmişin son çubuğu bugünkü anlık fiyatla aynı çubuk olabilir ya da bir önceki seanstır; iki aday da denenir, en yakını seçilir. */
+function fcRaw(s) {
+  const h = HIST && HIST.stocks && HIST.stocks[s.name]; if (!h || !h.closes || h.closes.length < 60 || !(s.close > 0)) return null;
+  const c = h.closes, today = fcToday(), age = h.last ? (Date.parse(today) - Date.parse(h.last)) / 864e5 : null;
+  if (age != null && age > 6) return {stale: true, age};
+  const base = h.last === today ? c.slice(0, -1) : c;
+  return {stale: false, base, withNow: base.concat([s.close]), n: base.length};
+}
+function fcBest(cands, said, tol, rel) {
+  let best = null;
+  for (const v of cands) { if (v == null || Number.isNaN(v)) continue; const d = rel ? Math.abs(v / said - 1) : Math.abs(v - said); if (best == null || d < best.d) best = {v, d}; }
+  return best && {raw: best.v, diff: best.d, ok: best.d <= tol};
+}
+/* Ham verilerden bağımsız yeniden hesap: {alan: [aday değerler]} */
+function fcRecalc(s) {
+  const raw = fcRaw(s); if (!raw || raw.stale) return raw;
+  const A = raw.withNow, B = raw.base, out = {};
+  const pct = (a, b) => (a / b - 1) * 100;
+  const n = B.length;
+  out.change = [pct(s.close, B[n - 1]), n > 1 ? pct(s.close, B[n - 2]) : null];
+  out.rsi = [rsiWilder(A), rsiWilder(B)];
+  out.sma50 = [fcAvg(A.slice(-50)), fcAvg(B.slice(-50))];
+  out.sma20 = [fcAvg(A.slice(-20)), fcAvg(B.slice(-20))];
+  out.p1m = []; for (const X of [A, B]) for (let k = 19; k <= 24; k++) if (X.length > k + 1) out.p1m.push(pct(s.close, X[X.length - 1 - k])); // TradingView 1 ay = takvim ayı (19-24 işlem günü)
+  const z = X => { const w = X.slice(-20), sd = fcSd(w); return sd > 0 ? (s.close - fcAvg(w)) / sd : null; };
+  out.z20 = [z(A), z(B)];
+  out.hi = Math.max(...A.slice(-250)); out.lo = Math.min(...A.slice(-250));
+  return out;
+}
+/* Ajan metinlerindeki rakam iddiaları: yalnızca kendi hissesine ait, belirsizliği olmayan kalıplar */
+function fcClaims(text) {
+  const num = t => Number(String(t).replace(/\./g, "").replace(",", ".")), out = [];
+  let m;
+  const rx = [["rsi", /RSI (\d{1,3}(?:,\d+)?)/g, 1], ["z20", /Z-skor (-?\d{1,2},\d{1,2})(?! \()/gi, 1], ["z20", /z-skor (-?\d{1,2},\d{1,2}) ve trend/g, 1]];
+  for (const [k, re, g] of rx) { re.lastIndex = 0; while ((m = re.exec(text))) out.push({k, said: num(m[g]), ctx: m[0]}); }
+  return out;
+}
+function fcTexts(s, r) {
+  const L = r.l, t = [];
+  ["buffett", "simons", "livermore", "kellogg", "seytan"].forEach(k => { if (L[k] && L[k].t) t.push([k, L[k].t]); });
+  try { const mt = meeting(s, r); mt.lines.forEach(x => t.push([x.who, x.text])); t.push(["karar", mt.verdict]); } catch (e) { t.push(["hata", "toplantı üretilemedi: " + e.message]); }
+  return t;
+}
+/* Ana kontrol: {locked, issues:[{kind, field, said, raw, msg}], checked, stale} */
+function factCheck(s, r, opts) {
+  const key = s.name + "|" + s.close + "|" + (r ? 1 : 0) + "|" + (opts && opts.tamper ? 1 : 0);
+  if (!(opts && opts.nocache) && FC_MEMO.has(key)) return FC_MEMO.get(key);
+  const issues = [];
+  let checked = 0, stale = false;
+  const rc = fcRecalc(s);
+  const bad = (kind, field, said, raw, msg) => issues.push({kind, field, said, raw, msg});
+  if (rc === null || rc === undefined) stale = true;
+  else if (rc.stale) stale = true;
+  else {
+    const px = s.close;
+    const tests = [
+      ["change", "Günlük değişim %", s.change, FC_TOL.change + 2 * (0.02 / Math.max(px, 0.01)) * 100, false],
+      ["rsi", "RSI (14)", s.rsi, FC_TOL.rsi, false],
+      ["sma50", "SMA50", s.sma50, FC_TOL.sma50 / 100, true],
+      ["sma20", "SMA20", s.sma20, FC_TOL.sma20 / 100, true],
+      ["p1m", "1 ay getiri %", s.p1m, FC_TOL.p1m, false],
+    ];
+    for (const [k, lab, said, tol, rel] of tests) {
+      if (said == null || rc[k] == null) continue; checked++;
+      const b = fcBest(rc[k], said, tol, rel);
+      if (b && !b.ok) bad("veri", k, said, b.raw, `${lab}: tabloda ${fmt(said, 2)}, TradingView kapanış geçmişinden hesap ${fmt(b.raw, 2)}`);
+    }
+    if (s.pe > 0 && s.eps > 0) { checked++; const p = s.close / s.eps; if (Math.abs(p / s.pe - 1) > FC_TOL.pe + 0.03) bad("veri", "pe", s.pe, p, `F/K: tabloda ${fmt(s.pe, 1)}, fiyat/EPS ${fmt(p, 1)}`); }
+    if (s.h52 > 0 && s.l52 > 0) { checked++; if (rc.hi > s.h52 * 1.01 || rc.lo < s.l52 * 0.99) bad("veri", "range", null, null, `52 hafta aralığı (${fmt(s.l52)}–${fmt(s.h52)}) kapanış geçmişini kapsamıyor (${fmt(rc.lo)}–${fmt(rc.hi)})`); }
+    if (r) {
+      for (const [who, text] of fcTexts(s, r)) {
+        for (const c of fcClaims(text)) {
+          const rawv = c.k === "rsi" ? rc.rsi : rc.z20, tol = c.k === "rsi" ? FC_TOL.rsi + 0.6 : FC_TOL.z + 0.1; checked++;
+          const b = fcBest(rawv, c.said, tol, false);
+          if (b && !b.ok) bad("metin", c.k, c.said, b.raw, `${(WHO_TXT[who] || who)} "${c.ctx}" diyor; ham veriden hesap ${fmt(b.raw, 2)}`);
+        }
+      }
+    }
+  }
+  const res = {locked: issues.length > 0, issues, checked, stale, name: s.name};
+  if (res.locked) res.request = `Düzeltme talebi (${s.name}): ${issues.map(i => i.msg).join(" | ")}. Veri yeniden çekilene ya da kaynak düzeltilene kadar rapor yayınlanmaz.`;
+  FC_MEMO.set(key, res);
+  return res;
+}
+const WHO_TXT = {buffett: "Buffett", simons: "Simons", livermore: "Livermore", kellogg: "Kellogg", seytan: "Şeytanın Avukatı", vol: "Volatilite Uzmanı", akilli: "Akıllı Para", psiko: "Psikoloji Analisti", makro: "Makro Uzmanı", karar: "Karar"};
+/* Kilitli hisselerin özet listesi (yalnızca verilen liste) */
+function factSweep(list) { const out = []; for (const s of list) { try { const f = factCheck(s, committee(s)); if (f.locked) out.push(f); } catch (e) { out.push({locked: true, name: s.name, issues: [{kind: "hata", msg: "kontrol çalışmadı: " + e.message}], checked: 0}); } } return out; }
+
+/* =====================================================================================
+   ANLIK ALARM MOTORU: seans içinde her veri yenilemesinde (tarayıcıda dakikada bir, sunucuda 15 dakikada bir) çalışır.
+   Tetikler: (1) ani hacim patlaması, (2) 50 günlük ortalama kırılımı (hisse ve BIST 100), (3) Şeytanın Avukatı'nın vetosu/risk tetiği (aday ve favoriler),
+   (4) piyasa geneli panik / geniş satış / taban yağmuru. sev 3 = "Kritik Piyasa Alarmı" (kırmızı banner + webhook), sev 2 = önemli, sev 1 = bilgi. */
+const ALARM_P = {volX: 3, volTl: 20, volChg: 2, brkTl: 20, panicIdx: 30, medChg: -2.5, tabanN: 8};
+function marketAlarms(extra) {
+  const uni = (typeof UNIVERSE !== "undefined" && UNIVERSE) || [], out = [], watch = new Set([...(extra && extra.watch || []), ...(typeof current !== "undefined" && current ? current.map(x => x.name) : [])]);
+  const add = (id, sev, type, n, text) => out.push({id, sev, type, n: n || null, text});
+  const liq = uni.filter(s => s.ok && s.tl >= ALARM_P.volTl);
+  // 1) hacim patlaması
+  liq.filter(s => s.rvol != null && s.rvol >= ALARM_P.volX && s.change != null && Math.abs(s.change) >= ALARM_P.volChg).sort((a, b) => b.tl - a.tl).slice(0, 10).forEach(s => {
+    const hot = s.rvol >= 5 && s.tl >= 100, w = watch.has(s.name);
+    add("vol:" + s.name, hot || (w && s.change < 0) ? 3 : 2, "hacim", s.name, `${s.name}: ani hacim patlaması: hacim ${fmt(s.rvol, 1)}x (normalin), fiyat ${s.change > 0 ? "+" : ""}${fmt(s.change, 1)}%, işlem ${fmt(s.tl, 0)} mn TL${w ? " (izleme listenizde/aday)" : ""}`);
+  });
+  // 2) SMA50 kırılımı
+  liq.forEach(s => {
+    if (s.change == null || !(s.sma50 > 0)) return;
+    const prev = s.close / (1 + s.change / 100), dn = prev >= s.sma50 && s.close < s.sma50, up = prev <= s.sma50 && s.close > s.sma50, w = watch.has(s.name);
+    if (dn && s.tl >= ALARM_P.brkTl) add("sma50dn:" + s.name, (s.rvol >= 2 && w) ? 3 : 2, "sma50", s.name, `${s.name}: 50 günlük ortalamanın (${fmt(s.sma50)}) ALTINA indi${s.rvol >= 2 ? ", hacimli (" + fmt(s.rvol, 1) + "x)" : ""}: trend desteği kırıldı`);
+    else if (up && w) add("sma50up:" + s.name, 1, "sma50", s.name, `${s.name}: 50 günlük ortalamanın (${fmt(s.sma50)}) üstüne çıktı`);
+  });
+  try {
+    const ix = HIST && HIST.index && HIST.index.closes; if (ix && ix.length > 55) {
+      const n = ix.length, m50 = fcAvg(ix.slice(-50)), last = ix[n - 1], prevM = fcAvg(ix.slice(-51, -1)), prev = ix[n - 2];
+      if (prev >= prevM && last < m50) add("xu100sma50dn", 3, "endeks", null, `BIST 100 (${fmt(last, 0)}) 50 günlük ortalamanın (${fmt(m50, 0)}) altına indi: piyasa geneli trend kırılımı`);
+    }
+  } catch (e) {}
+  // 3) Şeytanın Avukatı: aday/favori hisselerde veto
+  const seen = new Set();
+  [...watch].forEach(nm => { const s = uni.find(x => x.name === nm); if (!s || !s.ok || s.tl < 5 || seen.has(nm)) return; seen.add(nm);
+    try { const d = devil(s, null); if (d.veto) add("veto:" + nm, (typeof committee === "function" && committee(s).score >= 2) ? 3 : 2, "veto", nm, `${nm}: Şeytanın Avukatı vetosu: ${d.severe.join("; ")}. Bu koşulda yeni işlem açılmaz`); } catch (e) {} });
+  // 4) piyasa geneli
+  const cm = crowdMeter(); if (cm && cm.idx <= ALARM_P.panicIdx) add("panic", 3, "piyasa", null, `Piyasa paniği: korku göstergesi ${fmt(cm.idx, 0)}/100 (taban ${cm.tab}, tavan ${cm.tav})`);
+  const chs = uni.filter(s => s.ok && s.tl >= 5 && s.change != null).map(s => s.change).sort((a, b) => a - b);
+  if (chs.length > 50) { const med = chs[Math.floor(chs.length / 2)]; if (med <= ALARM_P.medChg) add("breadth", 3, "piyasa", null, `Geniş satış: hisselerin yarısından fazlası günde ${fmt(med, 1)}% veya daha kötü`); }
+  const tab = uni.filter(s => s.ok && s.tl >= 5 && s.change <= -9.5).length; if (tab >= ALARM_P.tabanN) add("taban", 3, "piyasa", null, `${tab} hisse taban oldu`);
+  return out.sort((a, b) => b.sev - a.sev);
+}
+
+/* =====================================================================================
+   OTOMATİK DENETİM ARŞİVİ: seans kapanışında konseyin kararlarını, efsanelerin oylarını, Monte Carlo sonuçlarını, Baş Denetçi ve Hata Avcısı mührünü
+   okunur bir Markdown raporu olarak üretir (archive.js bunu Arsiv/ klasörüne yazar). Saf biçimlendirme: tarayıcıda da test edilebilir. */
+function auditIssues(cands, results, dataTs) {
+  const issues = [], age = dataTs ? (Date.now() - dataTs * 1000) / 36e5 : null;
+  if (!cands.length) issues.push("Filtreye uyan hisse yok.");
+  if (age != null && age > 24) issues.push(`Veri ${fmt(age, 0)} saat önce çekilmiş.`);
+  const bad = UNIVERSE.filter(s => !s.ok).length; if (bad) issues.push(`${bad} hisse eksik/hatalı veri nedeniyle tarama dışı.`);
+  const noPe = cands.filter(c => c.pe == null || c.pe <= 0).length; if (noPe) issues.push(`${noPe} adayda F/K yok; Buffett değerlemesi bunlarda geçersiz.`);
+  if (!HIST) issues.push("Fiyat geçmişi yüklenmedi."); else {
+    const nohist = cands.filter(c => !HIST.stocks[c.name]).length; if (nohist) issues.push(`${nohist} adayın geçmişi yok.`);
+    const small = cands.filter(c => HIST.stocks[c.name] && HIST.stocks[c.name].bt.n < R.sMinN).length; if (small) issues.push(`${small} adayda geçmiş sinyal sayısı < ${R.sMinN}.`);
+  }
+  if (!Object.keys(NEWS || {}).length) issues.push("Haber verisi yüklenmedi.");
+  if (!RESEARCH) issues.push("Araştırma verisi yüklenmedi.");
+  results.forEach(([s, r]) => {
+    const mc = monteCarlo(s);
+    if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: "GÜÇLÜ ADAY" ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
+    const n = NEWS[s.name]; if (r.score >= 3 && n && n.score <= -2) issues.push(`${s.name}: "GÜÇLÜ ADAY" ama haber akışı olumsuz.`);
+  });
+  return issues;
+}
+function archiveDay(date, dataTs) {
+  const cands = current.slice(), results = cands.map(s => [s, committee(s)]);
+  const issues = auditIssues(cands, results, dataTs), locks = [];
+  const stocks = results.map(([s, r]) => {
+    const f = factCheck(s, r), mc = monteCarlo(s), mt = meeting(s, r), v = r.l;
+    if (f.locked) locks.push(f);
+    return {n: s.name, desc: s.description, sector: s.sector, close: s.close, change: s.change, score: r.score, label: r.label, veto: r.veto, veto2: !!r.veto2, net2: r.net2,
+      votes: {buffett: v.buffett.v, simons: v.simons.v, livermore: v.livermore.v, kellogg: v.kellogg.v, seytan: v.seytan.v, makro: r.k2.makro.v, akilli: r.k2.akilli.v, vol: r.k2.vol.v, psiko: r.k2.psiko.v},
+      mc: mc && {sigma: mc.sigma, days: mc.days, stop: mc.stop, p05: mc.p05, p50: mc.p50, p95: mc.p95, probLoss: mc.probLoss, probStop: mc.probStop},
+      devil: {t: v.seytan.t, plan: v.seytan.plan, severe: v.seytan.severe},
+      lines: mt.lines.map(x => [x.who, x.text]), verdict: mt.verdict, fact: {locked: f.locked, checked: f.checked, stale: f.stale, issues: f.issues.map(i => i.msg), request: f.request || null}};
+  });
+  return {date, regime: REGIME && REGIME.label, a50: REGIME && Math.round(REGIME.a50), stocks, issues, locks: locks.map(l => l.name), audit: locks.length ? "RED (KİLİTLİ RAPOR VAR)" : issues.length ? "ŞARTLI ONAY" : "ONAY"};
+}
+const AR_VOTE = v => v > 0 ? "▲ olumlu" : v < 0 ? "▼ olumsuz" : "• nötr";
+const AR_NAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", seytan: "Şeytanın Avukatı", makro: "Makro & Jeopolitik", akilli: "Akıllı Para", vol: "Opsiyon & Volatilite", psiko: "Piyasa Psikolojisi"};
+function archiveMd(day, extras) {
+  const x = extras || {}, L = [], seal = day.audit.startsWith("RED") ? "🔴" : day.audit === "ONAY" ? "🟢" : "🟡";
+  L.push(`# Borsa Komitesi Seans Raporu: ${day.date}`, "", `> Eğitim amaçlıdır, yatırım tavsiyesi değildir. Otomatik üretilmiştir (kural tabanlı ajanlar; yapay zekâ metni yoktur).`, "");
+  L.push(`**Piyasa rejimi:** ${day.regime || "–"}${day.a50 != null ? ` (hisselerin %${day.a50}'i SMA50 üstünde)` : ""} · **Aday sayısı:** ${day.stocks.length} · **Baş Denetçi mührü:** ${seal} ${day.audit}`, "");
+  L.push("## Mühürler", "", `- **Baş Denetçi:** ${day.audit}${day.issues.length ? "" : " (sorun bulunmadı)"}`);
+  day.issues.forEach(i => L.push(`  - ${i}`));
+  L.push(`- **Hata Avcısı (veri/rakam çapraz kontrolü):** ${day.locks.length ? `🔒 ${day.locks.length} rapor KİLİTLİ: ${day.locks.join(", ")}` : "✅ çelişki bulunmadı; metinlerdeki rakamlar TradingView kapanış geçmişiyle uyumlu"}`, "");
+  if (x.alarms && x.alarms.length) { L.push("## Gün içi alarmlar", ""); x.alarms.slice(0, 25).forEach(a => L.push(`- ${a.t || ""} ${a.sev >= 3 ? "🚨" : "⚠"} ${a.text}`)); L.push(""); }
+  L.push("## Özet tablo", "", "| Hisse | Kapanış | Gün % | Skor | Karar | B | S | L | K | Ş | Yeni uzman net | Stop olasılığı | Mühür |", "|---|---:|---:|---:|---|:-:|:-:|:-:|:-:|:-:|---:|---:|---|");
+  const sym = v => v > 0 ? "+" : v < 0 ? "−" : "0";
+  day.stocks.forEach(s => L.push(`| ${s.n} | ${fmt(s.close)} | ${s.change == null ? "–" : fmt(s.change, 1)} | ${s.score} | ${s.fact.locked ? "🔒 KİLİTLİ" : s.label + (s.veto ? " (VETO)" : "")} | ${sym(s.votes.buffett)} | ${sym(s.votes.simons)} | ${sym(s.votes.livermore)} | ${sym(s.votes.kellogg)} | ${sym(s.votes.seytan)} | ${s.net2} | ${s.mc ? "%" + fmt(s.mc.probStop, 0) : "–"} | ${s.fact.locked ? "🔴" : "🟢"} |`));
+  L.push("");
+  day.stocks.forEach(s => {
+    L.push(`## ${s.n}: ${s.desc || ""}`, "", `Kapanış ${fmt(s.close)} TL · gün ${s.change == null ? "–" : fmt(s.change, 2)}% · sektör ${s.sector || "–"} · komite skoru **${s.score}** (${s.label}${s.veto ? ", Şeytanın Avukatı VETO" : ""})`, "");
+    if (s.fact.locked) { L.push(`> 🔒 **RAPOR KİLİTLİ (Hata Avcısı).** Karar bölümü yayınlanmadı.`, `> ${s.fact.request}`, ""); L.push("### Oylar", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- ${AR_NAME[k]}: ${AR_VOTE(v)}`)); L.push(""); return; }
+    L.push("### Efsanelerin oyları", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- **${AR_NAME[k]}:** ${AR_VOTE(v)}`));
+    L.push("", `Yeni uzmanların net oyu: ${s.net2}${s.veto2 ? " (itiraz vetosu var)" : ""}`, "");
+    if (s.mc) L.push("### Monte Carlo (2000 yol)", "", `${s.mc.days} günlük ufuk, günlük oynaklık %${fmt(s.mc.sigma, 2)}: %5 / medyan / %95 getiri ${fmt(s.mc.p05, 1)}% / ${fmt(s.mc.p50, 1)}% / ${fmt(s.mc.p95, 1)}%; zarar olasılığı %${fmt(s.mc.probLoss, 0)}, %${s.mc.stop} stop'a değme olasılığı **%${fmt(s.mc.probStop, 0)}**.`, "");
+    L.push("### Masa tartışması", ""); s.lines.forEach(([w, t]) => L.push(`- **${(WHO_TXT[w] || w)}:** ${t}`));
+    L.push("", `**${s.verdict}**`, "", `**Şeytanın Avukatı planı:** ${s.devil.plan}`, "", `Hata Avcısı: ${s.fact.stale ? "ham veri eski/yok, kıyaslanamadı" : `${s.fact.checked} rakam kontrol edildi, çelişki yok`} ✅`, "");
+  });
+  if (x.scorecard) { L.push("## Geri test skor kartı (komite kararlarının sonradan ölçümü)", "", x.scorecard, ""); }
+  if (x.portfolios) { L.push("## Sanal portföyler", "", x.portfolios, ""); }
+  L.push("---", "*Bu arşiv her seans kapanışında otomatik üretilir; geçmiş kararların izlenmesi ve geri test skor kartı için kalıcı kayıttır.*");
+  return L.join("\n");
+}
