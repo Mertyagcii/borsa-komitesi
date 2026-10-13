@@ -1,10 +1,10 @@
-"""Makro kalkan araştırması: kur, VIX, petrol, dolar endeksi, altın, faiz ve getiri eğrisi koşulları, BIST 100'ün sonraki 5/20 günlük getirisini öngörüyor mu?
+﻿"""Makro kalkan araştırması: kur, VIX, petrol, dolar endeksi, altın, faiz ve getiri eğrisi koşulları, BIST 100'ün sonraki 5/20 günlük getirisini öngörüyor mu?
 Her koşul için: koşul doğruyken ve yanlışken sonraki getiri, fark, t, yarılar. Birleşik "risk-off sayısı" ile sonraki 20 günlük getiri.
 Veri: tvdatafeed günlük (≈800 gün). Çıktı: macro_research.json (arayüzdeki Makro Kalkan kanıt durumunu buradan okur).
 UYARI: ~3 yıl, tek rejim (yüksek enflasyonlu TL); kanıt değil ipucu."""
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +36,26 @@ def pull():
     return pd.DataFrame(out).sort_index().ffill()
 
 
+def gdelt_series():
+    """GDELT (ücretsiz): Türkiye + çatışma/yaptırım/kriz haberlerinin günlük ortalama tonu ve hacmi (3 yıl). Hız sınırı için yeniden denemeli."""
+    import urllib.parse
+    import urllib.request
+    q = urllib.parse.quote("Turkey (war OR conflict OR sanctions OR attack OR crisis)")
+    end = datetime.now(timezone.utc); rng = f"&startdatetime=20230801000000&enddatetime={end.strftime('%Y%m%d')}235959"
+    out = {}
+    for mode, key in (("timelinetone", "gtone"), ("timelinevolraw", "gvol")):
+        for attempt in range(5):
+            try:
+                req = urllib.request.Request(f"https://api.gdeltproject.org/api/v2/doc/doc?query={q}&mode={mode}&format=json{rng}", headers={"User-Agent": "Mozilla/5.0 (compatible; BorsaKomitesi/1.0)"})
+                j = json.loads(urllib.request.urlopen(req, timeout=60).read().decode("utf-8", "replace"))
+                out[key] = pd.Series({pd.to_datetime(x["date"][:8]): float(x["value"]) for x in j["timeline"][0]["data"]})
+                break
+            except Exception:
+                time.sleep(12 + 6 * attempt)
+        time.sleep(6)
+    return pd.DataFrame(out) if len(out) == 2 else None
+
+
 def conditions(d):
     c = {}
     c["usdtry_5g_artis_3"] = d.usdtry.pct_change(5) > 0.03
@@ -51,11 +71,19 @@ def conditions(d):
     c["tr10y_20g_dusus_1.5pp"] = (d.tr10y - d.tr10y.shift(20)) < -1.5
     c["egri_ters (2y > 10y)"] = d.tr2y > d.tr10y
     c["abd10y_20g_artis_0.3pp"] = (d.us10y - d.us10y.shift(20)) > 0.3
+    if "gtone" in d:
+        z = lambda s: (s - s.rolling(30).mean()) / s.rolling(30).std()
+        c["gdelt_ton_sok (z30 <= -1.5)"] = z(d.gtone) <= -1.5
+        c["gdelt_hacim_sok (z30 >= 1.5)"] = z(d.gvol) >= 1.5
+        c["gdelt_ton_ve_hacim_sok"] = (z(d.gtone) <= -1.0) & (z(d.gvol) >= 1.0)
     return c
 
 
 def main():
     d = pull()
+    g = gdelt_series()
+    if g is not None:
+        d = d.join(g, how="left"); d[["gtone", "gvol"]] = d[["gtone", "gvol"]].ffill()
     d = d.dropna(subset=["xu100"])
     fwd = {h: d.xu100.shift(-h) / d.xu100 - 1 for h in (5, 20)}
     res = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "from": str(d.index[0].date()), "to": str(d.index[-1].date()), "n": int(len(d)), "conds": {}, "last": {}}
@@ -95,3 +123,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

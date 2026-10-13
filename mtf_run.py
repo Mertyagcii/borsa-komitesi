@@ -43,6 +43,11 @@ try:  # yeni uzmanların vekil sinyalleri ve makro kalkan kanıtı
     kurul2_research.main()
 except Exception as e:
     print("kurul2/makro araştırması başarısız:", e)
+try:
+    import viop_research
+    viop_research.main()
+except Exception as e:
+    print("viop araştırması başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward

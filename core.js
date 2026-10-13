@@ -471,6 +471,7 @@ function devil(s, others) {
    (z-skor > 2,5) ortalamaya DÖNMEDİ (momentum sürdü); makro risk-off bayrakları BIST'in sonraki getirisini düşürmedi (nominal TL piyasasında kur şoku dönemlerinde hisseler yükseldi).
    Yeni uzmanların oyları mevcut komite skoruna KARIŞMAZ (sanal portföylerin kaydı bozulmasın); net oy ve itiraz vetosu ayrıca gösterilir. */
 let KUR2 = null, MACRO_R = null; // kurul2_research.json, macro_research.json (tarayıcı yükler)
+let VIOP = null, VIOP_R = null, NMOOD = null, GEO = null, AKD_USER = null; // viop.json (vadeli prim), viop_research.json, newsmood.json (Google Haberler), geo.json (GDELT), kullanıcıya özel AKD/takas özeti
 const k2sig = id => KUR2 && KUR2.signals ? KUR2.signals[id] : null;
 const k2ev = id => { const e = k2sig(id); if (!e || !e.h10) return "kanıt yok"; return `${e.verdict}: 10g ${e.h10.excess > 0 ? "+" : ""}${fmt(e.h10.excess, 2)}% (t ${fmt(e.h10.t, 1)}, n ${e.h10.n})`; };
 const k2bad = id => { const e = k2sig(id); return !!(e && e.verdict === "ters kanıt"); };   // sinyalin tersi doğru çıktı
@@ -489,7 +490,11 @@ function macroShield() {
   const count = items.filter(x => x.on).length, inverted = has("rf2") && has("rf10") && m.rf2 > m.rf10;
   const level = count >= 4 ? "Şiddetli" : count >= 3 ? "Yüksek" : count >= 2 ? "Orta" : "Düşük";
   const cn = MACRO_R && MACRO_R.count ? MACRO_R.count[String(Math.min(count, 3))] : null;
-  const geo = macroNewsHeat();
+  const geo = macroNewsHeat(), gn = GEO && GEO.now ? GEO.now : null, nj = NMOOD && NMOOD.market && NMOOD.market.jeo ? NMOOD.market.jeo : null;
+  geo.gdelt = gn; geo.news = nj;
+  const gc = MACRO_R && MACRO_R.conds ? MACRO_R.conds["gdelt_ton_ve_hacim_sok"] : null;
+  geo.evidence = gc && gc.diff20 != null ? `Geçmişte GDELT ton+hacim şoku olduğunda BIST 100 sonraki 20 günde ${gc.on20 > 0 ? "+" : ""}${fmt(gc.on20, 1)}% (olmadığında ${fmt(gc.off20, 1)}%), t ${fmt(gc.t20, 1)}.` : "Jeopolitik ton şokunun geçmiş testi yok/yetersiz.";
+  geo.shock = !!(gn && gn.tone_z30 != null && gn.tone_z30 <= -1 && gn.vol_z30 != null && gn.vol_z30 >= 1);
   return {items, count, level, inverted, live: !!m.date, date: m.date || null, geo, evidence: cn ? `Geçmişte (${MACRO_R.from} → ${MACRO_R.to}) ${count >= 3 ? "3+" : count} bayrak olduğunda BIST 100 sonraki 20 günde ortalama ${cn.ret20 > 0 ? "+" : ""}${fmt(cn.ret20, 1)}% getirdi (n ${cn.n}, isabet %${fmt(cn.hit, 0)}).` : "Geçmiş test verisi yüklenmedi."};
 }
 /* Jeopolitik: veri kaynağı yok; likit hisse haberlerinde son 3 günde jeopolitik/makro anahtar kelime yoğunluğu (zayıf vekil) */
@@ -558,7 +563,19 @@ function akilliP(s) {
   const dist = rv != null && rv >= 2 && ch != null && Math.abs(ch) <= 1.5 && cmf != null && cmf < -0.1, acc = rv != null && rv >= 2 && ch != null && Math.abs(ch) <= 1.5 && cmf != null && cmf > 0.1;
   const strong = cmf != null && cmf > 0.15 && tr, weak = cmf != null && cmf < -0.15;
   let v = 0; if (strong && k2good("cmf_guclu")) v = 1; else if ((weak && k2bad("cmf_zayif")) || (dist && k2bad("dagitim"))) v = -1;
+  // VİOP vadeli primi (taşıma maliyeti düşülmüş fazla prim): vadelide alıcı/satıcı iştahı. Oy yalnızca geçmiş testte (viop_research.json) kanıtlıysa.
+  const vp = VIOP && VIOP.stocks ? VIOP.stocks[s.name] : null, vf = VIOP_R && VIOP_R.factors ? VIOP_R.factors.fazla_prim : null, vst = VIOP_R && VIOP_R.stats;
+  let viopTxt = "", viopV = 0;
+  if (vp) {
+    const hi = vst && vp.excess >= vst.p90, lo = vst && vp.excess <= vst.p10;
+    if (vf && vf.verdict === "kanıt var") viopV = hi ? 1 : lo ? -1 : 0; else if (vf && vf.verdict === "ters kanıt") viopV = hi ? -1 : lo ? 1 : 0;
+    viopTxt = `Vadelide fazla prim %${fmt(vp.excess, 2)} (ham prim %${fmt(vp.basis, 2)}, vade ${VIOP.expiry}; hisse vadeli hacmi ${fmt(vp.vol_ratio, 1)}x)`;
+  }
+  const au = AKD_USER ? AKD_USER[s.name] : null; // kullanıcı CSV (Matriks vb.): yalnızca bilgi/teyit, oyu değiştirmez (doğrulanamaz)
+  if (viopV !== 0 && v === 0) v = viopV; else if (viopV < 0 && v > 0) v = 0; // vadeli olumsuz ise kuvvetli CMF oyunu nötrle
   const checks = [
+    chk(vp ? (viopV > 0 ? true : viopV < 0 ? false : null) : null, "Vadeli (VİOP) pozisyonlanma: taşıma maliyeti düşülmüş fazla prim", vp ? `${viopTxt} · ${vf ? vf.verdict : "test yok"}` : "bu hissenin vadelisi yok"),
+    chk(au ? (au.bal > 0.05 ? true : au.bal < -0.05 ? false : null) : null, "Kullanıcı AKD verisi: ilk 5 alıcı − ilk 5 satıcı dengesi (toplam hacme oranı)", au ? `${au.d}: %${fmt(au.bal * 100, 1)} (alıcı yoğunlaşması %${fmt(au.conc * 100, 1)})${au.foreign != null ? ", yabancı oranı %" + fmt(au.foreign, 1) : ""} · kullanıcı verisi, doğrulanamadı` : "içe aktarılmadı (Özel Veri sayfası)"),
     chk(cmf == null ? null : cmf > 0, "Para akışı (CMF günlük) pozitif: alıcı baskın", cmf == null ? "–" : fmt(cmf, 2)),
     chk(cmfw == null ? null : cmfw > 0, "Haftalık para akışı pozitif: birikim sürüyor", cmfw == null ? "–" : fmt(cmfw, 2)),
     chk(strong ? true : null, "Güçlü para girişi: CMF > 0,15 ve yükselen trend", strong ? "evet · " + k2ev("cmf_guclu") : "hayır"),
@@ -567,12 +584,12 @@ function akilliP(s) {
     chk(acc ? true : null, "Emilim (birikim): yüksek hacim, fiyat yerinde, CMF pozitif", acc ? "evet · " + k2ev("birikim") + " (kanıtsız)" : "hayır"),
     chk(vt == null ? null : vt >= 1, "Hacim eğilimi (10g/60g) ≥ 1: ilgi artıyor", vt == null ? "–" : fmt(vt, 2) + "x"),
     chk(s.ff == null ? null : s.ff >= 20, "Halka açıklık ≥ %20: tahtayı birkaç elin oynatması zor", s.ff == null ? "–" : "%" + fmt(s.ff, 0)),
-    chk(null, "Aracı kurum dağılımı, takas, kurumsal fon hareketi: veri kaynağı yok", "vekil göstergelerle çalışıyor")];
-  const t = v > 0 ? `Tahtanın izini sürüyorum: CMF ${fmt(cmf, 2)}${cmfw != null ? ` (haftalık ${fmt(cmfw, 2)})` : ""} ve trend yukarı; para içeri giriyor. Geçmişte bu yapı piyasayı geçti (${k2ev("cmf_guclu")}). Kimin aldığını (aracı kurum/takas) göremiyorum, yalnızca parasal akışın yönünü.`
+    chk(null, "Aracı kurum dağılımı/takas (herkese açık): Borsa İstanbul lisanslı veri, ücretsiz kaynak yok", au ? "kullanıcı CSV'si kullanılıyor" : "vekiller: CMF, hacim, VİOP primi")];
+  const t = (au && au.bal <= -0.08 ? `Kendi AKD verinizde ilk 5 satıcı baskın (%${fmt(au.bal * 100, 1)}): ` : au && au.bal >= 0.08 ? `Kendi AKD verinizde ilk 5 alıcı baskın (+%${fmt(au.bal * 100, 1)}): ` : "") + (viopV !== 0 ? `${viopTxt}: geçmişte bu uç ${viopV > 0 ? "olumlu" : "olumsuz"} sonuç verdi. ` : "") + (v > 0 ? `Tahtanın izini sürüyorum: CMF ${fmt(cmf, 2)}${cmfw != null ? ` (haftalık ${fmt(cmfw, 2)})` : ""} ve trend yukarı; para içeri giriyor. Geçmişte bu yapı piyasayı geçti (${k2ev("cmf_guclu")}). Kimin aldığını (aracı kurum/takas) göremiyorum, yalnızca parasal akışın yönünü.`
     : v < 0 ? `Tahta bana ${dist ? "dağıtım" : "para çıkışı"} gösteriyor: ${dist ? "hacim yüksek ama fiyat yerinde, CMF negatif: biri sessizce mal veriyor" : `CMF ${fmt(cmf, 2)}`}. Geçmişte bu sinyal olumsuz çıktı (${k2ev(dist ? "dagitim" : "cmf_zayif")}). Büyük oyuncunun kim olduğunu bilmiyorum ama yönü çıkışa bakıyor.`
     : acc ? `Hacim yüksek, fiyat yerinde, CMF pozitif: emilim izi var. Ama dürüst olayım, bu "birikim" sinyali geçmişte kanıtlanmadı (${k2ev("birikim")}); izleme listesine alırım.`
-    : "Tahtada belirgin bir izi yok: ne güçlü bir para girişi ne de dağıtım var. Gerçek takas verisi olmadan daha fazlasını söylemem.";
-  return {v, score: tally(checks).score, checks, t, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
+    : "Tahtada belirgin bir izi yok: ne güçlü bir para girişi ne de dağıtım var. Gerçek takas verisi olmadan daha fazlasını söylemem.");
+  return {v, score: tally(checks).score, checks, t, vp, viopV, au, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
 }
 /* Piyasa coşku/korku göstergesi (tüm piyasa): sosyal medya yerine fiyat davranışından */
 function crowdMeter() {
@@ -588,7 +605,7 @@ function psikoP(s) {
   if (c) { const incl = h.last === today, n = c.length, yest = incl ? c[n - 2] : c[n - 1], prior = incl ? c.slice(n - 22, n - 2) : c.slice(n - 21, n - 1); brkUp = yest > Math.max(...prior); brkDn = yest < Math.min(...prior); }
   const trapBull = brkUp === true && s.change <= -2 && s.rvol >= 1.5, trapBear = brkDn === true && s.change >= 2 && s.rvol >= 1.5;
   const fomoStrict = s.rsi > 78 && s.p1m > 25 && s.rvol >= 2, fomo = s.sma20 > 0 && (s.close / s.sma20 - 1) > 0.15 && s.rsi > 75;
-  const panic = s.change <= -6 && s.rvol >= 2.5 && s.rsi < 30, cm = crowdMeter();
+  const panic = s.change <= -6 && s.rvol >= 2.5 && s.rsi < 30, cm = crowdMeter(), nm = NMOOD && NMOOD.stocks ? NMOOD.stocks[s.name] : null;
   let v = 0; if ((panic && k2bad("panik")) || (trapBear && k2bad("ayi_tuzagi"))) v = -1;
   const checks = [
     chk(fomoStrict ? false : null, "FOMO: RSI > 78, 1 ayda > %25, hacim ≥ 2x", fomoStrict ? "evet · " + k2ev("fomo") : "hayır"),
@@ -597,13 +614,14 @@ function psikoP(s) {
     chk(trapBull ? false : null, "Boğa tuzağı: dün 20g zirve kırılımı, bugün ≤ −%2 ve hacimli", brkUp == null ? "geçmiş yok" : trapBull ? "evet · " + k2ev("boga_tuzagi") : "hayır"),
     chk(trapBear ? false : null, "Ayı tuzağı sıçraması: dün 20g dip kırılımı, bugün ≥ +%2 ve hacimli", brkDn == null ? "geçmiş yok" : trapBear ? "evet · " + k2ev("ayi_tuzagi") : "hayır"),
     chk(cm ? !(cm.idx >= 70 || cm.idx <= 30) : null, "Piyasa geneli coşku/korku dengeli", cm ? `${cm.label} (${fmt(cm.idx, 0)}/100; tavan ${cm.tav}, taban ${cm.tab})` : "–"),
-    chk(null, "Sosyal medya ve yatırımcı forumları: veri kaynağı yok", "fiyat davranışı vekili kullanıldı")];
+    chk(nm ? (nm.attn >= 3 && s.rsi > 70 ? false : null) : null, "Haber ilgisi (Google Haberler, son 24 saat / 7 gün ortalaması): ilgi patlaması + yüksek RSI = haber coşkusu", nm ? `${nm.n1} haber (7g: ${nm.n7}), ilgi ${fmt(nm.attn, 1)}x, ton ${nm.tone7 > 0 ? "+" : ""}${fmt(nm.tone7, 2)} · oy yok: geçmiş doğrulaması birikiyor` : "veri yok"),
+    chk(null, "Sosyal medya ve yatırımcı forumları: ücretsiz/güvenilir kaynak yok", "fiyat davranışı ve haber ilgisi vekil")];
   const t = panic ? `Panik: hisse günde %${fmt(s.change, 1)} düştü, hacim ${fmt(s.rvol, 1)}x, RSI ${fmt(s.rsi, 0)}. Herkes çıkıyor, "dip" diye atlamak cazip. Verim ne diyor? Geçmişte böyle panikten sonra hisse 10 günde ortalama ${k2sig("panik") && k2sig("panik").h10 ? fmt(k2sig("panik").h10.excess, 1) : "?"}% daha geride kaldı: panik çoğu zaman devam ediyor. Düşen bıçağı tutmayın.`
     : trapBear ? `Dikkat, "ayı tuzağı" sıçraması: dün 20 günlük dibi kırdı, bugün %${fmt(s.change, 1)} sıçradı. Rahatlama gibi görünüyor ama geçmişte bu tür sıçramalar tutmadı (${k2ev("ayi_tuzagi")}). Teyit gelmeden güvenmeyin.`
     : trapBull ? `Olası boğa tuzağı: dün 20 günlük zirveyi kırdı, bugün %${fmt(s.change, 1)} geri verdi ve hacimli. Dürüst olayım: geçmişte bu tek başına anlamlı bir sinyal çıkmadı (${k2ev("boga_tuzagi")}); ama kırılımın tutmadığını not ediyorum, Livermore'un pivotu bu yüzden bozuldu.`
     : fomoStrict || fomo ? `Coşku var (RSI ${fmt(s.rsi, 0)}, SMA20'nin %${fmt((s.close / s.sma20 - 1) * 100, 0)} üstü). "Herkes alıyor" cümlesi beni ürkütür, ama veriye bakınca: BIST'te bu kadar coşkulu hisseler geçmişte çoğu zaman yükselmeye devam etti (${k2ev("fomo_kismi")}). Yani coşku tek başına satış nedeni değil; sadece geç kalmış alıcı olmayın.`
     : `Kalabalık davranışında uç bir işaret görmüyorum: ne FOMO ne panik ne de tuzak. Piyasa geneli: ${cm ? cm.label.toLowerCase() : "–"}. (Sosyal medyayı tarayamıyorum; yalnızca fiyat ve hacim davranışına bakıyorum.)`;
-  return {v, score: tally(checks).score, checks, t, plan: v < 0 ? "Teyit gelene kadar bekleyin; tuzak ya da panik sürüyorsa yeni alım yapmayın." : "Kalabalığa karşı çıkmak için bir neden yok; kendi planınıza sadık kalın.", panic, trapBull, trapBear, fomo: fomoStrict || fomo, crowd: cm};
+  return {v, score: tally(checks).score, checks, t, nm, plan: v < 0 ? "Teyit gelene kadar bekleyin; tuzak ya da panik sürüyorsa yeni alım yapmayın." : "Kalabalığa karşı çıkmak için bir neden yok; kendi planınıza sadık kalın.", panic, trapBull, trapBear, fomo: fomoStrict || fomo, crowd: cm};
 }
 const PERSONAS2_KEYS = ["makro", "akilli", "vol", "psiko"];
 function committee(s) {

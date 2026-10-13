@@ -55,6 +55,14 @@ R.makroVeto = 0; if (macroP(any).veto) errs.push("makro veto kapalıyken veto ve
 R.makroVeto = 1; R.makroN = 4; if (!macroP(any).veto || !committee(any).veto2) errs.push("makro veto açıkken veto vermedi"); R.makroVeto = 0;
 HIST.macro = {date: "2026-10-12", rf10: 32, rf2: 30, usdtry_d5: 0.2, vix: 14, brent_d20: 1, dxy_d20: 0, gold_d20: 0, rf10_d20: 0, us10y_d20: 0}; if (macroShield().count !== 0) errs.push("makro sakin sentetik 0 olmalı");
 HIST.macro = savedMacro;
+// dış veriler (VİOP, kullanıcı AKD) sentetik
+VIOP = {expiry: "2026-10-30", stocks: {}}; VIOP.stocks[any.name] = {fut: 100, basis: 4, excess: 2, vol: 1000, vol_ratio: 1.2};
+VIOP_R = {factors: {fazla_prim: {verdict: "kanıt var"}}, stats: {p10: -1, p90: 1}};
+let ap0 = akilliP(any); if (!ap0.checks.some(c => c.t.indexOf("VİOP") >= 0) || ap0.viopV !== 1) errs.push("vadeli prim oyu: " + ap0.viopV);
+VIOP_R.factors.fazla_prim.verdict = "belirsiz"; ap0 = akilliP(any); if (ap0.viopV !== 0) errs.push("belirsiz vadeli oy vermemeli");
+VIOP = null; VIOP_R = null;
+AKD_USER = {}; AKD_USER[any.name] = {d: "2026-10-12", bal: -0.12, conc: 0.05, foreign: 31, n: 1}; ap0 = akilliP(any); if (!ap0.checks.some(c => c.t.indexOf("Kullanıcı AKD") >= 0 && c.s === -1)) errs.push("AKD olumsuz işaretlenmedi");
+AKD_USER = null;
 // psikoloji: panik sentetik
 const fake = Object.assign({}, any, {change: -8, rvol: 3.2, rsi: 22, name: "SENTETIK"}); const pp = psikoP(fake); if (!pp.panic) errs.push("panik tespit edilmedi"); if (pp.v !== -1 && KUR2.signals.panik.verdict === "ters kanıt") errs.push("panik oyu −1 olmalı");
 // akıllı para: dağıtım sentetik

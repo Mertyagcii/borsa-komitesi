@@ -1,4 +1,4 @@
-/* İşlevsel testler (tarayıcı içinde çalışır; sonuç <html data-test="{...}"> özniteliğine yazılır).
+﻿/* İşlevsel testler (tarayıcı içinde çalışır; sonuç <html data-test="{...}"> özniteliğine yazılır).
    Yalnızca ASCII alt dizgeler aranır (kodlama bağımsız). run_tests.py bu dosyayı sayfaya enjekte eder. */
 window.onerror = function (m, u, l) { document.documentElement.setAttribute("data-err", m + " @" + l); };
 try { localStorage.clear(); localStorage.setItem("tourDone", "true"); } catch (e) {}
@@ -82,6 +82,16 @@ setTimeout(async function () {
     var cmr = crowdMeter(); ok("kalabalik_olcer", !!cmr && cmr.idx >= 0 && cmr.idx <= 100);
     var mtgOk = false; UNIVERSE.filter(function (s) { return s.ok && s.tl >= 20; }).slice(0, 120).forEach(function (s) { var mm = meeting(s, committee(s)); if (mm.lines.some(function (x) { return ["makro", "akilli", "vol", "psiko"].indexOf(x.who) >= 0; })) mtgOk = true; }); ok("kurul2_toplantida_konusur", mtgOk);
     ok("kurul2_alerts", Array.isArray(computeAlerts()));
+    /* ---- Ozel veri (AKD/takas CSV), dis veri kaynaklari ---- */
+    var csv = "tarih;hisse;kurum;alış;satış;net\n2026-10-12;THYAO;A;1.200.000;300.000;900.000\n2026-10-12;THYAO;B;100.000;800.000;-700.000\n2026-10-12;THYAO;C;50.000;40.000;10.000\n2026-10-12;GARAN;A;10;500;-490";
+    var pr = akdParse(csv); ok("akd_ayristirma", !pr.error && pr.nstock === 2 && pr.stocks.THYAO["2026-10-12"].bal > 0 && pr.stocks.GARAN["2026-10-12"].bal < 0);
+    ok("akd_virgul_ayraci", !akdParse("hisse,tarih,yabancı\nTHYAO,2026-10-12,\"31,5\"").error && akdParse("hisse,tarih,yabancı\nTHYAO,2026-10-12,\"31,5\"").stocks.THYAO["2026-10-12"].foreign === 31.5);
+    ok("akd_hisse_sutunu_yoksa_hata", !!akdParse("a;b\n1;2").error);
+    store.set("akdUser", {}); ok("akd_kaydet", ovSave(pr) === true && AKD_USER.THYAO && Math.abs(AKD_USER.THYAO.bal - (910000 - 700000) / 1350000) < 0.01);
+    var thy = UNIVERSE.find(function (s) { return s.name === "THYAO"; }) || UNIVERSE[0]; AKD_USER[thy.name] = AKD_USER.THYAO || { d: "x", bal: 0.1, conc: 0.1, foreign: null, n: 1 };
+    ok("akd_kisi_analizde", akilliP(thy).checks.some(function (c) { return c.t.indexOf("Kullanıcı AKD") >= 0; })); show("ozelveri"); ok("ozel_veri_sayfasi", $("ovView").innerHTML.indexOf("Takas") >= 0 && $("ovView").innerHTML.indexOf("lisans") >= 0);
+    store.set("akdUser", {}); AKD_USER = {};
+    ok("dis_veri_yuklu_ya_da_yok", VIOP === null || typeof VIOP.stocks === "object"); show("dashboard"); ok("makro_jeopolitik_satiri", $("macroCard").innerHTML.indexOf("Jeopolitik") >= 0);
     /* ---- Paylasim, tarama karnesi, sektor akisi, lot simulasyonu ---- */
     var sh = { v: 1, zf: [{ id: "zz1", name: "Paylasim testi", conds: [{ f: "mtf_w", op: ">=", v: 80 }], sort: { f: "mtf_w", dir: -1 } }], sp: { haftalik: { wMin: 85 } } };
     var rt = shareDecode(shareEncode(sh)); ok("paylas_gidis_donus", JSON.stringify(rt) === JSON.stringify(sh));
