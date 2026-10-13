@@ -198,6 +198,9 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
 .factok{font-size:12px;color:var(--mute);margin:4px 0}
+.dbt{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0}.dbt i{display:block}.dbt .a{background:var(--up)}.dbt .t{background:var(--mute);opacity:.5}.dbt .s{background:var(--down)}
+.dbline{padding:3px 0;font-size:13px}.dbline.bull{border-left:3px solid var(--up);padding-left:8px}.dbline.bear{border-left:3px solid var(--down);padding-left:8px;margin-left:14px}
+.peert td,.peert th{padding:3px 8px;font-size:12.5px;text-align:right}.peert td:first-child,.peert th:first-child{text-align:left}
 .mdv{line-height:1.55;font-size:14px}.mdv h1{font-size:20px}.mdv h2{font-size:16px;margin-top:18px;border-bottom:1px solid var(--line);padding-bottom:3px}.mdv h3{font-size:14px}
 .mdv table{border-collapse:collapse;font-size:12.5px;margin:8px 0}.mdv td,.mdv th{border:1px solid var(--line);padding:3px 7px}.mdv blockquote{border-left:3px solid var(--warn);margin:8px 0;padding:2px 10px;color:var(--mute)}
 @media print{
@@ -496,6 +499,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <li><b>Veri:</b> BIST fiyatları TradingView'den, 15 dakikaya kadar gecikmeli gelir ve 15 dakikada bir yenilenir. Fiyat geçmişi günde bir kez güncellenir.</li>
           <li><b>Efsaneler:</b> Buffett (değer), Simons (istatistik + geri test), Livermore (trend), Kellogg (momentum) ve Şeytanın Avukatı (risk) kurallara göre oy verir. Oylar toplanır: ≥3 GÜÇLÜ ADAY, ≥1 İZLE, 0 NÖTR, negatif UZAK DUR.</li>
           <li><b>Baş Denetçi:</b> Veri eksiklerini, eski veriyi, küçük örneklemi ve komite içi çelişkileri kontrol eder.</li>
+          <li><b>Hafıza ve öğrenme:</b> Efsaneler masaya oturunca aynı hissedeki geçmiş oylarına (picks.json ve Arsiv/ kayıtları) bakar: "geçen hafta olumluydum, bugün olumsuzum çünkü ..." diye gerekçelendirir; fiyat ve skor değişmediği halde oyu çevirmek "eşik titremesi" sayılır ve denetçiye bildirilir. Her efsanenin isabeti 10 iş günü sonra piyasa ortalamasına göre ölçülür; en az 30 ölçülmüş karardan sonra ağırlığı 0,6–1,4 aralığında ayarlanır (öncesinde eşit ağırlık).</li>
+          <li><b>Boğa vs Ayı:</b> 9 oy sahibi boğa/ayı kampına ayrılır, her kamp kontrol listesinden tez kurar, karşı kamp aynı konuda (trend, değer, para akışı, risk, momentum) veriyle yanıt verir; yanıtsız kalan tezler "çürütülemedi" sayılır. Sonuç %Al / %Tut / %Sat ağırlıklı karar skorudur (komite skorunu ve sanal portföyleri değiştirmez).</li>
+          <li><b>Sektör kıyası:</b> Hissenin hareketi piyasa, sektör ve hisseye özel parçalara ayrılır (sektör medyanı ve en büyük 5 rakip); efsaneler düşüşün/yükselişin sektörel mi hisseye özel mi olduğunu söyleyerek yorum yapar.</li>
           <li><b>Hata Avcısı:</b> Ajanların metinlerindeki ve tablodaki rakamları (RSI, SMA, günlük değişim, 1 ay getiri, F/K, 52 hafta aralığı, z-skor) TradingView kapanış geçmişinden bağımsız yeniden hesaplar. Çelişki varsa o hissenin raporu KİLİTLENİR ve düzeltme talebi yazılır; veri düzelince kilit kalkar. Ajanlar kural tabanlıdır (yapay zekâ metni yok); bu kontrol veri/kod hatasını yakalar.</li>
           <li><b>Alarm motoru:</b> Seans içinde ani hacim patlaması, 50 günlük ortalama kırılımı (hisse ve BIST 100), Şeytanın Avukatı vetosu ve piyasa paniği izlenir; kritik olanlar kırmızı "Kritik Piyasa Alarmı" bandında görünür, sunucu tarafında webhook/Telegram'a gider.</li>
           <li><b>Arşiv:</b> Her seans kapanışında konsey tartışması, oylar, Monte Carlo, Baş Denetçi ve Hata Avcısı mührü Arsiv/ klasörüne Markdown olarak kaydedilir (Arşiv sayfasından okunur, PDF olarak kaydedilir).</li>
@@ -1451,6 +1457,26 @@ document.addEventListener("click", e => {
   store.set("alertAck", ack); updateAlertBadge(); renderAlerts();
 });
 
+
+
+/* ---------- Boğa vs Ayı münazarası ve Sektör/Rakip kıyası ---------- */
+function debateHtml(s, r) {
+  const d = debate(s, r), nm = k => (WHO_TXT[k] || k);
+  return `<details class="meet" open><summary>⚔ Boğa vs Ayı münazarası · ağırlıklı karar ${esc(d.text)}</summary>
+    <div class="dbt" title="${esc(d.text)}"><i class="a" style="width:${d.al}%"></i><i class="t" style="width:${d.tut}%"></i><i class="s" style="width:${d.sat}%"></i></div>
+    <div><b>${esc(d.label)}</b> <span class="mute" style="font-size:12px">· 🐂 ${d.bull.n} boğa oyu, 🐻 ${d.bear.n} ayı oyu · çürütülemeyen tez: boğa ${d.bull.unref}, ayı ${d.bear.unref}${d.bull.appointed ? " · boğa tarafı resen atandı (olumlu oy yok)" : ""}${d.bear.appointed ? " · ayı tarafı resen atandı (olumsuz oy yok)" : ""}</span></div>
+    ${d.lines.map(x => `<div class="dbline ${x.side}">${x.side === "bull" ? "🐂" : "🐻"} <b>${esc(nm(x.who))}:</b> ${esc(x.text)}</div>`).join("")}
+    <p class="note">Oylar efsanenin geçmiş isabetine göre ağırlıklandırılır (${d.learned ? "öğrenilmiş ağırlıklar kullanıldı" : "yeterli sonuç birikmediği için eşit ağırlık: en az 30 ölçülmüş karar gerekir"}). Bu bir tahmin değil, mevcut oyların özetidir; eğitim amaçlıdır.</p></details>`;
+}
+function peerHtml(s) {
+  const p = peerView(s); if (!p) return "";
+  const f = v => v == null ? "–" : (v > 0 ? "+" : "") + fmt(v, 1), cl = v => v == null ? "" : v > 0 ? "up" : v < 0 ? "down" : "";
+  return `<details class="meet"><summary>🏭 Sektör ve rakip kıyası · ${esc(trSector(p.sector))} (${p.n} hisse)${p.lead ? " · " + esc(p.lead.label) + ": " + esc(p.lead.type) : ""}</summary>
+    <table class="peert"><tr><th>Dönem</th><th>Hisse %</th><th>Sektör medyanı %</th><th>Piyasa medyanı %</th><th>Fark (puan)</th><th>Hareket</th></tr>
+    ${p.rows.map(x => `<tr><td>${x.label}</td><td class="${cl(x.st)}">${f(x.st)}</td><td class="${cl(x.sec)}">${f(x.sec)}</td><td class="${cl(x.mkt)}">${f(x.mkt)}</td><td class="${cl(x.rel)}"><b>${f(x.rel)}</b></td><td>${x.type ? esc(x.type) : "–"}</td></tr>`).join("")}</table>
+    <p class="note">Sektör içi göreceli güç sırası <b>${p.rank || "–"}/${p.rankOf}</b>${p.pePrem != null ? ` · F/K sektör medyanının %${fmt(Math.abs(p.pePrem), 0)} ${p.pePrem > 0 ? "üstünde" : "altında"}` : ""}. "Sektörel": hisse sektörü izliyor; "hisseye özel": sektör sakin ya da ters yönde. Sektör medyanı hissenin kendisini içermez.</p>
+    <div style="line-height:2">${p.peers.map(q => `<span class="pill" data-x="${esc(q.n)}">${esc(q.n)}</span> <span class="mute" style="font-size:12px">gün ${f(q.change)}% · 1 ay ${f(q.p1m)}%${q.rs != null ? " · RS " + fmt(q.rs, 0) : ""}${q.pe != null ? " · F/K " + fmt(q.pe, 1) : ""}</span>`).join("<br>")}</div></details>`;
+}
 
 /* ---------- Hata Avcısı kutusu, Kritik Piyasa Alarmı bandı, Arşiv sayfası ---------- */
 function factBox(fc) {
@@ -3013,7 +3039,7 @@ function detail(name, target = "detail") {
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)} <span class="mute">· yeni uzmanlar:</span> ${chips2Of(r)}</p>` +
-    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r) + debateHtml(s, r) + peerHtml(s)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     `<h2 style="margin-top:12px">Genişletilmiş kurul <span class="sub">4 yeni uzman · net oy ${r.net2 > 0 ? "+" : ""}${r.net2}${r.veto2 ? " · İTİRAZ VETOSU" : ""}</span></h2><div class="note">Bu uzmanların oyları komite skoruna karışmaz; vekil göstergelerle (fiyat-hacim-makro) çalışırlar ve yalnızca geçmişte test edilmiş sinyallerle oy kullanırlar. Takas/aracı kurum, zımni oynaklık ve sosyal medya verisi yoktur.</div>` + PERSONAS2.map(([k, n]) => personaCard(n, r.k2[k])).join("") +
@@ -3301,6 +3327,7 @@ async function loadAux() {
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
   { const m = await getJson("scan_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) SLOG = m; }
+  { const p = await getJson("picks.json?t=" + Math.floor(Date.now() / 36e5)); if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks); } }
   { const m = await getJson("viop.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) VIOP = m; }
   if (!VIOP_R) { const m = await getJson("viop_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.factors) VIOP_R = m; }
   { const m = await getJson("newsmood.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) NMOOD = m; }

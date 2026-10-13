@@ -675,7 +675,8 @@ function meeting(s, r) {
   }
   const verdict = r.veto && r.score >= 3 ? "Karar: güçlü ama Şeytanın Avukatı veto etti; masa işlem yapmıyor." : r.score >= 3 ? "Karar: masa uzlaştı, güçlü aday." : r.score === 2 ? "Karar: aday; masanın çoğu olumlu, kalan itirazlar not edildi." : r.score >= 1 ? "Karar: izleme listesi; teyit bekleniyor." : r.score === 0 ? "Karar: net değil, bekleyelim." : "Karar: uzak durulacak.";
   const v2 = r.k2 && r.veto2 && !r.veto && r.score >= 3 ? " Genişletilmiş kurul: itiraz var (net " + r.net2 + "), güçlü aday ihtiyatla okunmalı." : "";
-  return {lines, verdict: verdict + v2};
+  const mem = memoryLines(s, r), pv = peerView(s), db = debate(s, r);
+  return {lines: mem.lines.concat(lines, peerLines(s, r, pv)), verdict: verdict + v2 + ` Ağırlıklı karar skoru: ${db.text} (${db.label}).`, mem, peer: pv, debate: db};
 }
 
 /* ---------- Efsane ekranları ---------- */
@@ -944,7 +945,7 @@ function fcClaims(text) {
 function fcTexts(s, r) {
   const L = r.l, t = [];
   ["buffett", "simons", "livermore", "kellogg", "seytan"].forEach(k => { if (L[k] && L[k].t) t.push([k, L[k].t]); });
-  try { const mt = meeting(s, r); mt.lines.forEach(x => t.push([x.who, x.text])); t.push(["karar", mt.verdict]); } catch (e) { t.push(["hata", "toplantı üretilemedi: " + e.message]); }
+  try { const mt = meeting(s, r); mt.lines.forEach(x => { if (!x.gen) t.push([x.who, x.text]); }); t.push(["karar", mt.verdict]); } catch (e) { t.push(["hata", "toplantı üretilemedi: " + e.message]); }
   return t;
 }
 /* Ana kontrol: {locked, issues:[{kind, field, said, raw, msg}], checked, stale} */
@@ -988,7 +989,7 @@ function factCheck(s, r, opts) {
   FC_MEMO.set(key, res);
   return res;
 }
-const WHO_TXT = {buffett: "Buffett", simons: "Simons", livermore: "Livermore", kellogg: "Kellogg", seytan: "Şeytanın Avukatı", vol: "Volatilite Uzmanı", akilli: "Akıllı Para", psiko: "Psikoloji Analisti", makro: "Makro Uzmanı", karar: "Karar"};
+const WHO_TXT = {buffett: "Buffett", simons: "Simons", livermore: "Livermore", kellogg: "Kellogg", seytan: "Şeytanın Avukatı", vol: "Volatilite Uzmanı", akilli: "Akıllı Para", psiko: "Psikoloji Analisti", makro: "Makro Uzmanı", karar: "Karar", masa: "Masa"};
 /* Kilitli hisselerin özet listesi (yalnızca verilen liste) */
 function factSweep(list) { const out = []; for (const s of list) { try { const f = factCheck(s, committee(s)); if (f.locked) out.push(f); } catch (e) { out.push({locked: true, name: s.name, issues: [{kind: "hata", msg: "kontrol çalışmadı: " + e.message}], checked: 0}); } } return out; }
 
@@ -1051,19 +1052,23 @@ function auditIssues(cands, results, dataTs) {
     if (r.score >= 3 && mc && mc.probStop >= 60) issues.push(`${s.name}: "GÜÇLÜ ADAY" ama stop olasılığı %${fmt(mc.probStop, 0)}, çelişki var.`);
     const n = NEWS[s.name]; if (r.score >= 3 && n && n.score <= -2) issues.push(`${s.name}: "GÜÇLÜ ADAY" ama haber akışı olumsuz.`);
   });
+  results.slice(0, 40).forEach(([s, r]) => { try { consistencyIssues(s, r).forEach(i => issues.push(i)); } catch (e) { /* tutarlılık denetimi çalışmadı */ } });
   return issues;
 }
 function archiveDay(date, dataTs) {
   const cands = current.slice(), results = cands.map(s => [s, committee(s)]);
   const issues = auditIssues(cands, results, dataTs), locks = [];
   const stocks = results.map(([s, r]) => {
-    const f = factCheck(s, r), mc = monteCarlo(s), mt = meeting(s, r), v = r.l;
+    const f = factCheck(s, r), mc = monteCarlo(s), mt = meeting(s, r), v = r.l, db = mt.debate, pv = mt.peer;
     if (f.locked) locks.push(f);
     return {n: s.name, desc: s.description, sector: s.sector, close: s.close, change: s.change, score: r.score, label: r.label, veto: r.veto, veto2: !!r.veto2, net2: r.net2,
       votes: {buffett: v.buffett.v, simons: v.simons.v, livermore: v.livermore.v, kellogg: v.kellogg.v, seytan: v.seytan.v, makro: r.k2.makro.v, akilli: r.k2.akilli.v, vol: r.k2.vol.v, psiko: r.k2.psiko.v},
       mc: mc && {sigma: mc.sigma, days: mc.days, stop: mc.stop, p05: mc.p05, p50: mc.p50, p95: mc.p95, probLoss: mc.probLoss, probStop: mc.probStop},
       devil: {t: v.seytan.t, plan: v.seytan.plan, severe: v.seytan.severe},
-      lines: mt.lines.map(x => [x.who, x.text]), verdict: mt.verdict, fact: {locked: f.locked, checked: f.checked, stale: f.stale, issues: f.issues.map(i => i.msg), request: f.request || null}};
+      lines: mt.lines.map(x => [x.who, x.text]), verdict: mt.verdict,
+      debate: {text: db.text, label: db.label, al: db.al, tut: db.tut, sat: db.sat, learned: db.learned, bull: db.bull.pts.map(p => p.text), bear: db.bear.pts.map(p => p.text), unrefBull: db.bull.unref, unrefBear: db.bear.unref, lines: db.lines.map(x => [x.side, x.who, x.text])},
+      memory: mt.mem.ref ? {ref: mt.mem.ref, flips: mt.mem.flips.map(f => [f.k, f.from, f.to, f.tiny])} : null,
+      peer: pv && {sector: pv.sector, n: pv.n, rank: pv.rank, rankOf: pv.rankOf, pePrem: pv.pePrem, rows: pv.rows.map(x => [x.label, x.st, x.sec, x.mkt, x.rel, x.type]), peers: pv.peers}, fact: {locked: f.locked, checked: f.checked, stale: f.stale, issues: f.issues.map(i => i.msg), request: f.request || null}};
   });
   return {date, regime: REGIME && REGIME.label, a50: REGIME && Math.round(REGIME.a50), stocks, issues, locks: locks.map(l => l.name), audit: locks.length ? "RED (KİLİTLİ RAPOR VAR)" : issues.length ? "ŞARTLI ONAY" : "ONAY"};
 }
@@ -1077,9 +1082,9 @@ function archiveMd(day, extras) {
   day.issues.forEach(i => L.push(`  - ${i}`));
   L.push(`- **Hata Avcısı (veri/rakam çapraz kontrolü):** ${day.locks.length ? `🔒 ${day.locks.length} rapor KİLİTLİ: ${day.locks.join(", ")}` : "✅ çelişki bulunmadı; metinlerdeki rakamlar TradingView kapanış geçmişiyle uyumlu"}`, "");
   if (x.alarms && x.alarms.length) { L.push("## Gün içi alarmlar", ""); x.alarms.slice(0, 25).forEach(a => L.push(`- ${a.t || ""} ${a.sev >= 3 ? "🚨" : "⚠"} ${a.text}`)); L.push(""); }
-  L.push("## Özet tablo", "", "| Hisse | Kapanış | Gün % | Skor | Karar | B | S | L | K | Ş | Yeni uzman net | Stop olasılığı | Mühür |", "|---|---:|---:|---:|---|:-:|:-:|:-:|:-:|:-:|---:|---:|---|");
+  L.push("## Özet tablo", "", "| Hisse | Kapanış | Gün % | Skor | Karar | B | S | L | K | Ş | Yeni uzman net | Ağırlıklı karar | Stop olasılığı | Mühür |", "|---|---:|---:|---:|---|:-:|:-:|:-:|:-:|:-:|---:|---|---:|---|");
   const sym = v => v > 0 ? "+" : v < 0 ? "−" : "0";
-  day.stocks.forEach(s => L.push(`| ${s.n} | ${fmt(s.close)} | ${s.change == null ? "–" : fmt(s.change, 1)} | ${s.score} | ${s.fact.locked ? "🔒 KİLİTLİ" : s.label + (s.veto ? " (VETO)" : "")} | ${sym(s.votes.buffett)} | ${sym(s.votes.simons)} | ${sym(s.votes.livermore)} | ${sym(s.votes.kellogg)} | ${sym(s.votes.seytan)} | ${s.net2} | ${s.mc ? "%" + fmt(s.mc.probStop, 0) : "–"} | ${s.fact.locked ? "🔴" : "🟢"} |`));
+  day.stocks.forEach(s => L.push(`| ${s.n} | ${fmt(s.close)} | ${s.change == null ? "–" : fmt(s.change, 1)} | ${s.score} | ${s.fact.locked ? "🔒 KİLİTLİ" : s.label + (s.veto ? " (VETO)" : "")} | ${sym(s.votes.buffett)} | ${sym(s.votes.simons)} | ${sym(s.votes.livermore)} | ${sym(s.votes.kellogg)} | ${sym(s.votes.seytan)} | ${s.net2} | ${s.fact.locked ? "–" : s.debate.text} | ${s.mc ? "%" + fmt(s.mc.probStop, 0) : "–"} | ${s.fact.locked ? "🔴" : "🟢"} |`));
   L.push("");
   day.stocks.forEach(s => {
     L.push(`## ${s.n}: ${s.desc || ""}`, "", `Kapanış ${fmt(s.close)} TL · gün ${s.change == null ? "–" : fmt(s.change, 2)}% · sektör ${s.sector || "–"} · komite skoru **${s.score}** (${s.label}${s.veto ? ", Şeytanın Avukatı VETO" : ""})`, "");
@@ -1088,10 +1093,139 @@ function archiveMd(day, extras) {
     L.push("", `Yeni uzmanların net oyu: ${s.net2}${s.veto2 ? " (itiraz vetosu var)" : ""}`, "");
     if (s.mc) L.push("### Monte Carlo (2000 yol)", "", `${s.mc.days} günlük ufuk, günlük oynaklık %${fmt(s.mc.sigma, 2)}: %5 / medyan / %95 getiri ${fmt(s.mc.p05, 1)}% / ${fmt(s.mc.p50, 1)}% / ${fmt(s.mc.p95, 1)}%; zarar olasılığı %${fmt(s.mc.probLoss, 0)}, %${s.mc.stop} stop'a değme olasılığı **%${fmt(s.mc.probStop, 0)}**.`, "");
     L.push("### Masa tartışması", ""); s.lines.forEach(([w, t]) => L.push(`- **${(WHO_TXT[w] || w)}:** ${t}`));
+    if (s.memory) { L.push("", "### Hafıza (geçmiş kararlar)", "", `Önceki kayıt: ${s.memory.ref.d} (${s.memory.ref.age} gün önce), masa skoru ${s.memory.ref.sc}, o günden fiyat ${s.memory.ref.px > 0 ? "+" : ""}${fmt(s.memory.ref.px, 1)}%.`); s.memory.flips.forEach(([k, a, b, tiny]) => L.push(`- ${AR_NAME[k]}: ${AR_VOTE(a)} → ${AR_VOTE(b)}${tiny ? " (eşik titremesi, fikir değişimi sayılmaz)" : ""}`)); if (!s.memory.flips.length) L.push("- Hiçbir efsane oyunu değiştirmedi (tutarlı)."); }
+    L.push("", "### Boğa vs Ayı münazarası", "", `**Ağırlıklı karar skoru: ${s.debate.text} (${s.debate.label})**${s.debate.learned ? " · öğrenilmiş ağırlıklarla" : " · eşit ağırlık (öğrenme için yeterli sonuç birikmedi)"}`, "");
+    s.debate.lines.forEach(([side, w, t]) => L.push(`- ${side === "bull" ? "🐂" : "🐻"} **${WHO_TXT[w] || w}:** ${t}`));
+    L.push("", `Çürütülemeyen tezler: boğa ${s.debate.unrefBull}, ayı ${s.debate.unrefBear}.`);
+    if (s.peer) { L.push("", `### Sektör ve rakip kıyası (${s.peer.sector}, ${s.peer.n} hisse)`, "", "| Dönem | Hisse % | Sektör medyanı % | Piyasa medyanı % | Fark (puan) | Hareket |", "|---|---:|---:|---:|---:|---|"); s.peer.rows.forEach(([lab, st, sec, mk, rel, type]) => L.push(`| ${lab} | ${st == null ? "–" : fmt(st, 1)} | ${sec == null ? "–" : fmt(sec, 1)} | ${mk == null ? "–" : fmt(mk, 1)} | ${rel == null ? "–" : fmt(rel, 1)} | ${type || "–"} |`)); L.push("", `Sektör içi göreceli güç sırası: ${s.peer.rank || "–"}/${s.peer.rankOf}. Büyük rakipler: ${s.peer.peers.map(p => `${p.n} (gün ${p.change == null ? "–" : fmt(p.change, 1)}%, 1 ay ${p.p1m == null ? "–" : fmt(p.p1m, 1)}%)`).join("; ")}.`); }
     L.push("", `**${s.verdict}**`, "", `**Şeytanın Avukatı planı:** ${s.devil.plan}`, "", `Hata Avcısı: ${s.fact.stale ? "ham veri eski/yok, kıyaslanamadı" : `${s.fact.checked} rakam kontrol edildi, çelişki yok`} ✅`, "");
   });
   if (x.scorecard) { L.push("## Geri test skor kartı (komite kararlarının sonradan ölçümü)", "", x.scorecard, ""); }
   if (x.portfolios) { L.push("## Sanal portföyler", "", x.portfolios, ""); }
   L.push("---", "*Bu arşiv her seans kapanışında otomatik üretilir; geçmiş kararların izlenmesi ve geri test skor kartı için kalıcı kayıttır.*");
   return L.join("\n");
+}
+
+/* =====================================================================================
+   EFSANELERİN HAFIZASI VE ÖĞRENMESİ: komite kararları picks.json'a (ve Arsiv/*.json'a) her seans kapanışında yazılır; efsaneler masaya oturunca
+   aynı hissedeki GEÇMİŞ oylarına bakar, tersine döndüklerinde veriyle gerekçelendirir, "eşik titremesi" ile gerçek fikir değişimini ayırır.
+   Öğrenme: her efsanenin olumlu/olumsuz oyunun, sonradan (10 iş günü, yoksa 5) piyasa ortalamasına göre tutup tutmadığı sayılır. Örnek ≥ 30 olunca
+   isabet oranı o efsanenin ağırlıklı karar skorundaki ağırlığını (0,6–1,4) belirler; daha azsa ağırlık 1'dir (az örnekten ders çıkarılmaz).
+   Hafıza komite skorunu ve sanal portföyleri DEĞİŞTİRMEZ; yalnızca yorumu ve ağırlıklı karar skorunu etkiler. */
+let MEM = null;
+const MEM_KEYS = ["buffett", "simons", "livermore", "kellogg", "seytan"];
+function buildMemory(picks) {
+  const by = {}, skill = {}, days = new Set(); MEM_KEYS.forEach(k => { skill[k] = {n: 0, hit: 0}; });
+  (picks || []).forEach(p => {
+    if (p.src !== "komite" || !p.v) return; days.add(p.d); (by[p.n] = by[p.n] || []).push(p);
+    const h = p.r && p.r[10] != null && p.b && p.b[10] != null ? 10 : p.r && p.r[5] != null && p.b && p.b[5] != null ? 5 : null; if (!h) return;
+    const ex = p.r[h] - p.b[h]; MEM_KEYS.forEach((k, i) => { const v = p.v[i]; if (!v) return; skill[k].n++; if ((v > 0 && ex > 0) || (v < 0 && ex < 0)) skill[k].hit++; });
+  });
+  Object.values(by).forEach(a => a.sort((x, y) => x.d < y.d ? -1 : 1));
+  return MEM = {by, skill, days: days.size};
+}
+function memWeight(k) { const s = MEM && MEM.skill[k]; if (!s || s.n < 30) return 1; return Math.max(0.6, Math.min(1.4, 1 + (s.hit / s.n - 0.5) * 2)); }
+function memBack(name) {
+  const a = MEM && MEM.by[name]; if (!a) return null; const today = fcToday(), T = Date.parse(today);
+  const old = a.filter(p => p.d < today && p.e > 0).map(p => ({p, age: Math.round((T - Date.parse(p.d)) / 864e5)})); if (!old.length) return null;
+  old.sort((x, y) => Math.abs(x.age - 7) - Math.abs(y.age - 7)); return old[0];
+}
+const memAge = a => a <= 1 ? "Dün" : a <= 4 ? `${a} gün önce` : a <= 10 ? "Geçen hafta" : `${a} gün önce`;
+const memWord = v => v > 0 ? "olumluydum" : v < 0 ? "olumsuzdum" : "nötrdüm";
+function memReason(l) {
+  const cs = l.checks || [], c = l.v > 0 ? cs.find(x => x.s === OK) : l.v < 0 ? cs.find(x => x.s === BAD) : null;
+  return c ? `"${c.t.replace(/ \(.*?\)/g, "").replace(/:.*$/, "")}" ${c.s === OK ? "sağlanıyor" : "sağlanmıyor"}${c.val ? " (" + c.val + ")" : ""}` : "net bir üstünlük ya da zayıflık kalmadı";
+}
+function memoryLines(s, r) {
+  const m = memBack(s.name); if (!m) return {lines: [], flips: [], ref: null};
+  const p = m.p, px = (s.close / p.e - 1) * 100, lines = [], flips = [], say = (who, text) => lines.push({who, text, gen: true}), when = `${memAge(m.age)} (${p.d})`;
+  say("simons", `Hafızaya baktım: ${when} bu hisse için masa skoru ${p.sc > 0 ? "+" : ""}${p.sc} idi, bugün ${r.score > 0 ? "+" : ""}${r.score}. Fiyat o günden ${px > 0 ? "+" : ""}${fmt(px, 1)}% oynadı (${fmt(p.e)} → ${fmt(s.close)} TL).`);
+  MEM_KEYS.forEach((k, i) => {
+    const pv = p.v[i], nv = r.l[k].v; if (pv == null || pv === nv) return;
+    const hard = pv !== 0 && nv !== 0, tiny = Math.abs(px) < 1.5 && Math.abs(r.score - p.sc) <= 1;
+    flips.push({k, from: pv, to: nv, hard, tiny, px});
+    say(k, `${memAge(m.age)} bu hisse için ${memWord(pv)}${hard ? " (tam tersi)" : ""}; bugün ${nv > 0 ? "olumluyum" : nv < 0 ? "olumsuzum" : "nötrüm"}. ${tiny ? "Fiyat ve masa skoru neredeyse aynı; sinyal eşik sınırında dalgalanıyor, bunu kesin bir fikir değişikliği saymayın." : `Fikrim değişti çünkü ${memReason(r.l[k])}.`}`);
+  });
+  const same = MEM_KEYS.filter((k, i) => p.v[i] != null && p.v[i] === r.l[k].v && p.v[i] !== 0);
+  if (same.length) say(same[0], `Yönümü koruyorum: ${when} ${memWord(p.v[MEM_KEYS.indexOf(same[0])])}, bugün de aynı${same.length > 1 ? "; masada " + same.slice(1).map(k => WHO_TXT[k]).join(", ") + " da yönünü korudu" : ""}. Geçmişte söylediğimle çelişmiyorum.`);
+  const h = p.r && p.b && p.r[10] != null && p.b[10] != null ? 10 : p.r && p.b && p.r[5] != null && p.b[5] != null ? 5 : null;
+  if (h) { const ex = p.r[h] - p.b[h]; say("seytan", `Sonuç notu: o günkü karardan ${h} iş günü sonra hisse piyasa ortalamasına göre ${ex > 0 ? "+" : ""}${fmt(ex, 1)} puan fark yaptı${p.sc >= 2 ? (ex > 0 ? "; o aday kararı doğru çıktı." : "; o aday kararı yanlış çıktı: aynı gerekçeyle ısrar etmiyorum, veriyi yeniden tartıyorum.") : "."}`); }
+  return {lines, flips, ref: {d: p.d, sc: p.sc, age: m.age, px}};
+}
+/* Tutarlılık denetimi (Baş Denetçi): gerekçesiz tam ters oy ve zayıf konsensüs */
+function consistencyIssues(s, r) {
+  const out = [], mem = memoryLines(s, r);
+  mem.flips.filter(f => f.hard && f.tiny).forEach(f => out.push(`${s.name}: ${WHO_TXT[f.k]} geçmişte tam tersi oy vermişti ama fiyat/skor neredeyse değişmedi (eşik titremesi; fikir değişimi sayılmaz).`));
+  const d = debate(s, r); if (r.score >= 3 && !r.veto && d.sat >= 40) out.push(`${s.name}: "GÜÇLÜ ADAY" ama ağırlıklı karar skorunda %${d.sat} Sat oyu var; konsensüs zayıf.`);
+  return out;
+}
+
+/* =====================================================================================
+   BOĞA vs AYI MÜNAZARASI ve AĞIRLIKLI KARAR SKORU: 9 oy sahibi (5 efsane + 4 yeni uzman) oylarına göre boğa/ayı kampına ayrılır; her kamp kendi kontrol listesinden
+   TEZ kurar, karşı kamp aynı konudaki (trend, değer, para akışı, risk, momentum) doğrulanmış maddeyle YANIT verir; yanıtsız kalan tezler "çürütülemedi" sayılır.
+   Sonuç: oylar efsanenin öğrenilmiş ağırlığıyla çarpılıp %Al / %Tut / %Sat olarak toplanır. Not: bu bir tahmin değil, mevcut oyların özetidir. */
+const DB_CAT = [["trend", /SMA|trend|RS\b|göreceli|haftalık|pivot|zirve|dip/i], ["değer", /F\/K|değer|iskonto|PD\/DD|ROE|kâr|borç|FCF|marj|temettü/i], ["akış", /CMF|para|hacim|takas|dağıtım|emilim|VİOP|alıcı/i], ["risk", /stop|oynaklık|likidite|bilanço|beta|düşüş|FOMO|kovalama|rejim|batma|sektör|haber/i], ["momentum", /RSI|momentum|kırılım|MACD|z-skor|bıçak|aşırı/i]];
+const dbCat = t => { const c = DB_CAT.find(([, re]) => re.test(t)); return c ? c[0] : "diğer"; };
+function debate(s, r) {
+  const L = r.l, K = r.k2;
+  const voters = MEM_KEYS.map(k => ({k, v: L[k].v, w: memWeight(k), checks: L[k].checks || []})).concat(PERSONAS2_KEYS.map(k => ({k, v: K[k].v, w: 1, checks: K[k].checks || []})));
+  const pick = (pool, n) => { const out = [], seenC = new Set(); for (const p of pool) if (!seenC.has(p.cat) && out.length < n) { out.push(p); seenC.add(p.cat); } for (const p of pool) if (out.length < n && !out.includes(p)) out.push(p); return out; };
+  const mk = (x, c) => ({who: x.k, text: c.t.replace(/ \(.*?\)/g, ""), val: c.val || "", cat: dbCat(c.t)});
+  const poolOf = (voterList, st) => voterList.flatMap(x => x.checks.filter(c => c.s === st).map(c => mk(x, c)));
+  const bulls = voters.filter(x => x.v > 0), bears = voters.filter(x => x.v < 0);
+  let bullPool = poolOf(bulls, OK), bearPool = poolOf(bears, BAD).concat(poolOf(voters.filter(x => x.k === "seytan" && x.v >= 0), BAD));
+  const appointedBull = !bulls.length, appointedBear = !bears.length;
+  if (appointedBull) bullPool = poolOf(voters, OK); if (appointedBear) bearPool = poolOf(voters, BAD);
+  const bearPts = pick(bearPool, 3), used = new Set(bearPts);
+  const answer = (pts, pool) => pts.map(p => { const rb = pool.find(q => !used.has(q) && q.cat === p.cat); if (rb) used.add(rb); return {point: p, reply: rb || null}; });
+  const bearRounds = answer(bearPts, bullPool);                        // 1. tur: ayı tezi, boğa yanıtı
+  const bullPts = pick(bullPool.filter(q => !used.has(q)), 3), bullRounds = answer(bullPts, bearPool); // 2. tur: boğa tezi, ayı yanıtı (aynı madde iki kez gösterilmez)
+  const unrefBear = bearRounds.filter(x => !x.reply).length, unrefBull = bullRounds.filter(x => !x.reply).length;
+  const tot = voters.reduce((a, x) => a + x.w, 0), pct = f => voters.filter(f).reduce((a, x) => a + x.w, 0) / tot * 100;
+  const al = Math.round(pct(x => x.v > 0)), sat = Math.round(pct(x => x.v < 0)), tut = 100 - al - sat;
+  const label = r.veto ? "BEKLE (Şeytanın Avukatı vetosu)" : r.veto2 && al >= 50 ? "İZLE (uzman itirazı)" : al >= 50 ? "AL ağırlıklı" : sat >= 40 ? "SAT / UZAK DUR ağırlıklı" : "TUT / İZLE";
+  const lines = [];
+  bearRounds.forEach(x => { lines.push({side: "bear", who: x.point.who, text: `Ayı tezi: "${x.point.text}" sağlanmıyor${x.point.val ? " (" + x.point.val + ")" : ""}.`});
+    lines.push({side: "bull", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Boğa yanıtı: aynı konuda "${x.reply.text}" sağlanıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : "Boğa yanıtı: bu itiraza veriyle cevap bulunamadı (çürütülemedi)."}); });
+  bullRounds.forEach(x => { lines.push({side: "bull", who: x.point.who, text: `Boğa tezi: "${x.point.text}" sağlanıyor${x.point.val ? " (" + x.point.val + ")" : ""}.`});
+    lines.push({side: "bear", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Ayı yanıtı: aynı konuda "${x.reply.text}" sağlanmıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : "Ayı yanıtı: bu teze veriyle karşı çıkılamadı (çürütülemedi)."}); });
+  return {voters: voters.map(x => ({k: x.k, v: x.v, w: x.w})), bull: {n: bulls.length, pts: bullPts, unref: unrefBull, appointed: appointedBull}, bear: {n: bears.length, pts: bearPts, unref: unrefBear, appointed: appointedBear},
+    lines, al, tut, sat, label, learned: voters.some(x => x.w !== 1), text: `%${al} Al / %${tut} Tut / %${sat} Sat`};
+}
+
+/* =====================================================================================
+   SEKTÖR VE RAKİP KIYASLAMASI (Peer Benchmark): aynı veri çekiminden (TradingView tarayıcı tablosu) hissenin sektör medyanı, piyasa medyanı ve en büyük 5 rakibiyle farkı.
+   Her dönem için hareketi 3 katmana ayırır: piyasa → sektör (sektör − piyasa) → hisseye özel (hisse − sektör). Hareket sektörü izliyorsa SEKTÖREL, sektör sakinken
+   ya da ters yöndeyken hareket ediyorsa HİSSEYE ÖZEL denir. Sektör medyanı hissenin kendisini içermez. */
+const secName = x => (typeof trSector === "function" ? trSector(x) : x || "Diğer");
+const PEER_PERIODS = [["Bugün", "change", 1], ["1 ay", "p1m", 3], ["3 ay", "p3m", 5], ["6 ay", "p6m", 8]];
+const medianOf = a => { const b = a.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
+function peerView(s) {
+  const uni = ((typeof UNIVERSE !== "undefined" && UNIVERSE) || []).filter(x => x.ok && x.tl >= 5), grp = uni.filter(x => x.sector && x.sector === s.sector && x.name !== s.name);
+  if (!s.sector || grp.length < 3) return null;
+  const rows = PEER_PERIODS.map(([label, key, th]) => {
+    const st = s[key], sec = medianOf(grp.map(x => x[key])), mkt = medianOf(uni.filter(x => x.name !== s.name).map(x => x[key]));
+    if (st == null || sec == null || mkt == null) return {label, key, st, sec, mkt, rel: null, secRel: null, type: null};
+    const rel = st - sec, secRel = sec - mkt, follow = Math.abs(rel) <= Math.max(th, 0.35 * Math.abs(st)), sameDir = sec * st > 0;
+    const type = Math.abs(st) < th ? "sakin" : follow ? "sektörel" : (!sameDir || Math.abs(sec) < 0.35 * Math.abs(st)) ? "hisseye özel" : "karma";
+    return {label, key, st, sec, mkt, rel, secRel, type};
+  });
+  const peers = grp.slice().sort((a, b) => (b.mcap || 0) - (a.mcap || 0)).slice(0, 5).map(x => ({n: x.name, change: x.change, p1m: x.p1m, rs: x.rs, pe: x.pe > 0 ? x.pe : null}));
+  const byRs = [s, ...grp].filter(x => x.rs != null).sort((a, b) => b.rs - a.rs), rank = byRs.findIndex(x => x.name === s.name) + 1;
+  const medPe = medianOf(grp.map(x => x.pe > 0 ? x.pe : null)), pePrem = s.pe > 0 && medPe > 0 ? (s.pe / medPe - 1) * 100 : null;
+  const lead = rows.find(x => x.type && x.type !== "sakin") || null;
+  return {sector: s.sector, n: grp.length + 1, rows, peers, rank: rank || null, rankOf: byRs.length, medPe, pePrem, lead};
+}
+function peerLines(s, r, pv) {
+  if (!pv || !pv.lead) return [];
+  const w = pv.lead, L = [], say = (who, text) => L.push({who, text, gen: true}), sg = x => (x > 0 ? "+" : "") + fmt(x, 1);
+  const seg = secName(pv.sector);
+  if (w.type === "sektörel") say("livermore", `Hareketin kaynağına baktım: ${w.label} ${seg} sektörü medyanı %${sg(w.sec)}, ${s.name} %${sg(w.st)}; hisse sektörü izliyor, yani bu bir ${w.st < 0 ? "sektörel düşüş" : "sektörel yükseliş"}, tek hissenin hikâyesi değil. Sektör piyasadan ${sg(w.secRel)} puan ${w.secRel >= 0 ? "güçlü" : "zayıf"}.`);
+  else if (w.type === "hisseye özel") say("livermore", `${w.label} ${seg} sektörü medyanı %${sg(w.sec)} iken ${s.name} %${sg(w.st)}: bu hisseye özel bir hareket; sektör rüzgârı ${w.sec * w.st < 0 ? "ters yönde" : "yeterince eşlik etmiyor"}. Hareketin nedenini hissenin kendisinde (haber, bilanço, hacim) aramalıyız.`);
+  else say("livermore", `${w.label} hareketin bir kısmı sektörden (${seg} %${sg(w.sec)}), bir kısmı hisseden: ${s.name} %${sg(w.st)}, sektörden ${sg(w.rel)} puan ayrışıyor.`);
+  say("simons", `Sektöre göre artık getiri (${w.label}): ${sg(w.rel)} puan. Sektör içi göreceli güç sıralaması ${pv.rank || "–"}/${pv.rankOf}${pv.pePrem != null ? `; F/K sektör medyanının %${fmt(Math.abs(pv.pePrem), 0)} ${pv.pePrem > 0 ? "üstünde" : "altında"}` : ""}. Bu, hissenin kendi alfası ile sektör betasını ayırmamı sağlıyor.`);
+  if (w.st < 0 && w.type === "hisseye özel") say("seytan", `Tersini düşünelim: sektör ayakta ama ${s.name} düşüyor. Sektörel bir bahane yok; hissenin kendi hikâyesi bozulmuş olabilir. Haber akışını ve bilanço takvimini kontrol etmeden "ucuzladı" demeyin.`);
+  else if (w.st < 0 && w.type === "sektörel") say("seytan", `Düşüş sektörel: ${s.name} tek başına çürümüyor ama sektör dönmeden alım erken; sektör düzeltmeleri hisselerin hepsini birlikte çeker. Pozisyonu küçük tutun.`);
+  else if (w.st > 0 && w.type === "hisseye özel") say("seytan", `Yükseliş hisseye özel, sektör eşlik etmiyor: tek başına giden hisse sektöre dönebilir ya da sektörü sürükleyebilir. Kovalamayın, stop'u önceden belirleyin.`);
+  return L;
 }

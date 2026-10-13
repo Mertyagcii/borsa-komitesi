@@ -82,6 +82,11 @@ setTimeout(async function () {
     var cmr = crowdMeter(); ok("kalabalik_olcer", !!cmr && cmr.idx >= 0 && cmr.idx <= 100);
     var mtgOk = false; UNIVERSE.filter(function (s) { return s.ok && s.tl >= 20; }).slice(0, 120).forEach(function (s) { var mm = meeting(s, committee(s)); if (mm.lines.some(function (x) { return ["makro", "akilli", "vol", "psiko"].indexOf(x.who) >= 0; })) mtgOk = true; }); ok("kurul2_toplantida_konusur", mtgOk);
     ok("kurul2_alerts", Array.isArray(computeAlerts()));
+    /* ---- Munazara, sektor kiyasi, hafiza (detay paneli) ---- */
+    var ps = UNIVERSE.filter(function (s) { return s.ok && s.tl >= 20 && peerView(s); })[0] || s0; openDetail(ps.name);
+    var dp = $("detail").innerHTML; ok("detay_munazara", dp.indexOf('class="dbt"') >= 0 && dp.indexOf("dbline") >= 0); ok("detay_sektor_kiyasi", dp.indexOf("peert") >= 0);
+    buildMemory([{ d: "2026-01-02", src: "komite", n: ps.name, e: ps.close * 0.9, sc: 1, v: [1, 1, 1, 1, 1] }]); openDetail(ps.name); ok("detay_hafiza_satiri", $("detail").innerHTML.indexOf("Hafıza") >= 0 || $("detail").innerHTML.indexOf("Hafiza") >= 0 || $("detail").innerHTML.indexOf("Fikrim") >= 0); buildMemory([]);
+    closeDetail();
     /* ---- Ozel veri (AKD/takas CSV), dis veri kaynaklari ---- */
     var csv = "tarih;hisse;kurum;alış;satış;net\n2026-10-12;THYAO;A;1.200.000;300.000;900.000\n2026-10-12;THYAO;B;100.000;800.000;-700.000\n2026-10-12;THYAO;C;50.000;40.000;10.000\n2026-10-12;GARAN;A;10;500;-490";
     var pr = akdParse(csv); ok("akd_ayristirma", !pr.error && pr.nstock === 2 && pr.stocks.THYAO["2026-10-12"].bal > 0 && pr.stocks.GARAN["2026-10-12"].bal < 0);

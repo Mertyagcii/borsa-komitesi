@@ -114,6 +114,51 @@ if (!dayB.locks.includes(lk.name) || dayB.audit.indexOf("RED") !== 0) errs.push(
 if ((mdB.match(/### Masa tartışması/g) || []).length !== (mdA.match(/### Masa tartışması/g) || []).length - 1 && committee(lk) && factCheck(lk, committee(lk)).stale === false) errs.push("kilitli hissenin tartışması arşive girdi");
 if (mdB.indexOf("RAPOR KİLİTLİ") < 0) errs.push("arşivde kilit notu yok");
 lk.rsi = lkRsi; fcReset();
+// --- Hafıza, Boğa/Ayı münazarası, Sektör kıyası ---
+const hs = current[0], hr = committee(hs), dbg = debate(hs, hr);
+if (!(dbg.al + dbg.tut + dbg.sat === 100 && dbg.al >= 0 && dbg.tut >= 0 && dbg.sat >= 0)) errs.push("ağırlıklı karar yüzdeleri 100 etmiyor: " + dbg.text);
+if (!dbg.lines.length || !dbg.label) errs.push("münazara boş");
+const seenTxt = new Set(); dbg.lines.forEach(x => { if (seenTxt.has(x.text)) errs.push("münazarada aynı satır tekrarlandı"); seenTxt.add(x.text); });
+const nvote = hr.l.buffett.v + hr.l.simons.v + hr.l.livermore.v + hr.l.kellogg.v; if (hr.score !== nvote) errs.push("komite skoru bozuldu");
+const alAll = UNI.filter(x => x.ok && x.tl >= 20).slice(0, 120).map(x => debate(x, committee(x)));
+if (alAll.some(d => d.al + d.tut + d.sat !== 100)) errs.push("bazı hisselerde ağırlıklı karar 100 etmiyor");
+if (alAll.some(d => (d.bull.n === 0 && !d.bull.appointed) || (d.bear.n === 0 && !d.bear.appointed))) errs.push("resen atanan taraf işaretlenmedi");
+// hafıza: yok -> satır yok; sentetik geçmiş -> satırlar, çelişen oy gerekçelenir; eşik titremesi ayırt edilir
+buildMemory([]); if (memoryLines(hs, hr).lines.length) errs.push("hafıza boşken satır üretildi");
+const dPast = new Date(Date.parse(fcToday()) - 7 * 864e5).toISOString().slice(0, 10), flip = [-hr.l.buffett.v || 1, hr.l.simons.v, hr.l.livermore.v, hr.l.kellogg.v, hr.l.seytan.v];
+buildMemory([{d: dPast, src: "komite", n: hs.name, e: hs.close * 0.9, sc: 1, v: flip, r: {5: 4}, b: {5: 1}}]);
+let ml = memoryLines(hs, hr);
+if (!ml.lines.length || !/Hafızaya baktım/.test(ml.lines[0].text)) errs.push("hafıza girişi yok");
+if (!ml.flips.some(f => f.k === "buffett" && !f.tiny)) errs.push("gerçek fikir değişimi algılanmadı");
+if (!ml.lines.some(l => /Fikrim değişti çünkü/.test(l.text))) errs.push("oy değişimi gerekçelendirilmedi");
+if (!ml.lines.some(l => /Sonuç notu/.test(l.text))) errs.push("geçmiş sonuç notu yok");
+if (!meeting(hs, hr).lines.some(l => /Hafızaya baktım/.test(l.text))) errs.push("toplantıda hafıza yok");
+buildMemory([{d: dPast, src: "komite", n: hs.name, e: hs.close * 0.999, sc: hr.score, v: flip}]);
+ml = memoryLines(hs, hr); if (!ml.flips.some(f => f.tiny) || !ml.lines.some(l => /eşik sınırında/.test(l.text))) errs.push("eşik titremesi ayırt edilmedi");
+if (!consistencyIssues(hs, hr).some(x => /titremesi/.test(x)) && flip[0] * hr.l.buffett.v < 0) errs.push("gerekçesiz tersine dönüş denetçiye bildirilmedi");
+buildMemory([{d: fcToday(), src: "komite", n: hs.name, e: hs.close, sc: 9, v: flip}]); if (memoryLines(hs, hr).lines.length) errs.push("bugünün kaydı hafıza sayıldı");
+// öğrenme: 30'dan az örnekte ağırlık 1; 40 örnekte isabet oranına göre
+buildMemory([]); if (memWeight("simons") !== 1) errs.push("örneksizken ağırlık 1 olmalı");
+const lp = []; for (let i = 0; i < 40; i++) lp.push({d: "2026-01-0" + (1 + i % 9), src: "komite", n: "X" + i, e: 10, sc: 2, v: [0, 1, 0, 0, 0], r: {10: i < 30 ? 5 : -5}, b: {10: 0}});
+buildMemory(lp); const wS = memWeight("simons"); if (!(wS > 1.2 && wS <= 1.4) || memWeight("buffett") !== 1) errs.push("öğrenilmiş ağırlık hatalı: " + wS);
+const lp2 = lp.map(x => Object.assign({}, x, {r: {10: -5}})); buildMemory(lp2); if (!(memWeight("simons") >= 0.6 && memWeight("simons") < 0.8)) errs.push("kötü isabette ağırlık düşmedi");
+buildMemory([]);
+// sektör kıyası: sentetik sektör (3 katman ayrımı)
+const pg = UNI.filter(x => x.ok && x.tl >= 5 && x.sector === hs.sector);
+const pv = peerView(hs); if (pg.length >= 4) { if (!pv || pv.rows.length !== 4 || pv.n !== pg.length) errs.push("sektör kıyası bozuk"); }
+const sy = Object.assign({}, UNI.find(x => x.ok && x.tl >= 5), {name: "SYNTH", sector: "SYNSEC", change: -8, p1m: -20, p3m: -25, p6m: -30, mcap: 1e9});
+const syPeers = [0, 1, 2, 3].map(i => Object.assign({}, sy, {name: "P" + i, change: -7.5 + i * 0.2, p1m: -19 + i, p3m: -24, p6m: -29, mcap: 2e9 - i}));
+const syFlat = [0, 1, 2, 3].map(i => Object.assign({}, sy, {name: "Q" + i, sector: "SYNFLAT", change: 0.2, p1m: 1, p3m: 2, p6m: 3, mcap: 1e9 + i}));
+const uniSave = UNIVERSE; UNIVERSE = uniSave.concat([sy], syPeers, syFlat);
+let pS = peerView(sy); if (!pS || pS.rows[0].type !== "sektörel" || pS.rows[1].type !== "sektörel") errs.push("sektörel hareket ayırt edilemedi: " + (pS && pS.rows.map(x => x.type)));
+const sy2 = Object.assign({}, sy, {sector: "SYNFLAT", name: "SYNTH2"}); UNIVERSE = uniSave.concat([sy2], syFlat); pS = peerView(sy2);
+if (!pS || pS.rows[0].type !== "hisseye özel" || pS.rows[1].type !== "hisseye özel") errs.push("hisseye özel hareket ayırt edilemedi: " + (pS && pS.rows.map(x => x.type)));
+if (pS.rows[0].rel > -7) errs.push("sektöre göre fark hatalı: " + pS.rows[0].rel);
+const pl = peerLines(sy2, committee(any), pS); if (!pl.some(l => /hisseye özel/.test(l.text)) || !pl.some(l => l.who === "seytan")) errs.push("efsaneler hisseye özel düşüşü yorumlamadı");
+UNIVERSE = uniSave.concat([sy], syPeers); pS = peerView(sy); const pl2 = peerLines(sy, committee(any), pS); if (!pl2.some(l => /sektörel/.test(l.text))) errs.push("efsaneler sektörel düşüşü yorumlamadı");
+UNIVERSE = uniSave;
+// Hata Avcısı üretilmiş satırları taramamalı
+fcReset(); const gen = factCheck(hs, hr, {nocache: true}); if (gen.issues.some(i => i.kind === "metin")) errs.push("üretilmiş satırlar iddia olarak tarandı");
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));
