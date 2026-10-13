@@ -1,4 +1,4 @@
-﻿"""Dış veri kaynakları (ücretsiz, gecikmeli): günde bir kez, kapanıştan sonra çalışır.
+"""Dış veri kaynakları (ücretsiz, gecikmeli): günde bir kez, kapanıştan sonra çalışır.
 1) VİOP vadeli primi (TradingView 'HİSSE1!'): akıllı para / pozisyonlanma vekili → viop.json
 2) Haber ilgisi ve tonu (Google Haberler RSS, hisse başına): kalabalık dikkati vekili → newsmood.json (+ newsmood_log.json: ileride doğrulama için günlük kayıt)
 3) Jeopolitik ton ve hacim (GDELT, Türkiye + çatışma/yaptırım/kriz): makro kalkanın jeopolitik girdisi → geo.json
@@ -39,6 +39,11 @@ def run_viop(force=False):
     from tvDatafeed import Interval, TvDatafeed
     snap = fetcher.fetch_snapshot()["stocks"]
     names = fetcher.liquid_names(snap, min_tl=5, cap=220)
+    vr = HERE / "viop_research.json"
+    if vr.exists():  # vadelisi olan hisseler araştırmada biliniyor; boşuna 200+ sembol denenmesin
+        known = json.loads(vr.read_text(encoding="utf-8")).get("names") or []
+        if len(known) >= 10:
+            names = [n for n in names if n in known] or known
     spot = {s["name"]: s["close"] for s in snap if s.get("close")}
     tv = TvDatafeed()
     r = tv.get_hist("TR02Y", "TVC", interval=Interval.in_daily, n_bars=3)

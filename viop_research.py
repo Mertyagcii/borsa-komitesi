@@ -87,7 +87,7 @@ def main(force=False):
     rate = r["close"].astype(float); rate.index = pd.to_datetime(rate.index).normalize()
     eb = excess_basis(spot, fut, rate)
     fwd = {h: spot.shift(-h) / f["open"].shift(-1) - 1 for h in HORIZONS}
-    res = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "futures": int(eb.shape[1]), "stocks": int(spot.shape[1]), "factors": {}, "stats": {}}
+    res = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "futures": int(eb.shape[1]), "names": sorted(map(str, eb.columns)), "stocks": int(spot.shape[1]), "factors": {}, "stats": {}}
     arr = eb.stack().dropna()
     res["stats"] = {"median_pct": round(float(arr.median() * 100), 2), "p10": round(float(arr.quantile(.1) * 100), 2), "p90": round(float(arr.quantile(.9) * 100), 2), "n": int(len(arr))}
     cut = spot.index[-1] - pd.Timedelta(days=365)
