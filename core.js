@@ -1087,7 +1087,7 @@ function archiveMd(day, extras) {
   day.stocks.forEach(s => L.push(`| ${s.n} | ${fmt(s.close)} | ${s.change == null ? "–" : fmt(s.change, 1)} | ${s.score} | ${s.fact.locked ? "🔒 KİLİTLİ" : s.label + (s.veto ? " (VETO)" : "")} | ${sym(s.votes.buffett)} | ${sym(s.votes.simons)} | ${sym(s.votes.livermore)} | ${sym(s.votes.kellogg)} | ${sym(s.votes.seytan)} | ${s.net2} | ${s.fact.locked ? "–" : s.debate.text} | ${s.mc ? "%" + fmt(s.mc.probStop, 0) : "–"} | ${s.fact.locked ? "🔴" : "🟢"} |`));
   L.push("");
   day.stocks.forEach(s => {
-    L.push(`## ${s.n}: ${s.desc || ""}`, "", `Kapanış ${fmt(s.close)} TL · gün ${s.change == null ? "–" : fmt(s.change, 2)}% · sektör ${s.sector || "–"} · komite skoru **${s.score}** (${s.label}${s.veto ? ", Şeytanın Avukatı VETO" : ""})`, "");
+    L.push(`## ${s.n}: ${s.desc || ""}`, "", `Kapanış ${fmt(s.close)} TL · gün ${s.change == null ? "–" : fmt(s.change, 2)}% · sektör ${s.sector ? trSector(s.sector) : "–"} · komite skoru **${s.score}** (${s.label}${s.veto ? ", Şeytanın Avukatı VETO" : ""})`, "");
     if (s.fact.locked) { L.push(`> 🔒 **RAPOR KİLİTLİ (Hata Avcısı).** Karar bölümü yayınlanmadı.`, `> ${s.fact.request}`, ""); L.push("### Oylar", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- ${AR_NAME[k]}: ${AR_VOTE(v)}`)); L.push(""); return; }
     L.push("### Efsanelerin oyları", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- **${AR_NAME[k]}:** ${AR_VOTE(v)}`));
     L.push("", `Yeni uzmanların net oyu: ${s.net2}${s.veto2 ? " (itiraz vetosu var)" : ""}`, "");
@@ -1097,7 +1097,7 @@ function archiveMd(day, extras) {
     L.push("", "### Boğa vs Ayı münazarası", "", `**Ağırlıklı karar skoru: ${s.debate.text} (${s.debate.label})**${s.debate.learned ? " · öğrenilmiş ağırlıklarla" : " · eşit ağırlık (öğrenme için yeterli sonuç birikmedi)"}`, "");
     s.debate.lines.forEach(([side, w, t]) => L.push(`- ${side === "bull" ? "🐂" : "🐻"} **${WHO_TXT[w] || w}:** ${t}`));
     L.push("", `Çürütülemeyen tezler: boğa ${s.debate.unrefBull}, ayı ${s.debate.unrefBear}.`);
-    if (s.peer) { L.push("", `### Sektör ve rakip kıyası (${s.peer.sector}, ${s.peer.n} hisse)`, "", "| Dönem | Hisse % | Sektör medyanı % | Piyasa medyanı % | Fark (puan) | Hareket |", "|---|---:|---:|---:|---:|---|"); s.peer.rows.forEach(([lab, st, sec, mk, rel, type]) => L.push(`| ${lab} | ${st == null ? "–" : fmt(st, 1)} | ${sec == null ? "–" : fmt(sec, 1)} | ${mk == null ? "–" : fmt(mk, 1)} | ${rel == null ? "–" : fmt(rel, 1)} | ${type || "–"} |`)); L.push("", `Sektör içi göreceli güç sırası: ${s.peer.rank || "–"}/${s.peer.rankOf}. Büyük rakipler: ${s.peer.peers.map(p => `${p.n} (gün ${p.change == null ? "–" : fmt(p.change, 1)}%, 1 ay ${p.p1m == null ? "–" : fmt(p.p1m, 1)}%)`).join("; ")}.`); }
+    if (s.peer) { L.push("", `### Sektör ve rakip kıyası (${trSector(s.peer.sector)}, ${s.peer.n} hisse)`, "", "| Dönem | Hisse % | Sektör medyanı % | Piyasa medyanı % | Fark (puan) | Hareket |", "|---|---:|---:|---:|---:|---|"); s.peer.rows.forEach(([lab, st, sec, mk, rel, type]) => L.push(`| ${lab} | ${st == null ? "–" : fmt(st, 1)} | ${sec == null ? "–" : fmt(sec, 1)} | ${mk == null ? "–" : fmt(mk, 1)} | ${rel == null ? "–" : fmt(rel, 1)} | ${type || "–"} |`)); L.push("", `Sektör içi göreceli güç sırası: ${s.peer.rank || "–"}/${s.peer.rankOf}. Büyük rakipler: ${s.peer.peers.map(p => `${p.n} (gün ${p.change == null ? "–" : fmt(p.change, 1)}%, 1 ay ${p.p1m == null ? "–" : fmt(p.p1m, 1)}%)`).join("; ")}.`); }
     L.push("", `**${s.verdict}**`, "", `**Şeytanın Avukatı planı:** ${s.devil.plan}`, "", `Hata Avcısı: ${s.fact.stale ? "ham veri eski/yok, kıyaslanamadı" : `${s.fact.checked} rakam kontrol edildi, çelişki yok`} ✅`, "");
   });
   if (x.scorecard) { L.push("## Geri test skor kartı (komite kararlarının sonradan ölçümü)", "", x.scorecard, ""); }
@@ -1197,7 +1197,14 @@ function debate(s, r) {
    SEKTÖR VE RAKİP KIYASLAMASI (Peer Benchmark): aynı veri çekiminden (TradingView tarayıcı tablosu) hissenin sektör medyanı, piyasa medyanı ve en büyük 5 rakibiyle farkı.
    Her dönem için hareketi 3 katmana ayırır: piyasa → sektör (sektör − piyasa) → hisseye özel (hisse − sektör). Hareket sektörü izliyorsa SEKTÖREL, sektör sakinken
    ya da ters yöndeyken hareket ediyorsa HİSSEYE ÖZEL denir. Sektör medyanı hissenin kendisini içermez. */
-const secName = x => (typeof trSector === "function" ? trSector(x) : x || "Diğer");
+// Sektör adları (TradingView İngilizce verir): çekirdekte tanımlı, arayüz ve arşiv aynı çeviriyi kullanır
+const SECTORS = {"Finance": "Finans", "Non-Energy Minerals": "Enerji Dışı Madenler", "Energy Minerals": "Enerji / Madenler", "Transportation": "Ulaştırma", "Retail Trade": "Perakende",
+  "Consumer Services": "Tüketici Hizmetleri", "Consumer Durables": "Dayanıklı Tüketim", "Consumer Non-Durables": "Dayanıksız Tüketim", "Electronic Technology": "Elektronik Teknoloji",
+  "Technology Services": "Teknoloji Hizmetleri", "Health Technology": "Sağlık Teknolojisi", "Health Services": "Sağlık Hizmetleri", "Industrial Services": "Endüstriyel Hizmetler",
+  "Process Industries": "Proses Sanayi", "Producer Manufacturing": "Üretici İmalat", "Distribution Services": "Dağıtım Hizmetleri", "Commercial Services": "Ticari Hizmetler",
+  "Communications": "İletişim", "Utilities": "Kamu Hizmetleri", "Miscellaneous": "Çeşitli", "Government": "Kamu"};
+const trSector = s => SECTORS[s] || s || "Diğer";
+const secName = trSector;
 const PEER_PERIODS = [["Bugün", "change", 1], ["1 ay", "p1m", 3], ["3 ay", "p3m", 5], ["6 ay", "p6m", 8]];
 const medianOf = a => { const b = a.filter(x => x != null && Number.isFinite(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
 function peerView(s) {
