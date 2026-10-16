@@ -2,13 +2,14 @@
 // Kullanım: node tests/core_test.js <site-klasörü>
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const site = process.argv[2] || "site", rd = f => JSON.parse(fs.readFileSync(path.join(site, f), "utf8"));
+let stressJ = null; try { stressJ = rd("stress.json"); } catch (e) { /* stres verisi yoksa ilgili testler atlanır */ }
 let candlesJ = null; try { candlesJ = rd("candles.json"); } catch (e) { /* mum verisi yoksa seviye testi atlanır */ }
 const data = rd("data.json"), hist = rd("history.json"), news = rd("news.json").news || {}, research = rd("research.json"), mtfr = rd("mtf_composite.json"), k2r = rd("kurul2_research.json"), mr = rd("macro_research.json");
-const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: mr, __NOW: Date.now(), __candles: candlesJ});
+const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: mr, __NOW: Date.now(), __candles: candlesJ, __stress: stressJ});
 const out = vm.runInContext(`
 ${fs.readFileSync(path.join(__dirname, "..", "core.js"), "utf8")}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
-RESEARCH = __research; MTFR = __mtfr; KUR2 = __k2; MACRO_R = __mr; NOW = __NOW;
+RESEARCH = __research; MTFR = __mtfr; KUR2 = __k2; MACRO_R = __mr; STRESS = __stress; NOW = __NOW;
 const UNI = __data.stocks.map(enrich); rankUniverse(UNI); computeSectorStats(UNI); REGIME = computeRegime(UNI, HIST);
 UNIVERSE = UNI;
 current = strengthList(UNI, 25, 5);
@@ -292,6 +293,56 @@ const ents = []; for (let i = 0; i < 40; i++) ents.push({id: "a" + i, who: "Doğ
 const cs = commentStats(ents, OH, 5), rw = w => cs.rows.find(x => x.who === w);
 if (!(rw("Doğru").rate === 1 && rw("Doğru").status === "anlamlı üstünlük" && rw("Yanlış").rate === 0 && rw("Yanlış").status === "anlamlı olarak kötü" && rw("Az").status === "yetersiz örnek" && cs.rows[0].who === "Doğru")) errs.push("yorumcu karnesi hatalı: " + JSON.stringify(cs.rows.map(r => [r.who, r.n, r.rate, r.status])));
 const cc = commentConsensus(ents, "AAA"); if (!(cc.n === 81 && cc.al === 41 && cc.sat === 40) || commentConsensus(ents, "YOK") !== null) errs.push("yorumcu mutabakatı hatalı");
+// --- Kara kuğu stres testi ---
+if (STRESS) {
+  const stk = Object.keys(STRESS.stocks).find(k => UNI.some(u => u.name === k && u.ok)), stS = UNI.find(u => u.name === stk), sx = stressOf(stS), bb = STRESS.stocks[stk], mm = STRESS.meta;
+  const expBist = bb.bmd * -5, expKur = bb.bm2 * Math.min(0, mm.km * 10) + bb.bf * 10, expFaiz = bb.bm2 * Math.min(0, mm.ky * 3) + bb.by * 3, expSwan = bb.bmd * -10 + bb.bf * 8 + bb.by * 4;
+  if (!sx || Math.abs(sx.loss.bist5 - expBist) > 1e-9 || Math.abs(sx.loss.kur10 - expKur) > 1e-9 || Math.abs(sx.loss.faiz3 - expFaiz) > 1e-9 || Math.abs(sx.loss.swan - expSwan) > 1e-9) errs.push("stres kayıp formülü hatalı");
+  const synS = Object.assign({}, any, {name: "SYNSTRESS"}), setB = o => { STRESS.stocks.SYNSTRESS = Object.assign({bm: 1, bm2: 1, bmd: 1, bf: 0, by: 0, r2: 0.5, n: 800}, o); };
+  setB({}); if (!stressOf(synS).ok) errs.push("zararsız hisse stres testini geçemedi");
+  setB({bmd: 2.5}); let sf = stressOf(synS); if (sf.ok || !sf.fail.includes("bist5") || !sf.fail.includes("swan")) errs.push("yüksek düşüş betası yakalanmadı");
+  setB({bf: -2}); sf = stressOf(synS); if (sf.ok || !sf.fail.includes("kur10")) errs.push("kur duyarlılığı yakalanmadı: " + JSON.stringify(sf.loss));
+  setB({by: -4}); sf = stressOf(synS); if (sf.ok || !sf.fail.includes("faiz3")) errs.push("faiz duyarlılığı yakalanmadı");
+  setB({bmd: 2.5}); mcCache = {}; R.stressVeto = 1; let dv1 = devil(synS, null); if (!dv1.veto || !dv1.severe.some(x => /kara kuğu/.test(x)) || !/GEÇEMEDİ/.test(dv1.plan)) errs.push("Şeytanın Avukatı stres testini geçemeyen hisseyi reddetmedi");
+  R.stressVeto = 0; mcCache = {}; const dv0 = devil(synS, null); if (dv0.severe.some(x => /kara kuğu/.test(x))) errs.push("stressVeto=0 iken red verdi"); R.stressVeto = 1;
+  if (stressOf(Object.assign({}, any, {name: "YOKTUR"})) !== null) errs.push("verisi olmayan hisse için null beklenir");
+  delete STRESS.stocks.SYNSTRESS; mcCache = {};
+  const failN = UNI.filter(u => u.ok && stressOf(u) && !stressOf(u).ok).length, haveN = UNI.filter(u => u.ok && stressOf(u)).length; stat.stress = failN + "/" + haveN;
+  if (haveN > 20 && failN > haveN * 0.3) errs.push("stres testi çok fazla hisseyi reddediyor: " + failN + "/" + haveN);
+  if (!(mm.calibration && Math.abs(mm.calibration.pred - mm.calibration.real) < 1.5)) errs.push("stres modeli çöküş günlerinde kalibre değil: " + JSON.stringify(mm.calibration));
+}
+// --- Kelly ve izleyen stop ---
+const fp0 = mcFirstPassage(mcS, 12, 6, 0), fp1 = mcFirstPassage(mcS, 12, 6, 0.01);
+if (!fp0 || Math.abs(fp0.pT / (fp0.pT + fp0.pS) - 1 / 3) > 0.07) errs.push("kenarsız ilk-geçiş olasılığı 1/3'e yakın değil: " + fp0.pT / (fp0.pT + fp0.pS));
+if (!(fp1.pT / (fp1.pT + fp1.pS) > 0.6)) errs.push("pozitif sürüklenmede hedef olasılığı artmadı"); if (Math.abs(fp1.pT + fp1.pS + fp1.pN - 1) > 1e-9) errs.push("ilk-geçiş olasılıkları 1 etmiyor");
+const tsA = {entry: 100, stop0: 94, peak: 105, atr: 2, k: 2.5, S: 6}, tsB = Object.assign({}, tsA, {peak: 106}), tsC = Object.assign({}, tsA, {peak: 120}), tsD = Object.assign({}, tsA, {peak: 130});
+if (trailingStop(tsA) !== 94 || trailingStop(tsB) !== 101 || trailingStop(tsC) !== 115 || !(trailingStop(tsD) > trailingStop(tsC))) errs.push("izleyen stop hesabı hatalı: " + [trailingStop(tsA), trailingStop(tsB), trailingStop(tsC)]);
+if (trailingStop(Object.assign({}, tsA, {peak: 107, atr: 10})) !== 100) errs.push("izleyen stop girişin altına düşmemeli (başa baş koruması)");
+let nEdge = 0, nNo = 0; for (const x of UNI.filter(y => y.ok && y.tl >= 20 && y.atr).slice(0, 150)) { const kp = kellyPlan(x, 100000); if (!kp) continue;
+  if (!(kp.S >= 3 && kp.S <= 15) || Math.abs(kp.T - 2 * kp.S) > 1e-9 || kp.f < 0 || kp.f > 0.2 + 1e-9 || kp.f > kp.fRisk + 1e-9 || kp.f > Math.max(0, kp.half) + 1e-9) errs.push("Kelly sınırları ihlal: " + x.name);
+  if (kp.kelly <= 0 && (kp.f !== 0 || kp.edge)) errs.push("kenar yokken pozisyon önerildi: " + x.name); if (kp.edge) { nEdge++; if (!(kp.amount > 0) || kp.ladder.some((l, i) => l.stop < kp.stop0 - 1e-9 || (i && l.stop < kp.ladder[i - 1].stop - 1e-9)) || kp.ladder[0].stop < x.close - 1e-9) errs.push("izleyen stop merdiveni hatalı: " + x.name); } else nNo++;
+  if (Math.abs(kp.pT + kp.pS + kp.pN - 1) > 1e-9) errs.push("Kelly olasılıkları tutarsız"); }
+stat.kelly = nEdge + "/" + (nEdge + nNo); if (nEdge + nNo < 20) errs.push("Kelly planı çok az hissede üretildi");
+// --- Tahta derinliği ---
+const dpBase = (extra) => ({t: "10:30", bids: [{p: 100, q: 1000, o: 20}, {p: 99.9, q: 1200, o: 25}, {p: 99.8, q: 900, o: 18}, {p: 99.7, q: 1100, o: 22}, {p: 99.6, q: 1000, o: 20}].concat(extra && extra.bids || []), asks: [{p: 100.1, q: 900, o: 18}, {p: 100.2, q: 1100, o: 22}, {p: 100.3, q: 1000, o: 20}, {p: 100.4, q: 950, o: 19}, {p: 100.5, q: 1050, o: 21}].concat(extra && extra.asks || [])});
+const dA = depthAnalyze(dpBase(), {avgVol: 500000, close: 100}); if (!dA || dA.verdict !== "dengeli" || dA.walls.length || dA.spreadTicks !== 1) errs.push("sağlıklı tahta 'dengeli' çıkmadı: " + JSON.stringify(dA && [dA.verdict, dA.walls.length, dA.spreadTicks]));
+const farWall = dpBase(); farWall.bids[4] = {p: 99.6, q: 60000, o: 1}; const dB = depthAnalyze(farWall, {avgVol: 500000, close: 100}); if (!dB || dB.verdict !== "ŞÜPHELİ DERİNLİK" || !dB.walls.some(w => w.side === "alış" && w.dist === 4)) errs.push("uzak büyük/tek emir yakalanmadı: " + JSON.stringify(dB && [dB.verdict, dB.walls]));
+const gone = dpBase(); gone.t = "10:45"; const dC = depthAnalyze(gone, {avgVol: 500000, close: 100, prev: farWall}); if (!dC || !dC.spoof || dC.verdict !== "SPOOFING RİSKİ" || !dC.flags.some(f => /kayboldu/.test(f))) errs.push("kaybolan duvar (spoofing) yakalanmadı: " + JSON.stringify(dC && [dC.verdict, dC.flags]));
+const hit = dpBase(); hit.t = "10:45"; hit.bids = hit.bids.filter(b => b.p < 99.6).map(b => b); hit.bids.unshift({p: 99.5, q: 800, o: 15}); hit.bids = [{p: 99.5, q: 800, o: 15}, {p: 99.4, q: 900, o: 10}, {p: 99.3, q: 900, o: 10}, {p: 99.2, q: 900, o: 10}]; hit.asks = hit.asks.map(a => ({p: a.p - 0.6, q: a.q, o: a.o}));
+const dD = depthAnalyze(hit, {avgVol: 500000, close: 99.6, prev: farWall}); if (dD && dD.spoof) errs.push("fiyat duvara gelip işlem yapılmışsa spoofing denmemeli");
+const heavyBid = dpBase(); heavyBid.bids = heavyBid.bids.map(b => ({p: b.p, q: b.q * 10, o: b.o})); const dE = depthAnalyze(heavyBid, {avgVol: 5e6, close: 100}); if (!(dE.imb > 0.3) || dE.verdict !== "alıcı ağırlıklı") errs.push("alıcı ağırlığı hatalı: " + dE.verdict);
+const askWallS = dpBase(); askWallS.asks[1] = {p: 100.2, q: 40000, o: 12}; const dF = depthAnalyze(askWallS, {avgVol: 5e6, close: 100}); if (!dF.askWall || !dF.block.some(b => /satış duvarı/.test(b))) errs.push("fiyatın üstündeki satış duvarı bulunamadı");
+if (depthAnalyze({bids: [], asks: [{p: 1, q: 1}]}, {}) !== null) errs.push("tek taraflı tahta null dönmeli");
+const dgS = any.name; DEPTH_USER = {[dgS]: dF}; DEPTH_GATE = false; if (depthGate(any) !== null) errs.push("kapı kapalıyken null beklenir"); DEPTH_GATE = true; const dg1 = depthGate(any); if (!dg1 || !dg1.block) errs.push("kapı açıkken engel üretilmedi");
+let gated = 0; for (const x of UNI.filter(y => y.ok && y.tl >= 10)) { DEPTH_GATE = false; const l0 = livermore(x).v, k0 = kellogg(x).v; if (l0 > 0 || k0 > 0) { DEPTH_USER = {[x.name]: dF}; DEPTH_GATE = true; if ((l0 > 0 && livermore(x).v !== 0) || (k0 > 0 && kellogg(x).v !== 0)) errs.push("derinlik kapısı kırılım oyunu kapatmadı: " + x.name); else gated++; if (gated >= 3) break; } }
+stat.depthGated = gated; DEPTH_USER = null; DEPTH_GATE = false;
+// --- Sanal işlem performansına bağlı ağırlık ---
+const mkNav = (g, n) => Array.from({length: n}, (_, i) => ({d: "2026-02-" + String(1 + i).padStart(2, "0"), v: 100000 * Math.pow(1 + g, i)})), mkBench = n => Array.from({length: n}, (_, i) => ({d: "2026-02-" + String(1 + i).padStart(2, "0"), ew: 100}));
+const stP = {p: {buffett: {nav: mkNav(0.005, 25)}, simons: {nav: mkNav(-0.005, 25)}, livermore: {nav: mkNav(0.005, 10)}, kellogg: {nav: mkNav(0.0005, 25)}}, bench: mkBench(25)}, pw = paperWeights(stP);
+if (!(pw.buffett.w === 1.3 && pw.simons.w === 0.7 && pw.livermore.w === 1 && /yetersiz/.test(pw.livermore.status) && pw.kellogg.w > 1 && pw.kellogg.w < 1.3 && pw.akilli.w === 1)) errs.push("sanal işlem ağırlığı hatalı: " + JSON.stringify([pw.buffett.w, pw.simons.w, pw.livermore.w, pw.kellogg.w]));
+if (!/azaltıldı/.test(pw.simons.status) || !/artırıldı/.test(pw.buffett.status)) errs.push("sanal işlem durum metni hatalı");
+buildMemory([], {}); setPaper(stP); const mw = memWeights(); if (!(mw.buffett.w === 1.3 && mw.simons.w === 0.7 && mw.livermore.w === 1 && mw.buffett.paper)) errs.push("memWeights sanal işlem çarpanını uygulamadı: " + JSON.stringify([mw.buffett.w, mw.simons.w]));
+const dbB = debate(any, committee(any)), alB = dbB.al; setPaper(null); if (paperWeights(null) && Object.keys(paperWeights(null)).length) errs.push("boş durumda ağırlık üretildi"); if (memWeights().buffett.w !== 1) errs.push("setPaper(null) sonrası eşit ağırlık beklenir");
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));

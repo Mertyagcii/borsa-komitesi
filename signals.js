@@ -17,7 +17,7 @@ if (!data || !data.stocks || !data.stocks.length) { console.log("data.json yok; 
 const hist = read(path.join(SITE, "history.json"), null);
 const news = (read(path.join(SITE, "news.json"), {news: {}}) || {}).news || {};
 const research = read("research.json", null);
-const mtfr = read("mtf_composite.json", null);
+const mtfr = read("mtf_composite.json", null), k2r = read("kurul2_research.json", null), macroR = read("macro_research.json", null), stress = read("stress.json", null);
 
 function istanbul() {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {timeZone: "Europe/Istanbul", year: "numeric", month: "2-digit", day: "2-digit",
@@ -44,12 +44,12 @@ if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
 
 /* ---- core.js'i bir vm içinde çalıştır (tarayıcıyla aynı mantık) ---- */
 const coreSrc = fs.readFileSync(path.join(__dirname, "core.js"), "utf8");
-const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __NOW: Date.now()});
+const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: macroR, __stress: stress, __NOW: Date.now()});
 const FUND_COLS = ["name", "close", "roe", "nm", "gm", "de", "fcf", "mcap", "eps", "bvps", "epsg", "pe", "pb", "dy", "debt", "ebitda", "cash", "p1m", "p6m", "rs", "upside", "fair", "nipos8", "eqg", "nig4", "dbtg", "cr", "revg"];
 const out = vm.runInContext(`
 ${coreSrc}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
-RESEARCH = __research; MTFR = __mtfr; NOW = __NOW;
+RESEARCH = __research; MTFR = __mtfr; KUR2 = __k2; MACRO_R = __mr; STRESS = __stress; NOW = __NOW;
 const UNI = __data.stocks.map(enrich); rankUniverse(UNI); computeSectorStats(UNI);
 REGIME = computeRegime(UNI, HIST); UNIVERSE = UNI;
 current = strengthList(UNI, 25, 5);

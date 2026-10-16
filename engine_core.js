@@ -7,12 +7,13 @@
 const ENGINE = {capital: 1000000, cost: 0.0015, slip: 0.0010};
 let INTRA = null; // {date, bars:{HISSE:[[o,h,l,c],...]}}: varsa stop/hedef gün içi kronolojik sırayla yürütülür
 const LEGENDS = ["buffett", "simons", "livermore", "kellogg", "komite", "zaman"];
-const LNAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", komite: "Komite (Şeytanın Avukatı gözetiminde)", zaman: "Zaman Modeli (haftalık skor)"};
+const SHADOW = ["akilli", "vol", "kelly"], SHADOW_CAPITAL = 100000, ALLP = LEGENDS.concat(SHADOW), capOf = k => SHADOW.includes(k) ? SHADOW_CAPITAL : ENGINE.capital;
+const LNAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", komite: "Komite (Şeytanın Avukatı gözetiminde)", zaman: "Zaman Modeli (haftalık skor)", akilli: "Akıllı Para Takipçisi (gölge, 100 bin TL)", vol: "Opsiyon & Volatilite Uzmanı (gölge, 100 bin TL)", kelly: "Kelly + izleyen stop (gölge, 100 bin TL)"};
 const r2 = x => Math.round(x * 100) / 100;
 
 function initState(date, cashYield) {
   return {version: 1, start: date, lastDate: null, config: {...ENGINE, cashYield}, bench: [],
-    p: Object.fromEntries(LEGENDS.map(k => [k, {cash: ENGINE.capital, pos: [], orders: [], nav: [], trades: [], log: []}]))};
+    p: Object.fromEntries(ALLP.map(k => [k, {cash: capOf(k), cap: capOf(k), pos: [], orders: [], nav: [], trades: [], log: []}]))};
 }
 const posVal = (x, by) => x.sh * ((by[x.n] && by[x.n].close) || x.lastClose || x.avg);
 const navOf = (p, by) => p.cash + p.pos.reduce((a, x) => a + posVal(x, by), 0);
@@ -241,6 +242,70 @@ function signalsZaman(p, stocks, by, date, nav) {
   }
 }
 
+
+/* ======== Gölge arena: 100.000 TL sanal sermayeli üç ek ajan (yüzde getiriler ölçekten bağımsızdır; mevcut portföyler 1.000.000 TL ile sürer) ======== */
+/* Akıllı Para Takipçisi: CMF/dağıtım/vadeli prim oyu olumlu (v>0) olan, vetosuz hisseler; para çıkışı ya da 10 günlük ufuk dolunca çıkış */
+function signalsAkilli(p, stocks, by, date, nav) {
+  for (const pos of p.pos) {
+    const s = by[pos.n]; if (!s) continue; if (s.atr) pos.stop = Math.max(pos.stop || 0, s.close - 2.5 * s.atr);
+    const a = akilliP(s);
+    if (a.v < 0) queueSell(p, pos, "Akıllı para çıkışa döndü (CMF negatif ya da dağıtım).");
+    else if (pos.days >= 10) { if (a.v > 0) { pos.days = 0; say(p, date, `${pos.n}: 10 günlük ufuk doldu, para girişi sürüyor; pozisyon yenilendi.`, pos.n); } else queueSell(p, pos, "10 günlük ufuk doldu ve para girişi teyidi kalmadı."); }
+  }
+  const slots = 8 - p.pos.length - pendingBuys(p); if (slots <= 0) return;
+  const c = stocks.filter(s => s.ok && s.tl >= 20 && s.atr && !heldOrOrdered(p, s.name)).map(s => [s, akilliP(s)]).filter(([s, a]) => a.v > 0 && !devil(s, null).veto).sort((a, b) => (b[0].cmf ?? 0) - (a[0].cmf ?? 0));
+  if (!c.length) say(p, date, "Para girişi teyitli, vetosuz hisse yok; bekliyorum.");
+  for (const [s, a] of c) {
+    if (p.pos.length + pendingBuys(p) >= 8 || !sectorOk(p, s, 3)) continue;
+    const amount = Math.min(0.10 * nav, p.cash - pendingBuyAmt(p)); if (amount < 0.02 * nav) break;
+    const stop = Math.max(s.close - 2.5 * s.atr, s.close * 0.90);
+    queueBuy(p, {n: s.name, amount, limit: s.close * 1.03, stop, reason: `Akıllı para: CMF ${fmt(s.cmf, 2)}, yükselen trend (para girişi). Stop ${fmt(stop)} TL.`});
+    say(p, date, `${s.name}: para girişi teyitli (CMF ${fmt(s.cmf, 2)}); alım emri verdim.`, s.name);
+  }
+}
+/* Opsiyon & Volatilite Uzmanı: z-skoru sağlıklı trend (0,5-1,8) ya da oynaklık sıkışması + yükselen trend; düşen bıçakta çıkış */
+function signalsVol(p, stocks, by, date, nav) {
+  for (const pos of p.pos) {
+    const s = by[pos.n]; if (!s) continue; if (s.atr) pos.stop = Math.max(pos.stop || 0, s.close - 2.5 * s.atr);
+    const v = volP(s, simons(s).v);
+    if (v.knife || v.v < 0) queueSell(p, pos, "Volatilite uzmanı: düşen bıçak ya da olumsuz oy.");
+    else if (pos.days >= 10) { if (v.v > 0) { pos.days = 0; say(p, date, `${pos.n}: 10 günlük ufuk doldu, sağlıklı trend sürüyor; pozisyon yenilendi.`, pos.n); } else queueSell(p, pos, "10 günlük ufuk doldu ve sağlıklı trend yapısı kalmadı."); }
+  }
+  const slots = 8 - p.pos.length - pendingBuys(p); if (slots <= 0) return;
+  const c = stocks.filter(s => s.ok && s.tl >= 20 && s.atr && !heldOrOrdered(p, s.name)).map(s => [s, volP(s, simons(s).v)]).filter(([s, v]) => v.v > 0 && !devil(s, null).veto).sort((a, b) => (b[0].rs ?? 0) - (a[0].rs ?? 0));
+  if (!c.length) say(p, date, "Sağlıklı trend/sıkışma yapısında vetosuz hisse yok; bekliyorum.");
+  for (const [s, v] of c) {
+    if (p.pos.length + pendingBuys(p) >= 8 || !sectorOk(p, s, 3)) continue;
+    const amount = Math.min(0.10 * nav, p.cash - pendingBuyAmt(p)); if (amount < 0.02 * nav) break;
+    const stop = Math.max(s.close - 2.5 * s.atr, s.close * 0.90);
+    queueBuy(p, {n: s.name, amount, limit: s.close * 1.03, stop, reason: `Volatilite: z-skor ${fmt(v.vs.z20, 2)}, ${v.healthy ? "sağlıklı trend" : "oynaklık sıkışması"}. Stop ${fmt(stop)} TL.`});
+    say(p, date, `${s.name}: z-skor ${fmt(v.vs.z20, 2)}, ${v.healthy ? "sağlıklı trend" : "sıkışma"}; alım emri verdim.`, s.name);
+  }
+}
+/* Kelly + izleyen stop ajanı: komite adaylarının aynı filtresi, ama boyut yarım Kelly (kenar yoksa alım yok) ve stop dinamik (ATR izleyen); komiteyle A/B karşılaştırması */
+function signalsKelly(p, stocks, by, date, nav) {
+  for (const pos of p.pos) {
+    const s = by[pos.n]; if (!s) continue; const kp = kellyPlan(s, nav);
+    if (kp && s.atr) pos.stop = Math.max(pos.stop || 0, trailingStop({entry: pos.avg, stop0: pos.stop || kp.stop0, peak: pos.peak || s.close, atr: s.atr, k: kp.k, S: kp.S}));
+    const r = committee(s);
+    if (r.veto) queueSell(p, pos, `Şeytanın Avukatı veto etti: ${r.l.seytan.severe.join(", ")}.`);
+    else if (r.score <= 0) queueSell(p, pos, "Masa artık olumlu değil (skor ≤ 0).");
+    else if (pos.days >= 20) queueSell(p, pos, "20 günlük süre doldu.");
+  }
+  const slots = 10 - p.pos.length - pendingBuys(p); if (slots <= 0) return;
+  const pool = strengthList(stocks, 80, 15).filter(s => !heldOrOrdered(p, s.name)), bySec = {}; p.pos.forEach(x => { bySec[x.sector] = (bySec[x.sector] || 0) + 1; });
+  const c = pool.map(s => [s, committee(s)]).filter(([, r]) => r.score >= 2 && !r.veto && r.l.seytan.v === 0 && (r.l.livermore.v > 0 || r.l.simons.v > 0)).sort((a, b) => b[1].score - a[1].score || b[0].rs - a[0].rs);
+  let skipped = 0;
+  for (const [s, r] of c) {
+    if (p.pos.length + pendingBuys(p) >= 10) break; if ((bySec[s.sector] || 0) >= 3) continue;
+    const kp = kellyPlan(s, nav); if (!kp || !(kp.f > 0)) { skipped++; continue; }
+    const amount = Math.min(kp.f * nav, p.cash - pendingBuyAmt(p)); if (amount < 0.01 * nav) break;
+    queueBuy(p, {n: s.name, amount, limit: s.close * 1.03, stop: kp.stop0, reason: `Masa uzlaştı (skor ${r.score}); yarım Kelly ile boyut %${fmt(kp.f * 100, 1)} (başarı olasılığı %${fmt(kp.pWin * 100, 0)}), başlangıç stop ${fmt(kp.stop0)} TL, +1R'den sonra ${fmt(kp.k, 1)}×ATR izleyen stop.`});
+    say(p, date, `${s.name}: masa uzlaştı ve Kelly pozitif (olasılık %${fmt(kp.pWin * 100, 0)}); %${fmt(kp.f * 100, 1)} ağırlıkla alım emri.`, s.name); bySec[s.sector] = (bySec[s.sector] || 0) + 1;
+  }
+  if (skipped) say(p, date, `${skipped} masa adayında Kelly ≤ 0 (istatistiksel kenar yok): alınmadı.`);
+}
+
 /* ======== Bir işlem günü ======== */
 function runDay(st, data, date, idx) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s])); window_by = by;
@@ -248,8 +313,8 @@ function runDay(st, data, date, idx) {
   current = strengthList(stocks, 25, 5);
   const prevDate = st.lastDate, days = prevDate ? Math.max(1, Math.round((new Date(date) - new Date(prevDate)) / 864e5)) : 0;
   const cy = st.config.cashYield || 0.30;
-  for (const lg of LEGENDS) {
-    if (!st.p[lg]) st.p[lg] = {cash: ENGINE.capital, pos: [], orders: [], nav: [], trades: [], log: [], startDate: date}; // sonradan eklenen portföy
+  for (const lg of ALLP) {
+    if (!st.p[lg]) st.p[lg] = {cash: capOf(lg), cap: capOf(lg), pos: [], orders: [], nav: [], trades: [], log: [], startDate: date}; // sonradan eklenen portföy
     const p = st.p[lg];
     if (prevDate && p.nav.length) {
       p.cash += p.cash * cy * days / 365; // nakit faizi
@@ -258,7 +323,7 @@ function runDay(st, data, date, idx) {
     }
     const nav = navOf(p, by);
     p.nav.push({d: date, v: r2(nav), c: r2(p.cash), rg: REGIME ? REGIME.trend : null});
-    ({buffett: signalsBuffett, simons: signalsSimons, livermore: signalsLivermore, kellogg: signalsKellogg, komite: signalsKomite, zaman: signalsZaman})[lg](p, stocks, by, date, nav);
+    ({buffett: signalsBuffett, simons: signalsSimons, livermore: signalsLivermore, kellogg: signalsKellogg, komite: signalsKomite, zaman: signalsZaman, akilli: signalsAkilli, vol: signalsVol, kelly: signalsKelly})[lg](p, stocks, by, date, nav);
   }
   // kıyas: BIST100 ve likit 150 hissenin eşit ağırlıklı endeksi
   const liquid = stocks.filter(s => s.close > 0 && s.volume).sort((a, b) => b.tl - a.tl).slice(0, 150).map(s => s.change).filter(c => c != null && Math.abs(c) <= 15);
@@ -272,7 +337,7 @@ function runDay(st, data, date, idx) {
 function fillOnly(st, data, date) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s]));
   let n = 0;
-  for (const lg of LEGENDS) { const p = st.p[lg]; if (!p) continue; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
+  for (const lg of ALLP) { const p = st.p[lg]; if (!p) continue; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
   st.fillDate = date;
   return n;
 }

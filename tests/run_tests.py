@@ -181,6 +181,23 @@ def script_tests(site):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def engine_tests(site):
+    print("2d) Sanal işlem motoru: gölge arena (100.000 TL)")
+    tmp = Path(tempfile.mkdtemp(prefix="bk_eng_")); st = tmp / "state.json"
+    try:
+        r = subprocess.run(["node", str(ROOT / "engine.js"), "--site", site, "--state", str(st), "--nopublish", "--force", "--reset"], capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
+        ok = r.returncode == 0 and st.exists()
+        check("sanal işlem motoru çalıştı", ok, (r.stdout + r.stderr)[-400:])
+        if ok:
+            o = json.loads(st.read_text(encoding="utf-8")); p = o["p"]
+            check("gölge ajanlar var", all(k in p for k in ("akilli", "vol", "kelly")), str(list(p)))
+            check("gölge sermaye 100.000 TL", all(p[k]["cap"] == 100000 and abs(p[k]["nav"][0]["v"] - 100000) < 1 for k in ("akilli", "vol", "kelly")), str({k: (p[k].get("cap"), p[k]["nav"][:1]) for k in ("akilli", "vol", "kelly")}))
+            check("eski portföyler 1.000.000 TL", all(abs(p[k]["nav"][0]["v"] - 1000000) < 1 for k in ("buffett", "simons", "livermore", "kellogg", "komite", "zaman")), "")
+            check("emirler tutarlı (bütçeyi aşmıyor)", all(sum(x["amount"] for x in p[k]["orders"] if x["side"] == "buy") <= p[k]["cash"] + 1 for k in p), "")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def notify_tests():
     print("2c) Bildirim: notify.js")
     tmp = Path(tempfile.mkdtemp(prefix="bk_ntf_"))
@@ -214,6 +231,7 @@ def main():
     core_test(a.site)
     script_tests(a.site)
     notify_tests()
+    engine_tests(a.site)
     if not a.quick:
         browser_tests(a.site)
     print(f"\nSONUÇ: {passes} geçti, {len(fails)} başarısız" + (": " + ", ".join(fails) if fails else ""))

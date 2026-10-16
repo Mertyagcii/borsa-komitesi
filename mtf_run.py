@@ -48,6 +48,11 @@ try:
     viop_research.main()
 except Exception as e:
     print("viop araştırması başarısız:", e)
+try:  # kara kuğu stres testi duyarlılıkları (ohlcv.json + USDTRY/TR10Y)
+    import stress_research
+    stress_research.main()
+except BaseException as e:
+    print("stres araştırması başarısız:", e)
 import mtf_composite
 import mtf_research
 import mtf_walkforward
