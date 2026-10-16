@@ -24,6 +24,28 @@ OUT = HERE / "history.json"
 HORIZONS = (5, 10, 20)
 N_BARS = 800
 KEEP_CLOSES = 170
+CANDLE_BARS = 130
+
+
+def make_candles(frames: dict, axis_idx) -> dict:
+    """Mum grafiği için son CANDLE_BARS günün açılış/yüksek/düşük/kapanış değerleri (ortak tarih ekseni; eksik gün None)."""
+    axis = [str(d)[:10] for d in list(axis_idx)[-CANDLE_BARS:]]
+    pos = {d: i for i, d in enumerate(axis)}
+    out = {"dates": axis, "stocks": {}}
+    for nm, df in frames.items():
+        o, h, l, c = ([None] * len(axis) for _ in range(4))
+        for d, row in zip(df.index, df[["open", "high", "low", "close"]].to_numpy()):
+            i = pos.get(str(d)[:10])
+            if i is not None and not np.isnan(row).any():
+                o[i], h[i], l[i], c[i] = (round(float(x), 3) for x in row)
+        if sum(x is not None for x in c) >= CANDLE_BARS // 2:
+            out["stocks"][nm] = {"o": o, "h": h, "l": l, "c": c}
+    return out
+
+
+def write_candles(candles) -> None:
+    if candles and len(candles.get("stocks", {})) >= 20:
+        (HERE / "candles.json").write_text(json.dumps(candles, separators=(",", ":")), encoding="utf-8")
 
 
 def get_hist(tv, name: str, retries: int = 4):
@@ -78,7 +100,7 @@ def build(names: list[str], log=print) -> dict:
     stocks, pool = {}, {"A": {h: [] for h in HORIZONS}, "B": {h: [] for h in HORIZONS}, "C": {h: [] for h in HORIZONS}}
     pool_n = {"A": 0, "B": 0, "C": 0}
     base = {h: [] for h in HORIZONS}
-    ser = {}
+    ser, frames = {}, {}
     for k, name in enumerate(names, 1):
         df = get_hist(tv, name)
         if df is None:
@@ -87,6 +109,7 @@ def build(names: list[str], log=print) -> dict:
                 tv = TvDatafeed()  # bağlantı koptuysa yeniden bağlan
             continue
         ser[name] = (df.index, df["close"].astype(float).to_numpy(), df["volume"].astype(float).to_numpy())
+        frames[name] = df.tail(CANDLE_BARS + 5)
         close = df["close"].astype(float).reset_index(drop=True)
         lr = np.log(close).diff().dropna()
         sig = signals(close)
@@ -126,6 +149,7 @@ def build(names: list[str], log=print) -> dict:
             if i is not None:
                 c[i] = round(float(a), 3); v[i] = int(round(float(b2) / 1000))
         ohlcv["stocks"][nm] = {"c": c, "v": v}
+    candles = make_candles(frames, idf.index if index and idf is not None else sorted({str(d)[:10] for v in ser.values() for d in v[0]}))
     macro = {}
     # makro kalkan girdileri: son değer ve 5/20 günlük değişim (fiyatlarda %, faizlerde puan farkı)
     for key, sym, ex, pp in (("rf10", "TR10Y", "TVC", True), ("rf2", "TR02Y", "TVC", True), ("us10y", "US10Y", "TVC", True), ("usdtry", "USDTRY", "FX_IDC", False),
@@ -146,7 +170,7 @@ def build(names: list[str], log=print) -> dict:
     pooled["base"] = summarize({h: np.concatenate(v).tolist() if v else [] for h, v in base.items()}, 0)
     return {
         "ts": int(time.time()), "generated": now.strftime("%Y-%m-%d %H:%M"),
-        "bars": N_BARS, "pooled": pooled, "index": index, "macro": macro, "_ohlcv": ohlcv,
+        "bars": N_BARS, "pooled": pooled, "index": index, "macro": macro, "_ohlcv": ohlcv, "_candles": candles,
         "stocks": stocks,
     }
 
@@ -210,6 +234,7 @@ def main() -> None:
             pass
     ohlcv = data.pop("_ohlcv", None)
     write_ohlcv(ohlcv)
+    write_candles(data.pop("_candles", None))
     OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"history.json yazıldı: {len(data['stocks'])} hisse")
 

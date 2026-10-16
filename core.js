@@ -1236,3 +1236,66 @@ function peerLines(s, r, pv) {
   else if (w.st > 0 && w.type === "hisseye özel") say("seytan", `Yükseliş hisseye özel, sektör eşlik etmiyor: tek başına giden hisse sektöre dönebilir ya da sektörü sürükleyebilir. Kovalamayın, stop'u önceden belirleyin.`);
   return L;
 }
+
+/* =====================================================================================
+   AJAN İSABET ARENASI (Leaderboard): her ajanın geçmiş oylarının sonradan ölçülen başarısı. Ölçüt: piyasa ortalamasına göre fazla getiri (5/10/20 iş günü).
+   Olumlu oy → hisse piyasayı yenerse isabet; olumsuz oy → piyasanın gerisinde kalırsa isabet. Sıralama %95 Wilson alt sınırına göredir (az örnekle şans eseri
+   yükselenler öne geçmesin); n < 30 olanlar "yetersiz örnek" sayılır. Not: BIST'te tek bir tahminin tutma olasılığı %50-55 civarıdır; %80 gibi oranlar
+   beklenmemeli, avantaj küçük ve çok işleme yayılınca birikir. Ardışık günlerin kayıtları örtüştüğünden gerçek bağımsız örnek sayısı n'den azdır. */
+const ARENA_NAMES = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", seytan: "Şeytanın Avukatı", makro: "Makro & Jeopolitik Uzmanı", akilli: "Akıllı Para Takipçisi", vol: "Opsiyon & Volatilite Uzmanı", psiko: "Piyasa Psikolojisi Analisti"};
+function wilson(k, n) { if (!n) return null; const z = 1.96, p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)); return [(c - m) / d, (c + m) / d]; }
+function arenaStats(picks, h) {
+  const ex = p => p.r && p.b && p.r[h] != null && p.b[h] != null ? p.r[h] - p.b[h] : null, rows = {};
+  const row = (id, name, kind) => rows[id] || (rows[id] = {id, name, kind, up: {n: 0, hit: 0, sum: 0}, dn: {n: 0, hit: 0, sum: 0}, pending: 0});
+  const vote = (r, v, p) => { if (!v) return; const e = ex(p); if (e == null) { r.pending++; return; } const side = v > 0 ? r.up : r.dn; side.n++; side.sum += e; if ((v > 0 && e > 0) || (v < 0 && e < 0)) side.hit++; };
+  const K5 = ["buffett", "simons", "livermore", "kellogg", "seytan"], K4 = ["makro", "akilli", "vol", "psiko"];
+  let days = new Set(), total = 0;
+  (picks || []).forEach(p => {
+    if (p.src === "komite") {
+      days.add(p.d); total++;
+      if (p.v) K5.forEach((k, i) => vote(row(k, ARENA_NAMES[k], "oy"), p.v[i], p));
+      if (p.v2) K4.forEach((k, i) => vote(row(k, ARENA_NAMES[k], "oy"), p.v2[i], p));
+      vote(row("komite", "Komite (masa skoru ±2)", "komite"), p.sc >= 2 ? 1 : p.sc <= -2 ? -1 : 0, p);
+    } else if (K5.includes(p.src)) vote(row("ekran:" + p.src, "Ekran: " + ARENA_NAMES[p.src], "ekran"), 1, p);
+  });
+  const out = Object.values(rows).map(r => { const n = r.up.n + r.dn.n, hit = r.up.hit + r.dn.hit, ci = wilson(hit, n);
+    const status = n < 30 ? "yetersiz örnek" : ci[0] > 0.5 ? "anlamlı üstünlük" : ci[1] < 0.5 ? "anlamlı olarak kötü" : "şanstan ayırt edilemiyor";
+    return {...r, n, hit, rate: n ? hit / n : null, ci, status, avgUp: r.up.n ? r.up.sum / r.up.n : null, upRate: r.up.n ? r.up.hit / r.up.n : null, dnRate: r.dn.n ? r.dn.hit / r.dn.n : null}; });
+  out.sort((a, b) => (b.ci ? b.ci[0] : -1) - (a.ci ? a.ci[0] : -1) || b.n - a.n);
+  return {h, rows: out, days: days.size, total, measured: out.reduce((a, r) => a + r.n, 0)};
+}
+
+/* =====================================================================================
+   YÜKSEK GÜVENİLİRLİKLİ SİNYAL (Telegram/bildirim için): yalnızca tüm koşullar birlikte sağlanırsa. Her koşul geçmiş araştırmaya ya da bir denetime dayanır:
+   masa skoru ≥ 3 · Şeytanın Avukatı ve uzman vetosu yok · haftalık çok zamanlı skor lider (araştırmanın en tutarlı grubu) · Monte Carlo stop olasılığı < %60 ·
+   Hata Avcısı kilidi yok. Bu, kazanç garantisi değildir; yalnızca "tüm kontrollerden geçti" demektir. */
+function highConfidence(s, r) {
+  const t = mtfTier(s), lead = t && (t.id === "uyumlu" || t.id === "hlider"), mc = monteCarlo(s), f = factCheck(s, r), why = [];
+  if (r.score < 3) why.push("masa skoru < 3"); if (r.veto) why.push("Şeytanın Avukatı vetosu"); if (r.veto2) why.push("uzman itirazı"); if (!lead) why.push("haftalık lider değil");
+  if (mc && mc.probStop >= 60) why.push("stop olasılığı yüksek"); if (f.locked) why.push("rapor kilitli (Hata Avcısı)");
+  return {ok: !why.length, why, debate: debate(s, r).text, stop: mc ? Math.round(mc.probStop) : null, tier: t ? t.label : null};
+}
+
+/* =====================================================================================
+   SEVİYE GRAFİĞİ VERİSİ (mum grafiği üzerine Livermore ve Simons katmanları): saf hesap, çizim arayüzde (template.html).
+   Livermore: pivot (1 aylık zirve), yanılma noktası (pivotun %3 altı), SMA50/SMA200, 52 hafta zirvesi, 60 günlük en küçük kareler trend çizgisi ("en az direnç çizgisi").
+   Simons: 20 günlük ortalama etrafında ±1σ ve ±2σ sapma bantları (z-skor), ±2σ dışındaki günler işaretlenir; bugünkü z-skor. */
+function levelsData(s, cand) {
+  if (!cand || !cand.c) return null;
+  const idx = cand.c.map((v, i) => v != null && cand.o[i] != null && cand.h[i] != null && cand.l[i] != null ? i : -1).filter(i => i >= 0);
+  if (idx.length < 40) return null;
+  const pick = a => idx.map(i => a[i]), o = pick(cand.o), h = pick(cand.h), l = pick(cand.l), c = pick(cand.c), n = c.length, dates = idx.map(i => cand.dates[i]);
+  const sma = (k, i) => i >= k - 1 ? fcAvg(c.slice(i - k + 1, i + 1)) : null, sma20 = c.map((_, i) => sma(20, i)), sma50 = c.map((_, i) => sma(50, i));
+  const sd20 = c.map((_, i) => i >= 19 ? fcSd(c.slice(i - 19, i + 1)) : null), z = c.map((v, i) => sd20[i] > 0 ? (v - sma20[i]) / sd20[i] : null);
+  const m = Math.min(60, n), xs = Array.from({length: m}, (_, i) => i), ys = c.slice(n - m), mx = fcAvg(xs), my = fcAvg(ys);
+  const slope = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / xs.reduce((a, x) => a + (x - mx) ** 2, 0), icpt = my - slope * mx;
+  const trend = {from: n - m, y0: icpt, y1: icpt + slope * (m - 1), slopePct: slope / my * 100};
+  const liv = [];
+  if (s.h1m > 0) { liv.push({y: s.h1m, label: "Pivot (1 aylık zirve)", kind: "pivot"}); liv.push({y: s.h1m * 0.97, label: "Yanılma noktası (pivot −%3)", kind: "stop"}); }
+  if (s.sma50 > 0) liv.push({y: s.sma50, label: "SMA50", kind: "ma"});
+  if (s.sma200 > 0) liv.push({y: s.sma200, label: "SMA200", kind: "ma"});
+  if (s.h52 > 0) liv.push({y: s.h52, label: "52 hafta zirvesi", kind: "hi"});
+  const marks = z.map((v, i) => v != null && Math.abs(v) > 2 ? {i, z: v} : null).filter(Boolean);
+  const lv = livermore(s);
+  return {dates, o, h, l, c, sma20, sma50, sd20, z, trend, liv, marks, zNow: z[n - 1], livVote: lv.v, simVote: simons(s).v, pivotNear: s.h1m ? s.close / s.h1m : null};
+}

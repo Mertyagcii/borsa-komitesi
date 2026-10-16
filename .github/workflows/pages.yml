@@ -41,10 +41,10 @@ jobs:
         run: python extdata.py
       - name: history.json degistiyse kaydet
         run: |
-          if [ -n "$(git status --porcelain history.json ohlcv.json)" ]; then
+          if [ -n "$(git status --porcelain history.json ohlcv.json candles.json)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"
-            git add history.json ohlcv.json
+            git add history.json ohlcv.json candles.json
             git commit -m "history.json guncellendi"
             git push
           fi
@@ -66,14 +66,7 @@ jobs:
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           node alarms.js
-          if [ -f alarms.txt ]; then
-            if [ -n "$ALARM_WEBHOOK_URL" ]; then
-              python -c "import json,sys;t=open('alarms.txt',encoding='utf-8').read();print(json.dumps({'text':t,'content':t}))" | curl -s -X POST -H "Content-Type: application/json" -d @- "$ALARM_WEBHOOK_URL" > /dev/null || true
-            fi
-            if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
-              curl -s "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" --data-urlencode "chat_id=${TG_CHAT}" --data-urlencode "text=$(cat alarms.txt)" > /dev/null || true
-            fi
-          fi
+          node notify.js alarms.txt
       - name: Sanal portfoyler (gunde bir kez, kapanistan sonra)
         run: node engine.js
       - name: Seans kapanisi arsivi (Arsiv/*.md, gunde bir kez, kapanistan sonra)
@@ -93,10 +86,8 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] && [ -f alerts.txt ]; then
-            curl -s "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" --data-urlencode "chat_id=${TG_CHAT}" --data-urlencode "text=$(cat alerts.txt)" > /dev/null
-          fi
+          ALARM_WEBHOOK_URL: ${{ secrets.ALARM_WEBHOOK_URL }}
+        run: node notify.js alerts.txt
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

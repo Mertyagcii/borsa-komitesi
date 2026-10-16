@@ -61,7 +61,8 @@ const events = [];
 Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n); if (!s || !s.close) return;
   (v.items || []).forEach(i => { const tg = tagsOf(i.t).map(x => x[0]); if (tg.length && NOW / 1000 - i.ts < 4 * 86400) events.push({k: n + "|" + i.ts, n, ts: i.ts, tags: tg, s: i.s, e: s.close}); }); });
 ({
-  committee: res.map(([s, r]) => ({n: s.name, e: s.close, sc: r.score, v: [r.l.buffett.v, r.l.simons.v, r.l.livermore.v, r.l.kellogg.v, r.l.seytan.v]})),
+  committee: res.map(([s, r]) => ({n: s.name, e: s.close, sc: r.score, v: [r.l.buffett.v, r.l.simons.v, r.l.livermore.v, r.l.kellogg.v, r.l.seytan.v], v2: [r.k2.makro.v, r.k2.akilli.v, r.k2.vol.v, r.k2.psiko.v]})),
+  hc: res.map(([s, r]) => [s, r, highConfidence(s, r)]).filter(x => x[2].ok).map(([s, r, h]) => ({n: s.name, d: h.debate, stop: h.stop, tier: h.tier})),
   screens: Object.fromEntries(Object.entries(sc).map(([k, arr]) => [k, arr.map(([s, p]) => ({n: s.name, e: s.close, sc: p.score}))])),
   regime: REGIME && {trend: REGIME.trend, label: REGIME.label, a50: Math.round(REGIME.a50)},
   liquid: UNI.filter(s => s.close > 0 && s.volume).map(s => [s.name, s.close, s.tl]).sort((a, b) => b[2] - a[2]).slice(0, 150).map(([n, c]) => [n, c]),
@@ -102,7 +103,7 @@ const evaluated = evalList(store.picks, p => p.d) + evalList(nlog.events, p => p
 /* ---- bugünün kayıtları ---- */
 store.picks = store.picks.filter(p => p.d !== date);
 const rec = [];
-out.committee.forEach(c => rec.push({d: date, src: "komite", n: c.n, e: c.e, sc: c.sc, v: c.v}));
+out.committee.forEach(c => rec.push({d: date, src: "komite", n: c.n, e: c.e, sc: c.sc, v: c.v, v2: c.v2}));
 for (const [k, arr] of Object.entries(out.screens)) arr.forEach(c => rec.push({d: date, src: k, n: c.n, e: c.e, sc: c.sc}));
 store.picks.push(...rec);
 store.regime = Object.assign({}, store.regime, {[date]: out.regime});
@@ -146,9 +147,10 @@ fs.writeFileSync("mtf_log.json", JSON.stringify(mlog));
 fs.writeFileSync("scan_log.json", JSON.stringify(slog));
 publish();
 
-const strong = out.committee.filter(c => c.sc >= 3).map(c => c.n);
+const hcNames = new Set(out.hc.map(x => x.n)), strong = out.committee.filter(c => c.sc >= 3 && !hcNames.has(c.n)).map(c => c.n);
 const alertLines = [];
-if (strong.length) alertLines.push(`güçlü aday → ${strong.join(", ")}`);
+if (out.hc.length) alertLines.push(`YÜKSEK GÜVENİLİRLİKLİ SİNYAL (masa ≥3, veto yok, haftalık lider, stop riski düşük, rakamlar doğrulandı) → ${out.hc.map(x => `${x.n} (${x.d}${x.stop != null ? `, stop olasılığı %${x.stop}` : ""})`).join("; ")}`);
+if (strong.length) alertLines.push(`güçlü aday (ek teyit eksik) → ${strong.join(", ")}`);
 if (newLeaders.length) alertLines.push(`yeni lider kurulum (haftalık skor) → ${newLeaders.join(", ")}`);
 if (alertLines.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: ` + alertLines.join(" | ") + " (yatırım tavsiyesi değildir)");
 console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}`);

@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = ["dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
-         "arsiv", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
+         "arsiv", "arena", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
 fails, passes = [], 0
 
 
@@ -181,6 +181,28 @@ def script_tests(site):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def notify_tests():
+    print("2c) Bildirim: notify.js")
+    tmp = Path(tempfile.mkdtemp(prefix="bk_ntf_"))
+    try:
+        env = {k: v for k, v in os.environ.items() if k not in ("TG_TOKEN", "TG_CHAT", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "ALARM_WEBHOOK_URL")}
+        long = tmp / "long.txt"; long.write_text("\n".join(f"• satır {i} <b>&</b> " + "x" * 80 for i in range(120)), encoding="utf-8")
+        r = subprocess.run(["node", str(ROOT / "notify.js"), "--dry", str(long)], capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(tmp))
+        m = re.search(r"(\d+) parça", r.stdout)
+        check("bildirim uzun mesajı parçalıyor", r.returncode == 0 and m is not None and int(m.group(1)) >= 3, r.stdout[-200:] + r.stderr[-200:])
+        short = tmp / "short.txt"; short.write_text("🚨 deneme", encoding="utf-8")
+        r = subprocess.run(["node", str(ROOT / "notify.js"), str(short)], capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(tmp))
+        check("bildirim sır yokken sessizce atlıyor", r.returncode == 0 and "yapılandırılmamış" in r.stdout, r.stdout[-200:] + r.stderr[-200:])
+        r = subprocess.run(["node", str(ROOT / "notify.js"), str(tmp / "yok.txt")], capture_output=True, text=True, encoding="utf-8", env=env, cwd=str(tmp))
+        check("bildirim dosya yokken hata vermiyor", r.returncode == 0, r.stdout[-200:] + r.stderr[-200:])
+        js = "const n=require(%r);const c=n.chunks('a\\n'.repeat(5000),3800);console.log(JSON.stringify({ok:c.every(x=>x.length<=3800),n:c.length,e:n.esc('<a&b>')}))" % str(ROOT / "notify.js").replace("\\", "/")
+        r = subprocess.run(["node", "-e", js], capture_output=True, text=True, encoding="utf-8")
+        o = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 and r.stdout.strip() else {}
+        check("bildirim parça sınırı ve kaçış", o.get("ok") is True and o.get("n", 0) >= 2 and o.get("e") == "&lt;a&amp;b&gt;", r.stdout[-200:] + r.stderr[-200:])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--site", default=str(ROOT / "site"))
@@ -191,6 +213,7 @@ def main():
         print("site/data.json yok: önce `python build_site.py` çalıştırın."); sys.exit(2)
     core_test(a.site)
     script_tests(a.site)
+    notify_tests()
     if not a.quick:
         browser_tests(a.site)
     print(f"\nSONUÇ: {passes} geçti, {len(fails)} başarısız" + (": " + ", ".join(fails) if fails else ""))

@@ -2,8 +2,9 @@
 // Kullanım: node tests/core_test.js <site-klasörü>
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const site = process.argv[2] || "site", rd = f => JSON.parse(fs.readFileSync(path.join(site, f), "utf8"));
+let candlesJ = null; try { candlesJ = rd("candles.json"); } catch (e) { /* mum verisi yoksa seviye testi atlanır */ }
 const data = rd("data.json"), hist = rd("history.json"), news = rd("news.json").news || {}, research = rd("research.json"), mtfr = rd("mtf_composite.json"), k2r = rd("kurul2_research.json"), mr = rd("macro_research.json");
-const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: mr, __NOW: Date.now()});
+const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: mr, __NOW: Date.now(), __candles: candlesJ});
 const out = vm.runInContext(`
 ${fs.readFileSync(path.join(__dirname, "..", "core.js"), "utf8")}
 let R = Object.assign({}, DEFAULTS); let HIST = __hist; let NEWS = __news; let current = [];
@@ -159,6 +160,40 @@ UNIVERSE = uniSave.concat([sy], syPeers); pS = peerView(sy); const pl2 = peerLin
 UNIVERSE = uniSave;
 // Hata Avcısı üretilmiş satırları taramamalı
 fcReset(); const gen = factCheck(hs, hr, {nocache: true}); if (gen.issues.some(i => i.kind === "metin")) errs.push("üretilmiş satırlar iddia olarak tarandı");
+// --- Arena (isabet tablosu) ---
+const wl = wilson(8, 10); if (!(wl[0] > 0.4 && wl[0] < 0.5 && wl[1] > 0.9 && wl[1] <= 1) || wilson(0, 0) !== null) errs.push("Wilson aralığı hatalı: " + wl);
+const mkp = (d, n, sc, v, r10, b10, src) => ({d, src: src || "komite", n, e: 10, sc, v, v2: [1, 0, -1, 0], r: r10 == null ? undefined : {10: r10}, b: b10 == null ? undefined : {10: b10}});
+const arP = []; for (let i = 0; i < 40; i++) arP.push(mkp("2026-01-" + String(1 + i % 28).padStart(2, "0"), "A" + i, 2, [1, -1, 0, 1, 0], i < 30 ? 6 : -6, 1));   // 1. oy: 40 olumlu (30 tuttu); 2. oy: 40 olumsuz (10 tuttu)
+arP.push(mkp("2026-02-01", "Z", 3, [1, 1, 1, 1, 1], null, null));                    // sonucu henüz yok: bekleyen
+arP.push(mkp("2026-02-01", "SCR", 0, undefined, 5, 0, "livermore"));                // ekran kaydı
+const AS = arenaStats(arP, 10), rowOf = id => AS.rows.find(x => x.id === id);
+if (!(rowOf("buffett").n === 40 && rowOf("buffett").hit === 30 && rowOf("buffett").up.n === 40 && rowOf("buffett").pending === 1)) errs.push("arena buffett sayımı hatalı: " + JSON.stringify(rowOf("buffett")));
+if (!(rowOf("simons").n === 40 && rowOf("simons").hit === 10 && rowOf("simons").dn.n === 40 && rowOf("simons").status === "anlamlı olarak kötü")) errs.push("arena olumsuz oy isabeti hatalı: " + JSON.stringify(rowOf("simons")));
+if (rowOf("buffett").status !== "anlamlı üstünlük") errs.push("arena anlamlılık hatalı: " + rowOf("buffett").status);
+if (rowOf("livermore").n !== 0 || rowOf("livermore").pending !== 1 || rowOf("livermore").status !== "yetersiz örnek") errs.push("arena küçük örnek hatalı");
+if (!rowOf("ekran:livermore") || rowOf("ekran:livermore").up.hit !== 1) errs.push("arena ekran satırı yok");
+if (!rowOf("makro") || rowOf("makro").up.n !== 40) errs.push("arena yeni uzman (v2) oyları sayılmadı");
+if (AS.rows[0].id !== "buffett" && AS.rows[0].id !== "makro" && AS.rows[0].id !== "komite") errs.push("arena sıralaması alt sınıra göre değil: " + AS.rows[0].id);
+if (arenaStats([], 10).rows.length !== 0 || arenaStats(null, 10).rows.length !== 0) errs.push("arena boş kayıt hatalı");
+const AS5 = arenaStats(arP, 5); if (AS5.measured !== 0) errs.push("arena ufku ayrımı hatalı (5g sonucu yokken ölçüm var)");
+// --- Yüksek güvenilirlikli sinyal ---
+let hcN = 0; for (const x of UNI.filter(y => y.ok && y.tl >= 10).slice(0, 200)) { const rr = committee(x), h = highConfidence(x, rr); if (h.ok) { hcN++; if (rr.score < 3 || rr.veto || rr.veto2 || !/Uyumlu|lider/i.test(h.tier || "")) errs.push("yüksek güvenilirlik koşulları ihlal: " + x.name); } else if (!h.why.length) errs.push("gerekçesiz ret " + x.name); }
+const hcv = current.find(x => committee(x).veto), hcRet = hcv && highConfidence(hcv, committee(hcv)); if (hcv && (hcRet.ok || !hcRet.why.some(w => /veto/i.test(w)))) errs.push("veto edilen hisse yüksek güvenilirlik sayıldı");
+stat.hc = hcN;
+// --- Seviye grafiği verisi ---
+if (__candles) {
+  const cn = Object.keys(__candles.stocks).find(k => UNI.some(u => u.name === k && u.ok)), cs = UNI.find(u => u.name === cn), LD = levelsData(cs, Object.assign({dates: __candles.dates}, __candles.stocks[cn]));
+  if (!LD || LD.c.length < 40) errs.push("seviye verisi üretilemedi");
+  else {
+    const L = LD.c.length; if (LD.o.length !== L || LD.h.length !== L || LD.sma20.length !== L || LD.z.length !== L) errs.push("seviye serileri uzunluğu tutmuyor");
+    if (LD.h.some((v, i) => v < LD.l[i] - 1e-9 || v < Math.max(LD.o[i], LD.c[i]) - 1e-6)) errs.push("mum yüksek/düşük tutarsız");
+    const zi = L - 1, m = LD.c.slice(zi - 19, zi + 1), mean = m.reduce((a, b) => a + b, 0) / 20, sd = Math.sqrt(m.reduce((a, b) => a + (b - mean) ** 2, 0) / 20); if (Math.abs(LD.zNow - (LD.c[zi] - mean) / sd) > 1e-9) errs.push("z-skor hesabı hatalı");
+    if (!LD.liv.some(x => x.kind === "pivot") && cs.h1m > 0) errs.push("pivot seviyesi yok"); if (LD.liv.some(x => x.kind === "stop" && Math.abs(x.y - cs.h1m * 0.97) > 1e-9)) errs.push("yanılma noktası pivotun %3 altı değil");
+    if (!(isFinite(LD.trend.y0) && isFinite(LD.trend.y1))) errs.push("trend çizgisi sonsuz");
+    stat.levelBars = L;
+  }
+  if (levelsData(cs, {dates: [], o: [], h: [], l: [], c: []}) !== null || levelsData(cs, null) !== null) errs.push("boş mum verisi null dönmeli");
+}
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));

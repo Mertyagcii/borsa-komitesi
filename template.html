@@ -198,6 +198,9 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
 .factok{font-size:12px;color:var(--mute);margin:4px 0}
+.arena td,.arena th{padding:5px 9px;font-size:12.8px;text-align:right;white-space:nowrap}.arena td:nth-child(-n+2),.arena th:nth-child(-n+2){text-align:left}
+.rbar{display:inline-block;width:70px;height:8px;background:var(--panel2);border-radius:4px;vertical-align:middle;position:relative;overflow:hidden}.rbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent2)}.rbar b{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--mute)}
+.lvtog{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0;font-size:13px}.lvtog label{display:flex;gap:5px;align-items:center}
 .dbt{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0}.dbt i{display:block}.dbt .a{background:var(--up)}.dbt .t{background:var(--mute);opacity:.5}.dbt .s{background:var(--down)}
 .dbline{padding:3px 0;font-size:13px}.dbline.bull{border-left:3px solid var(--up);padding-left:8px}.dbline.bear{border-left:3px solid var(--down);padding-left:8px;margin-left:14px}
 .peert td,.peert th{padding:3px 8px;font-size:12.5px;text-align:right}.peert td:first-child,.peert th:first-child{text-align:left}
@@ -303,6 +306,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="kutu"><i data-ico="clipboard"></i>Haber Kutusu <span id="inboxBadge" class="vb good" style="margin-left:auto;display:none"></span></a>
       <a data-view="karne"><i data-ico="award"></i>Komite Karnesi</a>
       <a data-view="arsiv"><i data-ico="clipboard"></i>Arşiv (Denetim Notları)</a>
+      <a data-view="arena"><i data-ico="award"></i>Ajan Arenası</a>
       <a data-view="arastirma"><i data-ico="flask"></i>Sistem Araştırması</a>
       <a data-view="geritest"><i data-ico="bars"></i>Geri Test</a>
     </nav>
@@ -431,6 +435,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-halkaarz"><section class="card" id="ipoView"></section></div>
     <div class="view" id="v-ozelveri"><section class="card" id="ovView"></section></div>
     <div class="view" id="v-arsiv"><section class="card" id="arView"></section></div>
+    <div class="view" id="v-arena"><section class="card" id="arenaView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -502,6 +507,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <li><b>Hafıza ve öğrenme:</b> Efsaneler masaya oturunca aynı hissedeki geçmiş oylarına (picks.json ve Arsiv/ kayıtları) bakar: "geçen hafta olumluydum, bugün olumsuzum çünkü ..." diye gerekçelendirir; fiyat ve skor değişmediği halde oyu çevirmek "eşik titremesi" sayılır ve denetçiye bildirilir. Her efsanenin isabeti 10 iş günü sonra piyasa ortalamasına göre ölçülür; en az 30 ölçülmüş karardan sonra ağırlığı 0,6–1,4 aralığında ayarlanır (öncesinde eşit ağırlık).</li>
           <li><b>Boğa vs Ayı:</b> 9 oy sahibi boğa/ayı kampına ayrılır, her kamp kontrol listesinden tez kurar, karşı kamp aynı konuda (trend, değer, para akışı, risk, momentum) veriyle yanıt verir; yanıtsız kalan tezler "çürütülemedi" sayılır. Sonuç %Al / %Tut / %Sat ağırlıklı karar skorudur (komite skorunu ve sanal portföyleri değiştirmez).</li>
           <li><b>Sektör kıyası:</b> Hissenin hareketi piyasa, sektör ve hisseye özel parçalara ayrılır (sektör medyanı ve en büyük 5 rakip); efsaneler düşüşün/yükselişin sektörel mi hisseye özel mi olduğunu söyleyerek yorum yapar.</li>
+          <li><b>Seviye grafiği:</b> Grafik sayfasında ve hisse detayında, günlük mumların üzerine Livermore'un seviyeleri (pivot, yanılma noktası, SMA50/200, 52 hafta zirvesi, 60 günlük trend çizgisi) ve Simons'ın ±1σ/±2σ sapma bantları çizilir. Bant dışı = otomatik sinyal değildir (geçmiş araştırma bunu desteklemiyor).</li>
+          <li><b>Ajan Arenası:</b> Her ajanın geçmiş oylarının 5/10/20 iş gün sonra piyasa ortalamasına göre isabeti, %95 güven aralığıyla gösterilir; en az 30 ölçülmüş oy gerekir. Gerçekçi isabet %50-55 civarıdır.</li>
+          <li><b>Bildirimler:</b> Kapanışta "yüksek güvenilirlikli sinyal" (masa ≥3, veto yok, haftalık lider, düşük stop riski, rakamlar doğrulanmış) ve seans içinde kritik alarmlar Telegram'a/webhook'a gider (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALARM_WEBHOOK_URL GitHub secret'ları tanımlıysa).</li>
           <li><b>Hata Avcısı:</b> Ajanların metinlerindeki ve tablodaki rakamları (RSI, SMA, günlük değişim, 1 ay getiri, F/K, 52 hafta aralığı, z-skor) TradingView kapanış geçmişinden bağımsız yeniden hesaplar. Çelişki varsa o hissenin raporu KİLİTLENİR ve düzeltme talebi yazılır; veri düzelince kilit kalkar. Ajanlar kural tabanlıdır (yapay zekâ metni yok); bu kontrol veri/kod hatasını yakalar.</li>
           <li><b>Alarm motoru:</b> Seans içinde ani hacim patlaması, 50 günlük ortalama kırılımı (hisse ve BIST 100), Şeytanın Avukatı vetosu ve piyasa paniği izlenir; kritik olanlar kırmızı "Kritik Piyasa Alarmı" bandında görünür, sunucu tarafında webhook/Telegram'a gider.</li>
           <li><b>Arşiv:</b> Her seans kapanışında konsey tartışması, oylar, Monte Carlo, Baş Denetçi ve Hata Avcısı mührü Arsiv/ klasörüne Markdown olarak kaydedilir (Arşiv sayfasından okunur, PDF olarak kaydedilir).</li>
@@ -1453,6 +1461,86 @@ document.addEventListener("click", e => {
 
 
 
+
+/* ---------- Seviye grafiği: mum + Livermore seviyeleri + Simons sapma bantları ---------- */
+let CANDLES = null;
+async function loadCandles() { if (CANDLES) return CANDLES; const o = await getJson("candles.json?t=" + Math.floor(Date.now() / 36e5)); if (o && o.dates && o.stocks) CANDLES = o; return CANDLES; }
+function lvDraw(id, s, opt) {
+  const cv = $(id), cd = CANDLES && CANDLES.stocks[s.name]; if (!cv || !cd) return null;
+  const D = levelsData(s, {...cd, dates: CANDLES.dates}); if (!D) return null;
+  opt = opt || {liv: true, sim: true};
+  const H = +cv.dataset.h || 300, {g, w} = setupCanvas(cv, H), N = Math.min(90, D.c.length), off = D.c.length - N, X = i => 44 + (i - off + 0.5) / N * (w - 56);
+  let lo = Math.min(...D.l.slice(off)), hi = Math.max(...D.h.slice(off));
+  if (opt.sim) D.sma20.slice(off).forEach((m, k) => { const sd = D.sd20[off + k]; if (m != null && sd != null) { lo = Math.min(lo, m - 2 * sd); hi = Math.max(hi, m + 2 * sd); } });
+  const span = hi - lo, lvls = opt.liv ? D.liv.filter(x => x.y >= lo - 0.3 * span && x.y <= hi + 0.3 * span) : [], outside = opt.liv ? D.liv.filter(x => !lvls.includes(x)) : [];
+  lvls.forEach(x => { lo = Math.min(lo, x.y); hi = Math.max(hi, x.y); }); const pad = (hi - lo) * 0.04; lo -= pad; hi += pad;
+  const Y = v => H - 16 - (v - lo) / (hi - lo) * (H - 28), up = css("--up"), dn = css("--down"), mute = css("--mute"), warn = css("--warn"), acc = css("--accent2");
+  g.font = "11px system-ui"; g.lineWidth = 1;
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); g.strokeStyle = alpha("--mute", 0.18); g.beginPath(); g.moveTo(40, y); g.lineTo(w - 4, y); g.stroke(); g.fillStyle = mute; g.fillText(fmt(v, v < 20 ? 2 : 1), 2, y + 4); }
+  if (opt.sim) { // ±1σ gölge, ±2σ kesikli, SMA20
+    g.beginPath(); let started = false; for (let i = off; i < D.c.length; i++) { if (D.sma20[i] == null) continue; const x = X(i), y = Y(D.sma20[i] + D.sd20[i]); started ? g.lineTo(x, y) : g.moveTo(x, y); started = true; }
+    for (let i = D.c.length - 1; i >= off; i--) { if (D.sma20[i] == null) continue; g.lineTo(X(i), Y(D.sma20[i] - D.sd20[i])); } g.closePath(); g.fillStyle = alpha("--accent2", 0.1); g.fill();
+    const ln = (fn, col, dash, lw) => { g.beginPath(); g.strokeStyle = col; g.lineWidth = lw || 1; g.setLineDash(dash || []); let on = false; for (let i = off; i < D.c.length; i++) { const v = fn(i); if (v == null) continue; on ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)); on = true; } g.stroke(); g.setLineDash([]); };
+    ln(i => D.sma20[i] == null ? null : D.sma20[i] + 2 * D.sd20[i], alpha("--accent2", 0.7), [5, 4]); ln(i => D.sma20[i] == null ? null : D.sma20[i] - 2 * D.sd20[i], alpha("--accent2", 0.7), [5, 4]); ln(i => D.sma20[i], acc, [], 1.2);
+  }
+  const bw = Math.max(1.5, (w - 56) / N * 0.62);
+  for (let i = off; i < D.c.length; i++) { const x = X(i), col = D.c[i] >= D.o[i] ? up : dn; g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 1; g.beginPath(); g.moveTo(x, Y(D.h[i])); g.lineTo(x, Y(D.l[i])); g.stroke(); const y1 = Y(Math.max(D.o[i], D.c[i])), y2 = Y(Math.min(D.o[i], D.c[i])); g.fillRect(x - bw / 2, y1, bw, Math.max(1, y2 - y1)); }
+  if (opt.sim) D.marks.filter(m => m.i >= off).forEach(m => { const x = X(m.i), y = m.z > 0 ? Y(D.h[m.i]) - 6 : Y(D.l[m.i]) + 6; g.fillStyle = m.z > 0 ? warn : acc; g.beginPath(); m.z > 0 ? (g.moveTo(x, y + 4), g.lineTo(x - 3.5, y - 3), g.lineTo(x + 3.5, y - 3)) : (g.moveTo(x, y - 4), g.lineTo(x - 3.5, y + 3), g.lineTo(x + 3.5, y + 3)); g.closePath(); g.fill(); });
+  if (opt.liv) {
+    const colOf = k => k === "pivot" ? up : k === "stop" ? dn : k === "hi" ? warn : mute;
+    lvls.forEach(x => { g.strokeStyle = colOf(x.kind); g.lineWidth = 1.2; g.setLineDash(x.kind === "ma" ? [2, 3] : [7, 4]); g.beginPath(); g.moveTo(40, Y(x.y)); g.lineTo(w - 4, Y(x.y)); g.stroke(); g.setLineDash([]); g.fillStyle = colOf(x.kind); g.textAlign = "right"; g.fillText(`${x.label} ${fmt(x.y, x.y < 20 ? 2 : 1)}`, w - 6, Y(x.y) - 3); g.textAlign = "left"; });
+    const T = D.trend; g.strokeStyle = D.trend.slopePct >= 0 ? up : dn; g.lineWidth = 1.6; g.beginPath(); g.moveTo(X(T.from), Y(T.y0)); g.lineTo(X(D.c.length - 1), Y(T.y1)); g.stroke();
+  }
+  return {bars: N, levels: lvls.map(x => x.label), outside: outside.map(x => x.label), zNow: D.zNow, trendPct: D.trend.slopePct, marks: D.marks.length, D};
+}
+function lvInfoHtml(s) {
+  const cd = CANDLES && CANDLES.stocks[s.name]; if (!cd) return "";
+  const D = levelsData(s, {...cd, dates: CANDLES.dates}); if (!D) return "";
+  const np = D.pivotNear, z = D.zNow, lvl = D.liv.filter(x => x.kind !== "ma");
+  const outs = D.liv.filter(x => x.y < D.l.slice(-90).reduce((a, b) => Math.min(a, b), Infinity) * 0.7 || x.y > D.h.slice(-90).reduce((a, b) => Math.max(a, b), 0) * 1.4);
+  return `<ul class="note" style="margin:6px 0 0">
+    <li><b>Livermore:</b> ${s.h1m ? `fiyat pivotun (${fmt(s.h1m)}) ${np >= 1 ? "üstünde" : "%" + fmt((1 - np) * 100, 1) + " altında"}; yanılma noktası ${fmt(s.h1m * 0.97)}.` : "pivot verisi yok."} 60 günlük trend çizgisi ${D.trend.slopePct >= 0 ? "yukarı" : "aşağı"} (günde ${D.trend.slopePct > 0 ? "+" : ""}${fmt(D.trend.slopePct, 2)}%). Masadaki oyu: ${D.livVote > 0 ? "olumlu" : D.livVote < 0 ? "olumsuz" : "nötr"}.${outs.length ? ` Görünen aralığın çok dışında: ${outs.map(x => x.label).join(", ")}.` : ""}</li>
+    <li><b>Simons:</b> bugünkü z-skor ${z == null ? "–" : fmt(z, 2)} (20 günlük ortalamadan ${z == null ? "–" : (z > 0 ? "+" : "") + fmt(z, 1)}σ). Son 90 günde ±2σ dışına ${D.marks.filter(m => m.i >= D.c.length - 90).length} kez çıktı (üçgenler). Geçmiş araştırma: ${k2ev("z_asiri_ust")} (aşırı uzama sonrası) ve ${k2ev("z_asiri_alt")} (aşırı düşüş sonrası): bant dışı = otomatik alım/satım sinyali değildir. Masadaki oyu: ${D.simVote > 0 ? "olumlu" : D.simVote < 0 ? "olumsuz" : "nötr"}.</li></ul>
+    <div class="note">Mumlar günlük (son ${Math.min(90, D.c.length)} gün). <span class="up">━ pivot</span> · <span class="down">━ yanılma noktası</span> · <span style="color:var(--warn)">━ 52 hafta zirvesi</span> · noktalı: SMA50/SMA200 · düz çizgi: 60 gün trend · yeşil gölge: ±1σ · kesikli: ±2σ. Eğitim amaçlıdır.</div>`;
+}
+async function lvPage() {
+  const box = $("tvBox"); if (!box) return;
+  box.style.height = "auto"; box.style.border = "0"; box.style.overflow = "visible"; box.innerHTML = "<p class='mute' style='padding:16px'>Mum verisi yükleniyor…</p>";
+  await loadCandles(); if (view !== "grafik") return;
+  const s = UNIVERSE.find(x => x.name === chSym);
+  if (!s || !CANDLES || !CANDLES.stocks[chSym]) { box.innerHTML = `<p class="note" style="padding:12px">${esc(chSym)} için mum verisi yok (günlük mum verisi yalnızca en likit ~${CANDLES ? Object.keys(CANDLES.stocks).length : 140} hisse için tutulur). TradingView sekmesinden bakabilirsiniz.</p>`; return; }
+  const lvo = store.get("lvOpt", {liv: true, sim: true});
+  box.innerHTML = `<div class="lvtog"><label><input type="checkbox" id="lvLiv" ${lvo.liv ? "checked" : ""}> Livermore seviyeleri</label><label><input type="checkbox" id="lvSim" ${lvo.sim ? "checked" : ""}> Simons sapma bantları</label></div><canvas id="lvCv" data-h="460" style="width:100%;height:460px"></canvas><div id="lvInfo">${lvInfoHtml(s)}</div>`;
+  lvDraw("lvCv", s, lvo);
+}
+document.addEventListener("change", e => {
+  if (e.target.id !== "lvLiv" && e.target.id !== "lvSim") return;
+  const o = {liv: $("lvLiv").checked, sim: $("lvSim").checked}; store.set("lvOpt", o); const s = UNIVERSE.find(x => x.name === chSym); if (s) lvDraw("lvCv", s, o);
+});
+function lvDetailHtml(P) { return `<details class="meet" open><summary>📈 Seviye grafiği · Livermore seviyeleri + Simons sapma bantları</summary><canvas id="${P}lv" data-h="260" style="width:100%;height:260px"></canvas><div id="${P}lvn"></div></details>`; }
+function lvDetail(P, s) {
+  loadCandles().then(() => { const r = lvDraw(P + "lv", s); const n = $(P + "lvn"); if (!n) return; n.innerHTML = r ? lvInfoHtml(s) : `<p class="note">Bu hisse için mum verisi yok (yalnızca en likit hisseler için tutulur).</p>`; });
+}
+
+/* ---------- Ajan İsabet Arenası ---------- */
+let arenaH = store.get("arenaH", 10);
+async function renderArena() {
+  const el = $("arenaView"), head = `<h2>Ajan İsabet Arenası <span class="sub">geçmiş oyların sonradan ölçülen başarısı</span></h2>`;
+  el.innerHTML = head + "<p class='mute'>Yükleniyor…</p>";
+  await loadPicks(); if (view !== "arena") return;
+  const A = PICKS && PICKS.picks ? arenaStats(PICKS.picks, arenaH) : null, pct = v => v == null ? "–" : "%" + fmt(v * 100, 0);
+  const medal = i => ["🥇", "🥈", "🥉"][i] || "";
+  let rank = 0;
+  el.innerHTML = head + `<p class="note">Her ajanın <b>olumlu</b> oyu hisse piyasa ortalamasını yenerse, <b>olumsuz</b> oyu piyasanın gerisinde kalırsa isabet sayılır; ölçüm ${arenaH} iş günü sonra yapılır. Sıralama, şansa karşı dayanıklı <b>%95 güven aralığının alt sınırına</b> göredir. <b>Gerçekçi beklenti:</b> BIST'te tek tahminin tutma olasılığı %50-55 civarıdır; %80 gibi bir oran beklenmemeli (araştırmamızda en iyi grup bile ≈%53). Avantaj küçüktür ve çok işleme yayılınca birikir. Kayıtlar ${A ? A.days : 0} günlük; ardışık günler örtüştüğü için gerçek bağımsız örnek, n'den azdır.</p>
+    <div class="tabs">${[5, 10, 20].map(h => `<button class="tab ${arenaH === h ? "on" : ""}" data-arenah="${h}">${h} iş günü</button>`).join("")}</div>
+    ${!A || !A.rows.length ? "<p class='mute'>Henüz kayıt yok.</p>" : `<div class="tw"><table class="arena"><thead><tr><th></th><th>Ajan</th><th>Ölçülen oy (n)</th><th>İsabet</th><th>%95 aralık</th><th>Olumlu oy isabeti</th><th>Olumsuz oy isabeti</th><th>Olumlu oylarda ort. fazla getiri</th><th>Bekleyen</th><th>Durum</th></tr></thead><tbody>
+    ${A.rows.map(r => { const ok = r.n >= 30; const k = ok ? rank++ : -1; return `<tr><td>${ok ? medal(k) || k + 1 : "·"}</td><td><b>${esc(r.name)}</b></td><td>${r.n} <span class="mute">(${r.up.n}↑ ${r.dn.n}↓)</span></td>
+      <td>${r.n ? `<b>${pct(r.rate)}</b> <span class="rbar"><i style="width:${r.rate * 100}%"></i><b></b></span>` : "–"}</td><td>${r.ci ? pct(r.ci[0]) + "–" + pct(r.ci[1]) : "–"}</td><td>${r.up.n ? pct(r.upRate) + " (" + r.up.n + ")" : "–"}</td><td>${r.dn.n ? pct(r.dnRate) + " (" + r.dn.n + ")" : "–"}</td>
+      <td class="${r.avgUp > 0 ? "up" : r.avgUp < 0 ? "down" : ""}">${r.avgUp == null ? "–" : (r.avgUp > 0 ? "+" : "") + fmt(r.avgUp, 2) + " puan"}</td><td class="mute">${r.pending}</td><td class="${r.status === "anlamlı üstünlük" ? "up" : r.status === "anlamlı olarak kötü" ? "down" : "mute"}">${esc(r.status)}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note">Ölçülen toplam oy: ${A.measured}. "Bekleyen": oy verildi ama ${arenaH} iş günü henüz geçmedi. "Yetersiz örnek": n &lt; 30; madalya yalnızca n ≥ 30 olanlara verilir. Yeni uzmanların (Makro, Akıllı Para, Volatilite, Psikoloji) oyları ${new Date().toISOString().slice(0, 10)} itibarıyla kaydedilmeye başladı; sonuçları birkaç hafta sonra görünür. Ekran satırları, efsane ekranlarının günlük listelerini ölçer. Eğitim amaçlıdır.</p>`}`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-arenah]"); if (!b) return; arenaH = +b.dataset.arenah; store.set("arenaH", arenaH); renderArena(); });
+
 /* ---------- Boğa vs Ayı münazarası ve Sektör/Rakip kıyası ---------- */
 function debateHtml(s, r) {
   const d = debate(s, r), nm = k => (WHO_TXT[k] || k);
@@ -1858,9 +1946,9 @@ async function drawTv() {
       hide_side_toolbar: false, withdateranges: true, save_image: true, details: false, studies: chSt});
   } catch (err) { box.innerHTML = `<p class="down" style="padding:16px">TradingView grafiği yüklenemedi (ağ engeli olabilir). <a href="https://tr.tradingview.com/chart/?symbol=BIST%3A${encodeURIComponent(chSym)}" target="_blank" rel="noopener">TradingView'de aç ↗</a></p>`; }
 }
-let chKey = "";
+let chKey = "", chMode = store.get("chMode", "tv");
 function renderChartPage() {
-  const key = [chSym, chIv, chSt.join(), document.documentElement.dataset.theme].join("|");
+  const key = [chSym, chIv, chSt.join(), chMode, document.documentElement.dataset.theme].join("|");
   if ($("tvChart") && key === chKey) { $("chSelf").innerHTML = chartHtmlSelf(); return; } // veri yenilenince grafiği sıfırlama
   chKey = key;
   const favs = [...FAVS].slice(0, 12), recent = (CMP || []).slice(0, 3);
@@ -1868,18 +1956,20 @@ function renderChartPage() {
     <div class="controls" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0">
       <label>Hisse<input id="chIn" list="tickers" value="${esc(chSym)}" style="width:120px" placeholder="THYAO"></label><button id="chGo" class="pbtn">Göster</button>
       <a class="mute" id="chExt" target="_blank" rel="noopener" href="https://tr.tradingview.com/chart/?symbol=BIST%3A${encodeURIComponent(chSym)}">TradingView'de aç ↗</a></div>
-    <div class="tabs">${CH_IV.map(([k, n]) => `<button class="tab ${chIv === k ? "on" : ""}" data-chiv="${k}">${n}</button>`).join("")}</div>
-    <div class="tabs">${CH_ST.map(([k, n]) => `<button class="tab ${chSt.includes(k) ? "on" : ""}" data-chst="${k}">${n}</button>`).join("")}</div>
+    <div class="tabs"><button class="tab ${chMode === "tv" ? "on" : ""}" data-chmode="tv">TradingView grafiği</button><button class="tab ${chMode === "lv" ? "on" : ""}" data-chmode="lv">Seviye grafiği · Livermore + Simons</button></div>
+    ${chMode === "tv" ? `<div class="tabs">${CH_IV.map(([k, n]) => `<button class="tab ${chIv === k ? "on" : ""}" data-chiv="${k}">${n}</button>`).join("")}</div>
+    <div class="tabs">${CH_ST.map(([k, n]) => `<button class="tab ${chSt.includes(k) ? "on" : ""}" data-chst="${k}">${n}</button>`).join("")}</div>` : ""}
     ${favs.length ? `<div class="note">Favoriler: ${favs.map(n => `<span class="pill" data-chsym="${esc(n)}">${esc(n)}</span>`).join("")}</div>` : ""}
     <div id="chSelf">${chartHtmlSelf()}</div>
     <div id="tvBox" style="height:calc(100vh - 330px);min-height:480px;margin-top:8px;border:1px solid var(--line);border-radius:12px;overflow:hidden"></div>
     <p class="note">Grafikteki <b>Göstergeler</b> düğmesinden TradingView'deki tüm göstergeleri kendiniz ekleyebilir, çizim araçlarını kullanabilirsiniz (hesap gerekmez). Yukarıdaki düğmeler sık kullanılanları hızlıca açar/kapatır; ayarlarınız bu tarayıcıda hatırlanır. BIST verisi 15 dk gecikmelidir.</p>`;
-  drawTv();
+  if (chMode === "lv") lvPage(); else drawTv();
 }
 function chGo(sym) { sym = String(sym || "").trim().toUpperCase().replace(/^BIST:/, ""); if (!sym) return; chSym = sym; store.set("chSym", sym); renderChartPage(); history.replaceState(null, "", "#grafik"); }
 document.addEventListener("click", e => {
   if (view !== "grafik") return;
   if (e.target.closest("#chGo")) { chGo($("chIn").value); return; }
+  const cm = e.target.closest("[data-chmode]"); if (cm) { chMode = cm.dataset.chmode; store.set("chMode", chMode); renderChartPage(); return; }
   const iv = e.target.closest("[data-chiv]"); if (iv) { chIv = iv.dataset.chiv; store.set("chIv", chIv); renderChartPage(); return; }
   const st = e.target.closest("[data-chst]"); if (st) { const k = st.dataset.chst; chSt = chSt.includes(k) ? chSt.filter(x => x !== k) : [...chSt, k]; store.set("chSt", chSt); renderChartPage(); return; }
   const fv = e.target.closest("[data-chsym]"); if (fv) { chGo(fv.dataset.chsym); }
@@ -3042,6 +3132,7 @@ function detail(name, target = "detail") {
     Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
   T.insertAdjacentHTML("afterbegin", actionsHtml(name));
   const ev = eventsHtml(s); if (ev) T.querySelector("h2").insertAdjacentHTML("afterend", ev);
+  if (h) { T.insertAdjacentHTML("beforeend", lvDetailHtml(P)); lvDetail(P, s); }
   T.insertAdjacentHTML("beforeend", calcHtml(P));
   $(P + "cType").value = store.get("stoptype", "atr"); calcUpdate(P, name);
   if (h) priceChart(h, P + "pc");
@@ -3224,6 +3315,7 @@ function refreshView() {
   else if (view === "tarama") renderScan();
   else if (view === "ozelveri") renderOzelVeri();
   else if (view === "arsiv") renderArsiv();
+  else if (view === "arena") renderArena();
   else if (view === "halkaarz") renderIpo();
   else if (view === "gunluk") renderJournal();
   else if (view === "risk") renderRisk();
@@ -3433,7 +3525,7 @@ if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).to
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>
