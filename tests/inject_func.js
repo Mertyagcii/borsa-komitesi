@@ -1,4 +1,4 @@
-﻿/* İşlevsel testler (tarayıcı içinde çalışır; sonuç <html data-test="{...}"> özniteliğine yazılır).
+/* İşlevsel testler (tarayıcı içinde çalışır; sonuç <html data-test="{...}"> özniteliğine yazılır).
    Yalnızca ASCII alt dizgeler aranır (kodlama bağımsız). run_tests.py bu dosyayı sayfaya enjekte eder. */
 window.onerror = function (m, u, l) { document.documentElement.setAttribute("data-err", m + " @" + l); };
 try { localStorage.clear(); localStorage.setItem("tourDone", "true"); } catch (e) {}
@@ -29,7 +29,7 @@ setTimeout(async function () {
     ok("detay_neden_skor", dh.indexOf("skor neden") >= 0); ok("detay_para_akisi", dh.indexOf("Para ak") >= 0); ok("detay_masa", dh.indexOf("Masa toplant") >= 0); ok("detay_karar_karti", dh.indexOf("dcard") >= 0 && dh.indexOf("Stop (2,5") >= 0);
     ok("detay_ucuz_pahali_rozet", dh.indexOf("class=\"cheap") >= 0); ok("detay_benzer", dh.indexOf("Benzer hisseler") >= 0);
     var ch = cheapness(lead); ok("cheapness_alan", !ch || (["UCUZ", "PAHALI", "ADİL"].indexOf(ch.lab) >= 0 && ch.pct >= 0));
-    var allCh = UNIVERSE.filter(function (s) { return s.ok && s.tl >= 10; }).map(cheapness).filter(Boolean); ok("cheapness_yeterli_kapsam", allCh.length > 100);
+    var allCh = UNIVERSE.filter(function (s) { return s.ok && avgTl(s) >= 10; }).map(cheapness).filter(Boolean); ok("cheapness_yeterli_kapsam", allCh.length > 100);
     ok("cheapness_tutarli", allCh.every(function (c) { return c.lab === "UCUZ" ? c.disc >= 15 : c.lab === "PAHALI" ? c.prem >= 15 : Math.abs(c.disc) < 15 || Math.abs(c.prem) < 15; }));
     var sim = similarStocks(lead, 6); ok("benzer_hisse_sayisi", sim.top.length === 6 && sim.top.every(function (o) { return o.s.name !== lead.name; }));
     /* ---- Degerleme ---- */
@@ -87,6 +87,12 @@ setTimeout(async function () {
     var dp = $("detail").innerHTML; ok("detay_munazara", dp.indexOf('class="dbt"') >= 0 && dp.indexOf("dbline") >= 0); ok("detay_sektor_kiyasi", dp.indexOf("peert") >= 0);
     buildMemory([{ d: "2026-01-02", src: "komite", n: ps.name, e: ps.close * 0.9, sc: 1, v: [1, 1, 1, 1, 1] }]); openDetail(ps.name); ok("detay_hafiza_satiri", $("detail").innerHTML.indexOf("Hafıza") >= 0 || $("detail").innerHTML.indexOf("Hafiza") >= 0 || $("detail").innerHTML.indexOf("Fikrim") >= 0); buildMemory([]);
     closeDetail();
+    /* ---- Kaliteli ama dususte, yorumcu notlari, KAP/kurum akisi ---- */
+    show("kalite"); ok("kalite_sayfasi", $("qdView").innerHTML.indexOf("qdQ") >= 0 && $("qdView").innerHTML.indexOf("data-qdreset") >= 0);
+    qdP = { minQual: 0, p1m: -3, dd52: -10 }; renderQualityDip(); var qdRows = $("qdView").querySelectorAll("tbody tr[data-x]").length; ok("kalite_filtre_gevsek_liste", qdRows >= 1 && /Zirveden/.test($("qdView").innerHTML)); qdP = { minQual: 55, p1m: -8, dd52: -25 }; store.set("qdP", qdP);
+    var cmS = UNIVERSE.filter(function (s) { return s.ok && s.tl >= 20; })[0]; store.set("commentators", [{ id: "t1", who: "Test Yorumcu", src: "X (Twitter)", n: cmS.name, dir: "al", date: "2026-08-03", px: 1, target: null, text: "Rekor kar acikladi" }, { id: "t2", who: "Test Yorumcu", src: "X (Twitter)", n: cmS.name, dir: "sat", date: new Date().toISOString().slice(0, 10), px: cmS.close, target: null, text: "" }]);
+    show("yorumcu"); await new Promise(function (r) { setTimeout(r, 1200); }); var cmH2 = $("cmView").innerHTML; ok("yorumcu_sayfasi", cmH2.indexOf("Test Yorumcu") >= 0 && cmH2.indexOf("cmWho") >= 0 && cmH2.indexOf("data-cmadd") >= 0); ok("yorumcu_karne_satiri", cmH2.indexOf("yetersiz") >= 0 || cmH2.indexOf("%95") >= 0);
+    openDetail(cmS.name); ok("detay_yorumcu_notu", $("detail").innerHTML.indexOf("Test Yorumcu") >= 0); ok("detay_kap_kurum_blogu", $("detail").innerHTML.indexOf("KAP") >= 0); closeDetail(); store.set("commentators", []);
     /* ---- Bilanco denetimi, Monte Carlo matrisi, haber duygusu, takas filtresi ---- */
     openDetail(ps.name); var dh2 = $("detail").innerHTML; ok("detay_bilanco_denetimi", dh2.indexOf("peert") >= 0 && /(TEM|DİK|ZAY|VER)/.test(dh2) && dh2.indexOf("PD/DD") >= 0); ok("detay_mc_matrisi", dh2.indexOf("Sharpe") >= 0 && dh2.indexOf("CVaR") >= 0); ok("detay_haber_duygusu", dh2.indexOf("Haber duygusu") >= 0); closeDetail();
     var csv3 = "tarih;hisse;kurum;alış;satış;net;pay\n2026-10-08;THYAO;A;100;10;90;30\n2026-10-08;THYAO;B;10;60;-50;20\n2026-10-09;THYAO;A;120;10;110;32\n2026-10-09;THYAO;B;10;50;-40;21\n2026-10-12;THYAO;A;150;10;140;34\n2026-10-12;THYAO;B;10;40;-30;22\n2026-10-12;THYAO;C;20;5;15;10";

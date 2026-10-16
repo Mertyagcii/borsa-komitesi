@@ -120,7 +120,7 @@ const hs = current[0], hr = committee(hs), dbg = debate(hs, hr);
 if (!(dbg.al + dbg.tut + dbg.sat === 100 && dbg.al >= 0 && dbg.tut >= 0 && dbg.sat >= 0)) errs.push("ağırlıklı karar yüzdeleri 100 etmiyor: " + dbg.text);
 if (!dbg.lines.length || !dbg.label) errs.push("münazara boş");
 const seenTxt = new Set(); dbg.lines.forEach(x => { if (seenTxt.has(x.text)) errs.push("münazarada aynı satır tekrarlandı"); seenTxt.add(x.text); });
-const nvote = hr.l.buffett.v + hr.l.simons.v + hr.l.livermore.v + hr.l.kellogg.v; if (hr.score !== nvote) errs.push("komite skoru bozuldu");
+const nvote = hr.l.buffett.v + hr.l.simons.v + hr.l.livermore.v + hr.l.kellogg.v + hr.l.seytan.v; if (hr.score !== nvote) errs.push("komite skoru bozuldu");
 const alAll = UNI.filter(x => x.ok && x.tl >= 20).slice(0, 120).map(x => debate(x, committee(x)));
 if (alAll.some(d => d.al + d.tut + d.sat !== 100)) errs.push("bazı hisselerde ağırlıklı karar 100 etmiyor");
 if (alAll.some(d => (d.bull.n === 0 && !d.bull.appointed) || (d.bear.n === 0 && !d.bear.appointed))) errs.push("resen atanan taraf işaretlenmedi");
@@ -252,6 +252,46 @@ buildMemory([], {}); if (memWeights().simons.src !== "eşit") errs.push("örneks
 // --- Arşivde yeni bölümler ---
 const dayN = archiveDay("2026-10-13", __data.ts), mdN = archiveMd(dayN, {});
 for (const k of ["Bilanço denetimi", "Risk/ödül matrisi", "Dinamik ağırlıklar", "CVaR", "senaryo)"]) if (mdN.indexOf(k) < 0) errs.push("arşivde eksik: " + k);
+// --- KAP / aracı kurum akışı ---
+const nS = NOW / 1000; NEWS["SYNK"] = {ok: true, score: 0, items: [
+  {t: "Temettü Ödemesi", ts: nS - 3600, p: "kap", src: "KAP", rel: 1}, {t: "Özel Durum Açıklaması (Genel)", ts: nS - 86400, p: "kap", src: "KAP", rel: 1},
+  {t: "Sektör raporu - Otomotiv (Deniz Yatırım)", ts: nS - 7200, p: "matriks", src: "Matriks", rel: 2}, {t: "Piyasalarda bugün (İş Yatırım)", ts: nS - 3000, p: "matriks", src: "Matriks", rel: 12},
+  {t: "Otomotiv Sektörü (OYAK Yatırım)", ts: nS - 86400 * 3, p: "matriks", src: "Matriks", rel: 1}, {t: "Eski rapor (Gedik Yatırım)", ts: nS - 86400 * 20, p: "matriks", src: "Matriks", rel: 1}, {t: "Petrol fiyatları düştü", ts: nS - 100, p: "reuters", src: "Reuters", rel: 1}]};
+const nb = newsBreakdown("SYNK");
+if (!nb || nb.kap.length !== 2 || nb.brokers.length !== 3 || nb.kurumlar.length !== 3 || nb.specific.length !== 2 || nb.other.length !== 1) errs.push("KAP/kurum ayrıştırma hatalı: " + JSON.stringify(nb && [nb.kap.length, nb.brokers.length, nb.kurumlar, nb.specific.length, nb.other.length]));
+if (nb && nb.brokers.some(b => b.kurum.indexOf("Gedik") >= 0)) errs.push("10 günden eski kurum yazısı sayıldı");
+if (nb && !nb.brokers.find(b => b.kurum === "İş Yatırım").specific === false) errs.push("çok sembollü rapor 'doğrudan' sayıldı");
+if (stockSentiment("SYNK").kap < 2) errs.push("duygu katmanı KAP sağlayıcısını saymadı");
+delete NEWS["SYNK"]; if (newsBreakdown("YOKTUR") !== null) errs.push("haber yokken null dönmeli");
+// --- Kaliteli ama düşüşte ---
+const qdAll = qualityDipList(UNI), qdLoose = qualityDipList(UNI, {minQual: 0});
+stat.qd = qdAll.length + "/" + qdLoose.length;
+if (qdLoose.length < qdAll.length) errs.push("kalite eşiği düşürülünce liste küçüldü");
+for (const x of qdAll) { const s = x.s;
+  if (!(s.smaDist < 0) || !(x.qual >= 55) || x.audit === "ZAYIF BİLANÇO" || !(s.eps > 0) || !(avgTl(s) >= 20) || s.p1m <= -60 || s.dist52 <= -70 || !((s.p1m <= -8) || (s.dist52 <= -25))) errs.push("kaliteli-düşüşte koşulu ihlal: " + s.name); }
+for (let i = 1; i < qdAll.length; i++) if (qdAll[i].rank > qdAll[i - 1].rank + 1e-9) errs.push("kaliteli-düşüşte sıralaması bozuk");
+const qSrc = UNI.find(x => x.ok && avgTl(x) >= 20 && x.eps > 0 && buffett(x).checks[0].s === OK && buffett(x).quality >= 55 && buffett(x).audit.verdict !== "ZAYIF BİLANÇO" && x.p1m > -60 && x.dist52 > -70);
+if (qSrc) {
+  const sv = {p: qSrc.p1m, sm: qSrc.smaDist, d: qSrc.dist52, c: qSrc.close, sma: qSrc.sma50};
+  qSrc.sma50 = qSrc.close * 1.1; qSrc.smaDist = -9.1; qSrc.p1m = -15; if (!qualityDip(qSrc)) errs.push("kaliteli düşüştekini yakalamadı");
+  qSrc.p1m = -2; qSrc.dist52 = -5; if (qualityDip(qSrc)) errs.push("düşüşte olmayanı listeledi");
+  qSrc.p1m = -75; qSrc.dist52 = -80; if (qualityDip(qSrc)) errs.push("bedelsiz/bölünme kaynaklı sahte düşüşü elemedi");
+  qSrc.p1m = -15; qSrc.dist52 = -30; qSrc.smaDist = 3; if (qualityDip(qSrc)) errs.push("SMA50 üstündekini listeledi");
+  qSrc.p1m = sv.p; qSrc.smaDist = sv.sm; qSrc.dist52 = sv.d; qSrc.sma50 = sv.sma;
+}
+// --- Yorumcu notları karnesi ---
+const OH = {dates: [], stocks: {AAA: {c: []}, BBB: {c: []}}, index: []}; for (let i = 0; i < 60; i++) { OH.dates.push("2026-01-" + String(1 + i).padStart(2, "0")); OH.index.push(100 + i * 0.1); OH.stocks.AAA.c.push(100 + i * 1.0); OH.stocks.BBB.c.push(100 - i * 0.5); }
+OH.dates = Array.from({length: 60}, (_, i) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10));
+const ce = (n, dir, date) => ({id: n + dir + date, who: "Ali", n, dir, date, src: "X"});
+const e1 = commentEval(ce("AAA", "al", "2026-01-05"), OH, 5), e2 = commentEval(ce("AAA", "sat", "2026-01-05"), OH, 5), e3 = commentEval(ce("BBB", "sat", "2026-01-05"), OH, 5);
+if (!(e1.hit === true && e1.signed > 0 && e2.hit === false && e2.signed < 0 && e3.hit === true)) errs.push("yorum değerlendirme yönü hatalı: " + JSON.stringify([e1, e2, e3]));
+if (commentEval(ce("AAA", "al", "2026-02-25"), OH, 20).pending !== true) errs.push("ufku dolmamış yorum bekleyen olmalı");
+if (commentEval(ce("AAA", "izle", "2026-01-05"), OH, 5) !== null || commentEval(ce("ZZZ", "al", "2026-01-05"), OH, 5) !== null) errs.push("izle/yok hisse null dönmeli");
+if (commentEval(ce("AAA", "al", "2025-12-01"), OH, 5) !== null) errs.push("veri öncesi tarih null dönmeli");
+const ents = []; for (let i = 0; i < 40; i++) ents.push({id: "a" + i, who: "Doğru", n: "AAA", dir: "al", date: "2026-01-" + String(2 + (i % 20)).padStart(2, "0"), src: "X"}); for (let i = 0; i < 40; i++) ents.push({id: "b" + i, who: "Yanlış", n: "AAA", dir: "sat", date: "2026-01-" + String(2 + (i % 20)).padStart(2, "0"), src: "TradingView fikri"}); ents.push({id: "c1", who: "Az", n: "AAA", dir: "al", date: "2026-01-03", src: "X"});
+const cs = commentStats(ents, OH, 5), rw = w => cs.rows.find(x => x.who === w);
+if (!(rw("Doğru").rate === 1 && rw("Doğru").status === "anlamlı üstünlük" && rw("Yanlış").rate === 0 && rw("Yanlış").status === "anlamlı olarak kötü" && rw("Az").status === "yetersiz örnek" && cs.rows[0].who === "Doğru")) errs.push("yorumcu karnesi hatalı: " + JSON.stringify(cs.rows.map(r => [r.who, r.n, r.rate, r.status])));
+const cc = commentConsensus(ents, "AAA"); if (!(cc.n === 81 && cc.al === 41 && cc.sat === 40) || commentConsensus(ents, "YOK") !== null) errs.push("yorumcu mutabakatı hatalı");
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));

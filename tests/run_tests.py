@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = ["dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
-         "arsiv", "arena", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
+         "arsiv", "arena", "kalite", "yorumcu", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
 fails, passes = [], 0
 
 

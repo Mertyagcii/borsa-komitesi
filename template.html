@@ -307,6 +307,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="karne"><i data-ico="award"></i>Komite Karnesi</a>
       <a data-view="arsiv"><i data-ico="clipboard"></i>Arşiv (Denetim Notları)</a>
       <a data-view="arena"><i data-ico="award"></i>Ajan Arenası</a>
+      <a data-view="kalite"><i data-ico="trend"></i>Kaliteli ama Düşüşte</a>
+      <a data-view="yorumcu"><i data-ico="users"></i>Yorumcu Notları</a>
       <a data-view="arastirma"><i data-ico="flask"></i>Sistem Araştırması</a>
       <a data-view="geritest"><i data-ico="bars"></i>Geri Test</a>
     </nav>
@@ -436,6 +438,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-ozelveri"><section class="card" id="ovView"></section></div>
     <div class="view" id="v-arsiv"><section class="card" id="arView"></section></div>
     <div class="view" id="v-arena"><section class="card" id="arenaView"></section></div>
+    <div class="view" id="v-kalite"><section class="card" id="qdView"></section></div>
+    <div class="view" id="v-yorumcu"><section class="card" id="cmView"></section></div>
     <div class="view" id="v-gunici"><section class="card" id="giView"></section></div>
     <div class="view" id="v-zaman"><section class="card" id="zView"></section></div>
     <div class="view" id="v-grafik"><section class="card" id="chView"></section></div>
@@ -510,6 +514,9 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <li><b>Seviye grafiği:</b> Grafik sayfasında ve hisse detayında, günlük mumların üzerine Livermore'un seviyeleri (pivot, yanılma noktası, SMA50/200, 52 hafta zirvesi, 60 günlük trend çizgisi) ve Simons'ın ±1σ/±2σ sapma bantları çizilir. Bant dışı = otomatik sinyal değildir (geçmiş araştırma bunu desteklemiyor).</li>
           <li><b>Ajan Arenası:</b> Her ajanın geçmiş oylarının 5/10/20 iş gün sonra piyasa ortalamasına göre isabeti, %95 güven aralığıyla gösterilir; en az 30 ölçülmüş oy gerekir. Gerçekçi isabet %50-55 civarıdır.</li>
           <li><b>Bildirimler:</b> Kapanışta "yüksek güvenilirlikli sinyal" (masa ≥3, veto yok, haftalık lider, düşük stop riski, rakamlar doğrulanmış) ve seans içinde kritik alarmlar Telegram'a/webhook'a gider (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALARM_WEBHOOK_URL GitHub secret'ları tanımlıysa).</li>
+          <li><b>Kaliteli ama Düşüşte:</b> Buffett kalite ölçütlerini geçen, bilanço denetimi zayıf olmayan ama SMA50'nin altında ve belirgin düşmüş hisselerin izleme listesi. Alım sinyali değildir (düşen bıçak devam edebilir); toparlanma işaretleri ve uyarılar yanında gösterilir.</li>
+          <li><b>KAP ve aracı kurum akışı:</b> TradingView haber akışından KAP bildirimleri ve aracı kurum yazıları (kim, ne zaman) hisse detayında listelenir.</li>
+          <li><b>Yorumcu Notları:</b> Takip ettiğiniz kişi/hesap/kurum yorumlarını siz girersiniz (X'ten otomatik çekilmez); yönleri BIST 100'e göre sonradan ölçülür ve yorumcu isabet karnesi çıkarılır.</li>
           <li><b>Bilanço denetimi:</b> Buffett'ın yorumuna net borç (finansal borç − nakit), net borç/özsermaye ve /FAVÖK, nakit dönüşümü, TMS 29 şüpheli rakamları (olağandışı ROE, taban etkisi) ve <b>hakiki PD/DD</b> (piyasa ÷ gerekçeli PD/DD, fiyat/yatırılan sermaye) eklenir. Oyu değiştirmez.</li>
           <li><b>Takas filtresi:</b> Kendi AKD/takas CSV'nizden çok günlük birikim/dağıtım tespiti (Özel Veri sayfası); varsayılan olarak bilgi, isterseniz Akıllı Para oyuna katılır. Herkese açık takas verisi lisanslıdır, otomatik çekilemez.</li>
           <li><b>Monte Carlo:</b> 10.000 senaryo; olasılık dağılımı, Sharpe, CVaR %5 ve hedef/stop risk-ödül matrisi. Simons modelinin Sharpe'ını, Şeytanın Avukatı stres/CVaR'ı kullanır.</li>
@@ -1468,6 +1475,88 @@ document.addEventListener("click", e => {
 
 
 
+
+
+/* ---------- Kaliteli ama Düşüşte (izleme) ---------- */
+let qdP = store.get("qdP", {minQual: 55, p1m: -8, dd52: -25});
+function renderQualityDip() {
+  const el = $("qdView"), L = qualityDipList(UNIVERSE, qdP);
+  el.innerHTML = `<h2>Kaliteli ama Düşüşte <span class="sub">${L.length} hisse · izleme listesi, alım sinyali değil</span></h2>
+    <p class="note"><b>Ne arıyor?</b> Buffett kalite ölçütlerini (büyüklük, kârlılık, reel ROE, marj, borç, nakit akışı, büyüme) geçen, bilanço denetimi "zayıf" olmayan, ama fiyatı SMA50'nin altında ve ya son 1 ayda belirgin düşmüş ya da 52 hafta zirvesinden uzaklaşmış hisseler. <b>Uyarı:</b> araştırmamız düşen bıçağın (aşırı düşüş, panik satışı) geçmişte çoğu zaman devam ettiğini gösterdi; bu liste "ucuzladı, al" demez. Toparlanma işaretleri ve uyarılar yanında gösterilir, karar için trendin dönmesi (Livermore pivot/haftalık trend) ve para girişi beklenir. Bedelsiz/bölünme kaynaklı sahte düşüşler (1 ay &lt; −%60 ya da zirveden &lt; −%70) elenir. Likidite ortalama 30 günlük hacimle ölçülür (gün içi saatten bağımsız).</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:8px 0">
+      <label>Min. kalite (0-100)<input id="qdQ" type="number" min="0" max="100" step="5" value="${qdP.minQual}" style="width:80px"></label>
+      <label>1 ayda düşüş ≥ %<input id="qdM" type="number" min="0" max="60" step="1" value="${-qdP.p1m}" style="width:70px"></label>
+      <label>Zirveden uzaklık ≥ %<input id="qdD" type="number" min="0" max="70" step="1" value="${-qdP.dd52}" style="width:70px"></label>
+      <button data-qdreset="1">Varsayılan</button></div>
+    ${L.length ? `<div class="tw"><table class="arena"><thead><tr><th>Hisse</th><th>Kalite</th><th>Bilanço</th><th>Zirveden %</th><th>1 ay %</th><th>SMA50'ye %</th><th>Hakiki PD/DD</th><th>Değer</th><th style="text-align:left">Toparlanma işaretleri</th><th style="text-align:left">Düşüş kaynağı</th><th style="text-align:left">Uyarılar</th></tr></thead><tbody>
+    ${L.map(x => `<tr data-x="${esc(x.s.name)}" style="cursor:pointer"><td style="text-align:left"><b>${esc(x.s.name)}</b><span class="nm" style="display:block;font-size:11px;color:var(--mute)">${esc(x.s.description || "")}</span></td><td><b>${fmt(x.qual, 0)}</b></td><td class="${x.audit === "TEMİZ" ? "up" : ""}">${esc(x.audit)}</td><td class="down">${fmt(x.dd, 0)}</td><td class="down">${fmt(x.p1m, 0)}</td><td class="down">${fmt(x.smaDist, 1)}</td><td>${x.ratio == null ? "–" : fmt(x.ratio, 2) + "x"}</td><td>${cheapBadge(x.s)}</td>
+      <td style="text-align:left;white-space:normal">${x.rec.length ? x.rec.map(r => `<span class="pill">${esc(r)}</span>`).join(" ") : '<span class="mute">yok</span>'}</td><td style="text-align:left">${x.lead ? esc(x.lead.type) : "–"}</td><td style="text-align:left;white-space:normal;color:var(--warn)">${x.warn.length ? esc(x.warn.join("; ")) : "–"}</td></tr>`).join("")}</tbody></table></div>` : '<p class="mute">Bu filtrelerle hisse yok. Eşikleri gevşetin.</p>'}
+    <p class="note">Kalite puanı Buffett'ın kontrol listesinin ilk bölümüdür (yönetim/moat ölçülemez). Bir hisse listede yoksa kalite puanı eşiğin altındadır; kalite eşiğini 0 yapınca düşüştekilerin hepsi görünür (ör. reel ROE'si negatif şirketler düşük puan alır). Satıra tıklayınca hisse analizi (bilanço denetimi, münazara, sektör kıyası, seviye grafiği) açılır. Eğitim amaçlıdır.</p>`;
+}
+document.addEventListener("change", e => {
+  if (view !== "kalite" || !["qdQ", "qdM", "qdD"].includes(e.target.id)) return;
+  qdP = {minQual: +$("qdQ").value || 0, p1m: -(+$("qdM").value || 0), dd52: -(+$("qdD").value || 0)}; store.set("qdP", qdP); renderQualityDip();
+});
+document.addEventListener("click", e => { if (view === "kalite" && e.target.closest("[data-qdreset]")) { qdP = {minQual: 55, p1m: -8, dd52: -25}; store.set("qdP", qdP); renderQualityDip(); } });
+
+/* ---------- KAP ve aracı kurum akışı (detay paneli) ---------- */
+function kapKurumHtml(s) {
+  const b = newsBreakdown(s.name), dt = ts => new Date(ts * 1000).toLocaleDateString("tr-TR", {day: "2-digit", month: "2-digit"});
+  if (!b) return `<div class="note">🏛 KAP / aracı kurum akışı: bu hisse için haber verisi yok (haber yalnızca likit hisseler için çekilir).</div>`;
+  const kp = b.kap.slice(0, 5), br = b.brokers.slice().sort((x, y) => (y.specific - x.specific) || (y.ts - x.ts)).slice(0, 6);
+  return `<details class="meet"><summary>🏛 KAP bildirimleri ve aracı kurum görüşleri · son 10 gün: ${b.kap.length} KAP, ${b.kurumlar.length} kurum</summary>
+    ${kp.length ? `<div class="note"><b>KAP:</b></div><ul class="news">${kp.map(i => `<li>${esc(i.t)} <span class="mute">· ${dt(i.ts)}</span></li>`).join("")}</ul>` : '<div class="note">Son 10 günde KAP bildirimi yok.</div>'}
+    ${br.length ? `<div class="note"><b>Aracı kurum / birim yazıları</b> (başlıkta öneri ya da hedef fiyat yoktur; yalnızca kimin, ne zaman, hangi türde yazdığı bilinir):</div><ul class="news">${br.map(i => `<li><b>${esc(i.kurum)}</b>: ${esc(i.t.replace(/\s*\([^()]*\)\s*$/, ""))} <span class="mute">· ${dt(i.ts)}${i.specific ? " · doğrudan bu hisse" : " · sektör/piyasa raporu"}</span></li>`).join("")}</ul>` : '<div class="note">Son 10 günde aracı kurum yazısı yok.</div>'}
+    <p class="note">Kaynak: TradingView haber akışı (KAP, Matriks, Reuters). Çok kurumun aynı hisseye aynı günlerde yazması ilginin arttığını gösterir; yazının yönünü başlıktan bilemeyiz, içeriği kurumun raporundan okuyun.</p></details>`;
+}
+
+/* ---------- Yorumcu notları (kullanıcı girdisi) ---------- */
+const CM_SRC = ["X (Twitter)", "TradingView fikri", "Aracı kurum / birim", "Telegram / forum", "Tanıdık / diğer"];
+const cmList = () => store.get("commentators", []);
+let cmH = store.get("cmH", 10);
+async function renderCommentators() {
+  const el = $("cmView"), list = cmList(), today = new Date().toISOString().slice(0, 10), who = [...new Set(list.map(x => x.who))];
+  el.innerHTML = `<h2>Yorumcu Notları <span class="sub">kendi girdiğiniz yorumlar · isabetleri ölçülür</span></h2><p class="mute">Yükleniyor…</p>`;
+  await loadOhlc(); if (view !== "yorumcu") return;
+  const S = OHLC ? commentStats(list, OHLC, cmH) : {rows: []}, pct = v => v == null ? "–" : "%" + fmt(v * 100, 0);
+  el.innerHTML = `<h2>Yorumcu Notları <span class="sub">kendi girdiğiniz yorumlar · isabetleri ölçülür</span></h2>
+    <div class="note" style="border-left:3px solid var(--warn);padding-left:10px;margin:8px 0"><b>Neden otomatik çekmiyoruz?</b> X'in (Twitter) ücretsiz bir API'si yok ve hesapların taranması hizmet koşullarına aykırı; ayrıca bir kişiyi "tahtacı" gibi nitelemek doğrulanamayan, hukuken riskli bir iddiadır. Bunun yerine takip ettiğiniz kişi, hesap, kurum ya da birimin yorumunu <b>siz girersiniz</b> (veriler yalnızca bu tarayıcıda saklanır). Sistem yorumun yönünü (al/sat) kaydeder ve sonradan BIST 100'e göre fazla getiriyle ölçer: yorumcu ünlü olduğu için değil, <b>isabetli olduğu ölçüde</b> ağırlık kazanır. TradingView'deki kurum yazıları ve KAP bildirimleri ise otomatik çekilir (hisse detayında).</div>
+    <div class="card" style="background:var(--panel2);margin:8px 0"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label>Yorumcu<input id="cmWho" list="cmWhoList" placeholder="@hesap / kişi / kurum" style="width:170px"></label><datalist id="cmWhoList">${who.map(w => `<option value="${esc(w)}">`).join("")}</datalist>
+      <label>Kaynak<select id="cmSrc">${CM_SRC.map(x => `<option>${x}</option>`).join("")}</select></label>
+      <label>Hisse<input id="cmN" list="tickers" placeholder="THYAO" style="width:90px"></label>
+      <label>Yön<select id="cmDir"><option value="al">Al (yükselir)</option><option value="sat">Sat (düşer)</option><option value="izle">İzle (ölçülmez)</option></select></label>
+      <label>Tarih<input id="cmDate" type="date" value="${today}" max="${today}"></label>
+      <label>Hedef fiyat<input id="cmTgt" type="number" step="0.01" style="width:90px"></label></div>
+      <label style="display:block;margin-top:6px">Yorum / not (isteğe bağlı)<textarea id="cmTxt" rows="2" style="width:100%" placeholder="Yorumun özeti ya da bağlantısı"></textarea></label>
+      <div style="margin-top:6px"><button class="pbtn" data-cmadd="1">Ekle</button> <button data-cmexp="1">Dışa aktar (JSON)</button> <label class="btn">İçe aktar <input id="cmImp" type="file" accept=".json" style="display:none"></label></div></div>
+    <h3 style="margin:12px 0 4px">Yorumcu karnesi</h3>
+    <div class="tabs">${[5, 10, 20].map(h => `<button class="tab ${cmH === h ? "on" : ""}" data-cmh="${h}">${h} iş günü</button>`).join("")}</div>
+    ${S.rows.length ? `<div class="tw"><table class="arena"><thead><tr><th style="text-align:left">Yorumcu</th><th style="text-align:left">Kaynak</th><th>Not</th><th>Ölçülen</th><th>İsabet</th><th>%95 aralık</th><th>Yön düzeltmeli ort. fazla getiri</th><th>Bekleyen</th><th>Durum</th></tr></thead><tbody>${S.rows.map(r => `<tr><td style="text-align:left"><b>${esc(r.who)}</b></td><td style="text-align:left">${esc(r.src.join(", "))}</td><td>${r.notes}</td><td>${r.n}</td><td>${r.n ? `<b>${pct(r.rate)}</b>` : "–"}</td><td>${r.ci ? pct(r.ci[0]) + "–" + pct(r.ci[1]) : "–"}</td><td class="${r.avg > 0 ? "up" : r.avg < 0 ? "down" : ""}">${r.avg == null ? "–" : (r.avg > 0 ? "+" : "") + fmt(r.avg, 2) + " puan"}</td><td class="mute">${r.pending}</td><td class="${r.status === "anlamlı üstünlük" ? "up" : r.status === "anlamlı olarak kötü" ? "down" : "mute"}">${esc(r.status)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">İsabet: "al" dediği hisse BIST 100'ü yenerse, "sat" dediği hisse BIST 100'ün gerisinde kalırsa. Kapanıştan kapanışa, yorum tarihindeki kapanıştan ${cmH} iş günü sonrasına. n &lt; 30 ise sonuç kanıt değil gürültüdür. Geçmiş tarihli yorumları da girebilirsiniz (tarih seçin): sonuç hemen hesaplanır, böylece bir kişinin eski çağrıları sınanabilir.</p>` : '<p class="mute">Henüz not yok. İlk yorumu yukarıdan ekleyin.</p>'}
+    <h3 style="margin:12px 0 4px">Son notlar (${list.length})</h3>
+    ${list.length ? `<div class="nlist">${list.slice().sort((a, b) => b.date < a.date ? -1 : 1).slice(0, 40).map(x => { const r = OHLC ? commentEval(x, OHLC, cmH) : null, sn = x.text ? sentiment(x.text).score : null; return `<div class="nitem" style="align-items:center"><span class="vt ${x.dir === "al" ? "up" : x.dir === "sat" ? "down" : ""}">${x.dir === "al" ? "AL" : x.dir === "sat" ? "SAT" : "İZLE"}</span> <b data-x="${esc(x.n)}" style="cursor:pointer;margin-left:6px">${esc(x.n)}</b> <span class="mute" style="margin-left:6px">${esc(x.who)} · ${esc(x.src || "")} · ${esc(x.date)}${x.px ? " · " + fmt(x.px) + " TL" : ""}${x.target ? " · hedef " + fmt(x.target) : ""}</span>${x.text ? `<span style="flex:1;margin-left:8px">${esc(x.text.slice(0, 140))}${sn != null && Math.abs(sn) >= 0.2 ? ` <span class="mute">(metin duygusu ${sn > 0 ? "+" : ""}${fmt(sn, 2)})</span>` : ""}</span>` : '<span style="flex:1"></span>'}${r ? (r.pending ? '<span class="mute">bekliyor</span>' : `<span class="${r.hit ? "up" : "down"}">${r.hit ? "✔" : "✘"} ${r.signed > 0 ? "+" : ""}${fmt(r.signed, 1)}</span>`) : ""} <button data-cmdel="${esc(x.id)}">Sil</button></div>`; }).join("")}</div>` : '<p class="mute">–</p>'}`;
+}
+document.addEventListener("click", e => {
+  if (view !== "yorumcu") return;
+  const del = e.target.closest("[data-cmdel]"); if (del) { store.set("commentators", cmList().filter(x => x.id !== del.dataset.cmdel)); renderCommentators(); return; }
+  const h = e.target.closest("[data-cmh]"); if (h) { cmH = +h.dataset.cmh; store.set("cmH", cmH); renderCommentators(); return; }
+  if (e.target.closest("[data-cmexp]")) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(cmList(), null, 1)], {type: "application/json"})); a.download = "yorumcu_notlari.json"; a.click(); return; }
+  if (e.target.closest("[data-cmadd]")) {
+    const who = $("cmWho").value.trim(), n = $("cmN").value.trim().toUpperCase(), dir = $("cmDir").value, date = $("cmDate").value || new Date().toISOString().slice(0, 10), text = $("cmTxt").value.trim(), tgt = +$("cmTgt").value || null, s = UNIVERSE.find(x => x.name === n);
+    if (!who) { toast("Yorumcu adı gerekli"); return; } if (!s) { toast("Geçerli bir hisse kodu girin"); return; }
+    const list = cmList(); list.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), who, src: $("cmSrc").value, n, dir, date, px: s.close, target: tgt, text}); store.set("commentators", list.slice(-500)); toast("Not eklendi"); renderCommentators();
+  }
+});
+document.addEventListener("change", e => {
+  if (e.target.id !== "cmImp" || !e.target.files[0]) return; const rd = new FileReader();
+  rd.onload = () => { try { const a = JSON.parse(String(rd.result)); if (!Array.isArray(a)) throw 0; const cur = cmList(), ids = new Set(cur.map(x => x.id)); a.filter(x => x && x.who && x.n && x.date && x.id && !ids.has(x.id)).forEach(x => cur.push({id: String(x.id), who: String(x.who), src: String(x.src || ""), n: String(x.n).toUpperCase(), dir: ["al", "sat", "izle"].includes(x.dir) ? x.dir : "izle", date: String(x.date), px: +x.px || null, target: +x.target || null, text: String(x.text || "")})); store.set("commentators", cur.slice(-500)); toast("İçe aktarıldı"); renderCommentators(); } catch (err) { toast("Geçersiz dosya"); } };
+  rd.readAsText(e.target.files[0], "utf-8");
+});
+function commentHtml(s) {
+  const c = commentConsensus(cmList(), s.name); if (!c) return "";
+  return `<details class="meet"><summary>🗣 Yorumcu notları · ${c.n} not (${c.al} al, ${c.sat} sat${c.izle ? ", " + c.izle + " izle" : ""})</summary><ul class="news">${c.items.slice(0, 8).map(x => `<li><b>${esc(x.who)}</b> <span class="${x.dir === "al" ? "up" : x.dir === "sat" ? "down" : "mute"}">${x.dir.toUpperCase()}</span> <span class="mute">· ${esc(x.date)}${x.px ? " · " + fmt(x.px) + " TL'de" : ""}</span>${x.text ? " " + esc(x.text.slice(0, 160)) : ""}</li>`).join("")}</ul><p class="note">Kullanıcı girdisi, doğrulanamaz; oy değildir. Yorumcuların isabeti Yorumcu Notları sayfasında ölçülür.</p></details>`;
+}
 
 /* ---------- Bilanço denetimi, Monte Carlo matrisi, haber duygusu ---------- */
 function auditHtml(s) {
@@ -3157,8 +3246,8 @@ function detail(name, target = "detail") {
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)} <span class="mute">· yeni uzmanlar:</span> ${chips2Of(r)}</p>` +
-    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r) + debateHtml(s, r) + peerHtml(s)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt + " " + esc(balanceAudit(s).text)) + auditHtml(s) + sentimentHtml(s) +
-    (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
+    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r) + debateHtml(s, r) + peerHtml(s)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt + " " + esc(balanceAudit(s).text)) + auditHtml(s) + sentimentHtml(s) + kapKurumHtml(s) + commentHtml(s) +
+    (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.slice(0, 6).map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     `<h2 style="margin-top:12px">Genişletilmiş kurul <span class="sub">4 yeni uzman · net oy ${r.net2 > 0 ? "+" : ""}${r.net2}${r.veto2 ? " · İTİRAZ VETOSU" : ""}</span></h2><div class="note">Bu uzmanların oyları komite skoruna karışmaz; vekil göstergelerle (fiyat-hacim-makro) çalışırlar ve yalnızca geçmişte test edilmiş sinyallerle oy kullanırlar. Takas/aracı kurum, zımni oynaklık ve sosyal medya verisi yoktur.</div>` + PERSONAS2.map(([k, n]) => personaCard(n, r.k2[k])).join("") +
     (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · ${mc.n.toLocaleString("tr-TR")} senaryo</h2><canvas id="${P}cv" style="height:150px"></canvas>
@@ -3350,6 +3439,8 @@ function refreshView() {
   else if (view === "ozelveri") renderOzelVeri();
   else if (view === "arsiv") renderArsiv();
   else if (view === "arena") renderArena();
+  else if (view === "kalite") renderQualityDip();
+  else if (view === "yorumcu") renderCommentators();
   else if (view === "halkaarz") renderIpo();
   else if (view === "gunluk") renderJournal();
   else if (view === "risk") renderRisk();
@@ -3559,7 +3650,7 @@ if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).to
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
 loadData(false);
 startTourIfFirst();
 </script>

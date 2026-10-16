@@ -1213,9 +1213,9 @@ function debate(s, r) {
   const label = r.veto ? "BEKLE (Şeytanın Avukatı vetosu)" : r.veto2 && al >= 50 ? "İZLE (uzman itirazı)" : al >= 50 ? "AL ağırlıklı" : sat >= 40 ? "SAT / UZAK DUR ağırlıklı" : "TUT / İZLE";
   const lines = [];
   bearRounds.forEach(x => { lines.push({side: "bear", who: x.point.who, text: `Ayı tezi: "${x.point.text}" sağlanmıyor${x.point.val ? " (" + x.point.val + ")" : ""}.`});
-    lines.push({side: "bull", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Boğa yanıtı: aynı konuda "${x.reply.text}" sağlanıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : "Boğa yanıtı: bu itiraza veriyle cevap bulunamadı (çürütülemedi)."}); });
+    lines.push({side: "bull", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Boğa yanıtı: aynı konuda "${x.reply.text}" sağlanıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : `Boğa yanıtı: "${x.point.text}" itirazına veriyle cevap bulunamadı (çürütülemedi).`}); });
   bullRounds.forEach(x => { lines.push({side: "bull", who: x.point.who, text: `Boğa tezi: "${x.point.text}" sağlanıyor${x.point.val ? " (" + x.point.val + ")" : ""}.`});
-    lines.push({side: "bear", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Ayı yanıtı: aynı konuda "${x.reply.text}" sağlanmıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : "Ayı yanıtı: bu teze veriyle karşı çıkılamadı (çürütülemedi)."}); });
+    lines.push({side: "bear", who: x.reply ? x.reply.who : "masa", text: x.reply ? `Ayı yanıtı: aynı konuda "${x.reply.text}" sağlanmıyor${x.reply.val ? " (" + x.reply.val + ")" : ""}.` : `Ayı yanıtı: "${x.point.text}" tezine veriyle karşı çıkılamadı (çürütülemedi).`}); });
   return {voters: voters.map(x => ({k: x.k, v: x.v, w: x.w})), bull: {n: bulls.length, pts: bullPts, unref: unrefBull, appointed: appointedBull}, bear: {n: bears.length, pts: bearPts, unref: unrefBear, appointed: appointedBear},
     lines, al, tut, sat, label, learned: voters.some(x => x.w !== 1), text: `%${al} Al / %${tut} Tut / %${sat} Sat`};
 }
@@ -1475,4 +1475,80 @@ function stockSentiment(name, nowMs) {
   let sw = 0, sv = 0; rows.forEach(x => { const w = Math.pow(0.5, Math.max(0, x.age) / 1.5); sw += w; sv += w * x.s; });
   const score = sv / sw, kap = rows.filter(x => KAP_TAGS.test(trLower(x.t))).length, ext = rows.slice().sort((a, b) => Math.abs(b.s) - Math.abs(a.s))[0];
   return {score, n: rows.length, kap, label: score >= 0.2 ? "pozitif" : score <= -0.2 ? "negatif" : "nötr", top: ext && ext.t, topScore: ext && ext.s, pos: rows.filter(x => x.s > 0.15).length, neg: rows.filter(x => x.s < -0.15).length};
+}
+
+/* =====================================================================================
+   KAP VE ARACI KURUM AKIŞI (TradingView haber akışı): başlıklar sağlayıcıya göre ayrılır: KAP bildirimleri (provider=kap), aracı kurum raporları (Matriks üzerinden,
+   başlık sonundaki "(Kurum Adı)"), diğer (Reuters, Matriks haber). Kurum raporlarının başlığında öneri/hedef fiyat yoktur: yalnızca KİM, NE ZAMAN yazdığı bilinir
+   (kapsam yoğunluğu). Çok sembollü sektör/piyasa raporları (rel > 3) "genel" sayılır. */
+const BROKER_RE = /yatırım|menkul|securities|bank|capital|değerler|invest|ak yat|gedik|tera|info|şeker|oyak|deniz|destek|kuzey|garanti|işbank|is yatirim/i;
+function newsBreakdown(name) {
+  const n = typeof NEWS !== "undefined" && NEWS ? NEWS[name] : null; if (!n || !n.items) return null;
+  const now = (typeof NOW === "number" ? NOW : Date.now()) / 1000, kap = [], brokers = [], other = [];
+  n.items.forEach(i => {
+    const age = (now - i.ts) / 86400; if (age > 10 || age < -0.5) return;
+    if (i.p === "kap") { kap.push(i); return; }
+    const m = String(i.t).match(/\(([^()]*)\)\s*$/), kurum = m && BROKER_RE.test(m[1]) ? m[1].trim() : null;
+    if (kurum && (i.p === "matriks" || !i.p)) brokers.push({t: i.t, ts: i.ts, kurum, specific: (i.rel == null ? 9 : i.rel) <= 3, s: sentiment(i.t).score}); else other.push(i);
+  });
+  const kurumlar = [...new Set(brokers.map(b => b.kurum))];
+  return {kap, brokers, other, kurumlar, specific: brokers.filter(b => b.specific)};
+}
+
+/* =====================================================================================
+   KALİTELİ AMA DÜŞÜŞTE (izleme listesi): Buffett kalite ölçütlerini (büyüklük, kârlılık, reel ROE, marj, borç, nakit akışı, büyüme) geçen, bilanço denetimi
+   "zayıf" olmayan, ama fiyatı SMA50'nin altında ve (1 ayda ≥ %8 düşmüş ya da 52 hafta zirvesinden ≥ %25 aşağıda) olan likit hisseler.
+   DİKKAT: bu bir alım sinyali değildir. Araştırmamız düşen bıçağın (aşırı düşüş, panik satışı) geçmişte devam ettiğini gösterdi; liste "teyit bekleyen" hisseleri toplar.
+   Toparlanma işaretleri (para girişi, SMA20 üstü, haftalık para akışı, 'toparlanan' kurulum) ve düşüşün sektörel mi hisseye özel mi olduğu yanında gösterilir. */
+const QD_P = {minQual: 55, minTl: 20, p1m: -8, dd52: -25};
+const avgTl = s => (s.av30 > 0 ? s.av30 : s.av60 > 0 ? s.av60 : s.volume || 0) * (s.close || 0) / 1e6; // ortalama günlük işlem hacmi (mn TL): gün içi saatten bağımsız likidite
+function qualityDip(s, P) {
+  P = Object.assign({}, QD_P, P || {});
+  if (!s.ok || !(avgTl(s) >= P.minTl) || !(s.eps > 0)) return null;
+  if ((s.p1m != null && s.p1m <= -60) || (s.dist52 != null && s.dist52 <= -70)) return null; // olası bedelsiz/bölünme (fiyat düzeltmesi) görünümü: gerçek düşüş sayılmaz
+  const down = s.smaDist != null && s.smaDist < 0 && ((s.p1m != null && s.p1m <= P.p1m) || (s.dist52 != null && s.dist52 <= P.dd52));
+  if (!down) return null;
+  const b = buffett(s); if (b.checks[0].s !== OK || !(b.quality >= P.minQual) || b.audit.verdict === "ZAYIF BİLANÇO") return null;
+  const t = mtfTier(s), vs = volStats(s), tr = trendUp(s) === true, knife = vs.z20 != null && vs.z20 < R.zLo && !tr, cheap = cheapness(s), pv = peerView(s), mc = monteCarlo(s);
+  const rec = [];
+  if (s.cmf != null && s.cmf > 0.05) rec.push("para girişi (CMF > 0)");
+  if (s.cmf_w != null && s.cmf_w > 0) rec.push("haftalık para akışı pozitif");
+  if (s.sma20 > 0 && s.close > s.sma20) rec.push("fiyat SMA20 üstünde");
+  if (t && t.id === "toparlanan") rec.push("'toparlanan' kurulum");
+  if (s.rsi != null && s.rsi > 30 && s.rsi < 50 && s.change > 0) rec.push("RSI aşırı satımdan çıkıyor");
+  const lead = pv && pv.rows.find(x => x.key === "p1m" && x.type && x.type !== "sakin");
+  const warn = []; if (knife) warn.push("düşen bıçak: z-skor çok düşük ve trend aşağı"); if (mc && mc.probStop >= 55) warn.push(`stop olasılığı %${fmt(mc.probStop, 0)}`);
+  if (REGIME && REGIME.trend === "bear") warn.push("piyasa ayı rejiminde"); if (b.audit.verdict === "DİKKAT") warn.push("bilanço denetimi: dikkat");
+  const nx = s.nextEarn ? (s.nextEarn * 1000 - (typeof NOW === "number" ? NOW : Date.now())) / 864e5 : null; if (nx != null && nx >= -1 && nx <= 7) warn.push("bilanço yaklaşıyor");
+  const rank = b.quality + 10 * rec.length + (cheap && cheap.lab === "UCUZ" ? 10 : 0) - (knife ? 15 : 0) - (mc && mc.probStop >= 55 ? 5 : 0);
+  return {s, qual: b.quality, audit: b.audit.verdict, ratio: b.audit.ratio, dd: s.dist52, p1m: s.p1m, smaDist: s.smaDist, cheap, rec, warn, knife, lead, stop: mc ? mc.probStop : null, tier: t ? t.id : null, rank};
+}
+function qualityDipList(uni, P) { return uni.map(s => { try { return qualityDip(s, P); } catch (e) { return null; } }).filter(Boolean).sort((a, b) => b.rank - a.rank); }
+
+/* =====================================================================================
+   YORUMCU NOTLARI KARNESİ: kullanıcının kendi girdiği yorumlar (X hesapları, TradingView fikirleri, aracı kurum/birim görüşleri, tanıdıklar...). Otomatik çekilmez:
+   X'in ücretsiz API'si yok ve kişi/hesap sınıflaması (ör. "tahtacı") doğrulanamaz bir iddiadır. Bunun yerine her yorumun YÖNÜ (al/sat) ve tarihi kaydedilir,
+   sonradan 5/10/20 iş günü içinde BIST 100'e göre fazla getiriyle ölçülür; yorumcu "ünlü" değil "isabetli mi" diye değerlendirilir (%95 Wilson aralığı, n < 30 yetersiz). */
+function commentEval(e, ohlc, h) {
+  const st = ohlc && ohlc.stocks && ohlc.stocks[e.n]; if (!st || !ohlc.index || (e.dir !== "al" && e.dir !== "sat")) return null;
+  let i0 = -1; for (let i = ohlc.dates.length - 1; i >= 0; i--) if (ohlc.dates[i] <= e.date && st.c[i] != null && ohlc.index[i] != null) { i0 = i; break; }
+  if (i0 < 0) return null; const i1 = i0 + h; if (i1 >= ohlc.dates.length) return {pending: true};
+  const c0 = st.c[i0], c1 = st.c[i1], x0 = ohlc.index[i0], x1 = ohlc.index[i1]; if (!c0 || !c1 || !x0 || !x1) return null;
+  const ex = (c1 / c0 - x1 / x0) * 100, signed = e.dir === "al" ? ex : -ex;
+  return {ex, signed, hit: signed > 0};
+}
+function commentStats(entries, ohlc, h) {
+  const by = {};
+  (entries || []).forEach(e => {
+    const w = (by[e.who] = by[e.who] || {who: e.who, notes: 0, n: 0, hit: 0, sum: 0, pending: 0, src: new Set()}); w.notes++; if (e.src) w.src.add(e.src);
+    const r = commentEval(e, ohlc, h); if (!r) return; if (r.pending) { w.pending++; return; } w.n++; w.sum += r.signed; if (r.hit) w.hit++;
+  });
+  const rows = Object.values(by).map(w => { const ci = wilson(w.hit, w.n); return {who: w.who, notes: w.notes, n: w.n, hit: w.hit, rate: w.n ? w.hit / w.n : null, ci, avg: w.n ? w.sum / w.n : null, pending: w.pending, src: [...w.src],
+    status: w.n < 30 ? "yetersiz örnek" : ci[0] > 0.5 ? "anlamlı üstünlük" : ci[1] < 0.5 ? "anlamlı olarak kötü" : "şanstan ayırt edilemiyor"}; });
+  rows.sort((a, b) => (b.ci ? b.ci[0] : -1) - (a.ci ? a.ci[0] : -1) || b.notes - a.notes);
+  return {h, rows};
+}
+function commentConsensus(entries, name) {
+  const xs = (entries || []).filter(e => e.n === name); if (!xs.length) return null;
+  return {n: xs.length, al: xs.filter(e => e.dir === "al").length, sat: xs.filter(e => e.dir === "sat").length, izle: xs.filter(e => e.dir === "izle").length, items: xs.slice().sort((a, b) => b.date < a.date ? -1 : 1)};
 }
