@@ -198,6 +198,47 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
 .factok{font-size:12px;color:var(--mute);margin:4px 0}
+/* ---- Kokpit: sade, tek ekran, koyu tema ---- */
+body.kp .side,body.kp .topbar,body.kp #critBanner{display:none!important}
+body.kp .shell{grid-template-columns:minmax(0,1fr);background:transparent;border:0;border-radius:0;overflow:visible}
+body.kp{background:radial-gradient(1100px 520px at 50% -8%,rgba(18,184,134,.13) 0%,transparent 62%),var(--bg);padding:14px}
+.kp-wrap{max-width:1000px;margin:0 auto;padding:4px 2px 48px}
+.kp-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.kp-brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.3px;color:var(--text)}
+.kp-search{flex:1;min-width:240px;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:4px 16px}
+.kp-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(18,184,134,.18)}
+.kp-search input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font-size:19px;padding:10px 4px;text-transform:uppercase;letter-spacing:.5px;min-width:0}
+.kp-search input::placeholder{text-transform:none;color:var(--mute);letter-spacing:0;font-size:15px}
+.kp-ib{background:var(--panel);border:1px solid var(--line);color:var(--mute);border-radius:12px;padding:9px 12px;cursor:pointer;font-size:13px}.kp-ib:hover{color:var(--text)}
+.kp-market{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 20px}
+.kb{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;background:var(--panel2);border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.kb.up{color:var(--up);border-color:rgba(163,230,53,.28);background:rgba(163,230,53,.07)}.kb.down{color:var(--down);border-color:rgba(255,107,107,.3);background:rgba(255,107,107,.07)}.kb.warn{color:var(--warn);border-color:rgba(240,180,60,.3);background:rgba(240,180,60,.07)}
+.kphead{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.kpname{font-size:30px;font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kpprice{font-size:20px;margin-top:6px}.kps{font-size:12px;color:var(--mute)}.kpl{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+.kpsealbox{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.kpseal{display:inline-flex;align-items:center;padding:10px 24px;border-radius:999px;font-weight:800;letter-spacing:1px;font-size:20px;border:1px solid var(--line);background:var(--panel2);color:var(--mute)}
+.kpseal.strong{color:var(--up);border-color:rgba(163,230,53,.5);background:rgba(163,230,53,.12);box-shadow:0 0 30px -6px rgba(163,230,53,.45)}
+.kpseal.buy{color:var(--accent2);border-color:rgba(63,217,168,.45);background:rgba(18,184,134,.12)}
+.kpseal.neutral{color:var(--mute)}
+.kpseal.risk{color:var(--warn);border-color:rgba(240,180,60,.5);background:rgba(240,180,60,.1)}
+.kpseal.avoid,.kpseal.lock{color:var(--down);border-color:rgba(255,107,107,.5);background:rgba(255,107,107,.1)}.kpseal.lock{border-style:dashed}
+.kpgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}.kpgrid2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kpcard{background:linear-gradient(180deg,var(--panel),var(--shell));border:1px solid var(--line);border-radius:20px;padding:16px 18px}
+.kpbig{font-size:26px;font-weight:700;line-height:1.2;margin:2px 0 6px}
+.kpchip{display:inline-flex;gap:6px;align-items:center;margin:3px 6px 3px 0;padding:5px 11px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;font-size:13px}.kpchip:hover{border-color:var(--accent)}
+.kpaccs{display:flex;flex-direction:column;gap:10px}
+.kpacc{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.kpacc>summary{list-style:none;cursor:pointer;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.kpacc>summary::-webkit-details-marker{display:none}
+.kpacc>summary:after{content:"＋";color:var(--mute);font-size:18px;margin-left:auto}.kpacc[open]>summary:after{content:"－"}
+.kpacc[open]>summary{border-bottom:1px solid var(--line)}.kpt{font-size:16px;font-weight:600}
+.kpbody{padding:14px 20px 18px}
+.kprows{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.kpline{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}.kpline .kps{margin-left:auto;text-align:right}
+.kpn{border-bottom:1px solid var(--line)}.kpn>summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 0;flex-wrap:wrap}.kpn>summary::-webkit-details-marker{display:none}.kpn>summary .kps{flex:1;min-width:200px}
+.kpn .kpbody{padding:4px 0 12px}
+@media(max-width:820px){.kpgrid,.kpgrid2{grid-template-columns:1fr}.kpname{font-size:24px}.kpsealbox{align-items:flex-start}.kpsealbox .kps{text-align:left!important}}
+
 .arena td,.arena th{padding:5px 9px;font-size:12.8px;text-align:right;white-space:nowrap}.arena td:nth-child(-n+2),.arena th:nth-child(-n+2){text-align:left}
 .rbar{display:inline-block;width:70px;height:8px;background:var(--panel2);border-radius:4px;vertical-align:middle;position:relative;overflow:hidden}.rbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent2)}.rbar b{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--mute)}
 .lvtog{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0;font-size:13px}.lvtog label{display:flex;gap:5px;align-items:center}
@@ -276,6 +317,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="26" height="26"><g fill="#fff"><ellipse cx="11" cy="12" rx="7.6" ry="4.1"/></g><g fill="#fff" fill-opacity=".92"><rect x="5.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="5.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="19.6" y="9.6" width="2.7" height="4.8" rx="1.35"/></g></svg></span><div><b>Borsa Komitesi</b><div class="sub" style="line-height:1.1">BIST Trading Ofisi</div></div></div>
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
     <nav class="nav" id="nav">
+      <a data-view="kokpit"><i data-ico="award"></i>Kokpit (sade görünüm)</a>
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="tarama"><i data-ico="filter"></i>Tarama Senaryoları</a>
@@ -335,6 +377,13 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div id="critBanner" class="crit" style="display:none"></div>
 
     <!-- GENEL BAKIŞ -->
+    <!-- KOKPİT: tek ekran -->
+    <div class="view" id="v-kokpit"><div class="kp-wrap">
+      <div class="kp-top"><span class="kp-brand"><span class="logo" style="width:30px;height:30px;border-radius:9px"><svg viewBox="0 0 24 24" width="20" height="20"><g fill="#fff"><ellipse cx="11" cy="12" rx="7.6" ry="4.1"/></g></svg></span>Borsa Komitesi</span>
+        <label class="kp-search"><span class="mute">🔎</span><input id="kpIn" list="tickers" placeholder="Hisse kodu ya da şirket adı (ör. THYAO)" autocomplete="off" spellcheck="false"></label>
+        <button class="kp-ib" id="kpRefresh" title="Veriyi yenile">↻</button><button class="kp-ib" id="kpTheme" title="Tema">◐</button><button class="kp-ib" data-go="dashboard" title="Tüm sayfalar ve ayrıntılı tablolar">☰ Tüm sayfalar</button></div>
+      <div class="kp-market" id="kpMarket"></div>
+      <div id="kpBody"></div></div></div>
     <div class="view" id="v-dashboard">
       <section class="card hero" id="hero"></section>
       <section class="card" id="briefCard"></section>
@@ -678,6 +727,7 @@ function technical(s) {
     const c = h.closes.slice(-20), lo = Math.min(...c), hi = Math.max(...c);
     txt += ` Son 20 günün kapanış desteği ~${fmt(lo)}, direnci ~${fmt(hi)}. Fiyat desteğe %${fmt((s.close / lo - 1) * 100, 1)}, dirence %${fmt((hi / s.close - 1) * 100, 1)} uzakta.`;
   }
+  const dp = DEPTH_USER && DEPTH_USER[s.name]; if (dp) txt += ` Tahta (Level-2): ${dp.text}${dp.block.length ? " Kırılım teyitsiz olabilir: " + dp.block.join("; ") + "." : ""}`;
   return txt;
 }
 function fundamentalNews(s) {
@@ -741,6 +791,11 @@ function auditor(cands, results) {
   results.slice(0, 40).forEach(([s, r]) => { const f = factCheck(s, r); if (f.locked) { locks++; issues.unshift(`🔒 Hata Avcısı: ${s.name} raporu KİLİTLİ: ${f.issues.map(i => i.msg).join("; ")}`); } });
   AUDIT = {issues, ok: !issues.length, locks};
 }
+function weightNoteHtml() {
+  let W = {}; try { W = memWeights(); } catch (e) { return ""; }
+  const ch = Object.entries(W).filter(([, o]) => o.w !== 1), nm = k => ARENA_NAMES[k] || k;
+  return `<div class="note"><b>Öz-düzenleme (Baş Denetçi):</b> ${ch.length ? ch.map(([k, o]) => `${esc(nm(k))} <b class="${o.w < 1 ? "down" : "up"}">×${fmt(o.w, 2)}</b> (${o.paper && o.paper.w !== 1 ? "sanal işlem: " + esc(o.paper.status) : esc(o.src)})`).join("; ") + "." : "hiçbir ajanın oy ağırlığı değiştirilmedi (her ajan için en az 30 ölçülmüş oy ve 20 işlem günü sanal işlem kaydı gerekir)."}</div>`;
+}
 function renderAudit() {
   const {issues, ok} = AUDIT;
   const label = ok == null ? "Bekleniyor" : AUDIT.locks ? "RED · KİLİT" : ok ? "ONAY" : "ŞARTLI ONAY";
@@ -748,6 +803,7 @@ function renderAudit() {
   if (ok == null) { $("audit").innerHTML = "<h2>Baş Denetçi</h2><p class='mute'>Veri bekleniyor…</p>"; return; }
   $("audit").innerHTML = `<h2>Baş Denetçi: <span class="${ok ? "audit-ok" : "audit-warn"}">${label}</span></h2>
     <ul>${issues.map(i => `<li>${i}</li>`).join("")}</ul>
+    ${weightNoteHtml()}
     <p class="note">Geri test işlem maliyeti içermez ve bugün listede olan hisselerle yapılır (hayatta kalma yanlılığı); Türkiye'de enflasyon nedeniyle nominal getiriler yukarı eğilimlidir, bu yüzden "taban" ile karşılaştırılır.</p>`;
 }
 
@@ -1564,25 +1620,111 @@ function commentHtml(s) {
 }
 
 
+
+/* ---------- KOKPİT: tek ekran karar özeti ---------- */
+let kpSym = store.get("kpSym", null);
+const kpOpen = new Set(store.get("kpOpen", []));
+const KP_CLOSED = h => String(h).replace(/<details class="meet" open>/g, '<details class="meet">'); // kokpitte ayrıntılar varsayılan kapalı
+const kpVote = v => v > 0 ? '<span class="kb up">▲ olumlu</span>' : v < 0 ? '<span class="kb down">▼ olumsuz</span>' : '<span class="kb">• nötr</span>';
+const kpCheck = c => c.s === OK ? '<span class="kb up">✓</span>' : c.s === BAD ? '<span class="kb down">✗</span>' : '<span class="kb">–</span>';
+function kpFirst(t) { const m = String(t || "").match(/^.*?[.!?](\s|$)/); return (m ? m[0] : String(t || "")).trim().slice(0, 150); }
+function kpMarketHtml() {
+  if (!UNIVERSE.length) return '<span class="kb">Veri yükleniyor…</span>';
+  const g = REGIME, cm = (() => { try { return crowdMeter(); } catch (e) { return null; } })(), sh = (() => { try { return macroShield(); } catch (e) { return null; } })();
+  const crit = (() => { try { return marketAlarms({watch: [...FAVS]}).filter(a => a.sev >= 3).length; } catch (e) { return 0; } })();
+  const rg = g ? `<span class="kb ${g.trend === "bull" ? "up" : g.trend === "bear" ? "down" : "warn"}">BIST: ${esc(g.label)} rejimi · hisselerin %${fmt(g.a50, 0)}'i SMA50 üstünde</span>` : "";
+  return `${rg}${cm ? `<span class="kb ${cm.idx >= 70 || cm.idx <= 30 ? "warn" : ""}">Duygu: ${esc(cm.label)} (${fmt(cm.idx, 0)}/100)</span>` : ""}${sh ? `<span class="kb ${sh.count >= 3 ? "down" : sh.count >= 2 ? "warn" : "up"}">Makro risk: ${esc(sh.level)} (${sh.count}/7)</span>` : ""}<span class="kb ${crit ? "down" : "up"}" ${crit ? "data-go=\"uyari\" style=\"cursor:pointer\" title=\"Uyarı Merkezi\"" : ""}>${crit ? "🚨 " + crit + " kritik alarm" : "Kritik alarm yok"}</span>${DH ? `<span class="kb ${DH.label === "İYİ" ? "up" : DH.label === "KÖTÜ" ? "down" : "warn"}">Veri: ${esc(DH.label)} · ${esc(DATA && DATA.generated || "")}</span>` : ""}`;
+}
+function kpAcc(id, title, sub, body) { return `<details class="kpacc" data-kpa="${id}" ${kpOpen.has(id) ? "open" : ""}><summary><span class="kpt">${title}</span><span class="kps">${sub}</span></summary><div class="kpbody">${body}</div></details>`; }
+function kpLegends(s, r) {
+  const P = [["buffett", "Warren Buffett", r.l.buffett], ["simons", "Jim Simons", r.l.simons], ["livermore", "Jesse Livermore", r.l.livermore], ["kellogg", "Jack Kellogg", r.l.kellogg], ["seytan", "Şeytanın Avukatı", r.l.seytan],
+    ["makro", "Makro & Jeopolitik", r.k2.makro], ["akilli", "Akıllı Para", r.k2.akilli], ["vol", "Opsiyon & Volatilite", r.k2.vol], ["psiko", "Piyasa Psikolojisi", r.k2.psiko]], W = memWeights();
+  return `<div class="kprows">${P.map(([k, n, x]) => `<details class="kpn"><summary>${kpVote(x.v)} <b>${esc(n)}</b>${W[k] && W[k].w !== 1 ? ` <span class="kb ${W[k].w < 1 ? "down" : "up"}" title="öğrenilmiş oy ağırlığı">×${fmt(W[k].w, 2)}</span>` : ""}<span class="kps">${esc(kpFirst(x.t))}</span></summary><div class="kpbody"><p>${esc(x.t)}</p>${x.plan ? `<p class="note"><b>Plan:</b> ${esc(x.plan)}</p>` : ""}</div></details>`).join("")}</div>
+    ${KP_CLOSED(meetingHtml(s, r))}${KP_CLOSED(debateHtml(s, r))}${KP_CLOSED(peerHtml(s))}`;
+}
+function kpSmart(s, r) {
+  const a = r.k2.akilli, au = AKD_USER && AKD_USER[s.name], ast = akdState(au, s), dp = DEPTH_USER && DEPTH_USER[s.name];
+  return `<div class="kprows"><div class="kpline">${kpVote(a.v)} <b>Akıllı Para oyu</b><span class="kps">${esc(kpFirst(a.t))}</span></div>
+    ${a.checks.map(c => `<div class="kpline">${kpCheck(c)} <span>${esc(c.t.replace(/ \(.*?\)/g, ""))}</span><span class="kps">${esc(c.val || "")}</span></div>`).join("")}</div>
+    ${ast ? `<p class="note"><b>Takas filtresi:</b> ${esc(ast.text)}</p>` : '<p class="note">Takas/AKD: kendi CSV\'nizi <a href="#ozelveri" data-go="ozelveri">Özel Veri</a> sayfasından yükleyin (lisanslı veri, yalnızca tarayıcınızda kalır).</p>'}
+    ${dp ? `<p class="note"><b>Tahta (Level-2):</b> ${esc(dp.text)}${dp.block.length ? " <b class='down'>Kırılım teyitsiz olabilir: " + esc(dp.block.join("; ")) + "</b>" : ""}</p>` : '<p class="note">Tahta derinliği/spoofing: kendi tahta görüntülerinizi Özel Veri sayfasından yükleyin.</p>'}`;
+}
+function kpRisk(s, r) {
+  const mc = monteCarlo(s);
+  return `${stressHtml(s)}${mc ? `<div class="note">🎲 ${mc.n.toLocaleString("tr-TR")} senaryo · ${mc.days} günde %${mc.stop} stop olasılığı <b>%${fmt(mc.probStop, 0)}</b> · zarar olasılığı %${fmt(mc.probLoss, 0)} · CVaR %5: <b>${fmt(mc.cvar5, 1)}%</b> · Sharpe ${fmt(mc.sharpe0, 2)}</div>${mcExtraHtml(s, mc)}` : ""}
+    ${KP_CLOSED(kellyHtml(s))}<p class="note"><b>Şeytanın Avukatı:</b> ${esc(r.l.seytan.t)}</p>`;
+}
+function kpFund(s, r) { return `<div class="note">${valLine(s)}</div>${auditHtml(s)}${sentimentHtml(s)}${kapKurumHtml(s)}${commentHtml(s)}`; }
+function kpDecision(s, r) {
+  const sl = kokpitSeal(s, r), d = sl.d, k = kellyPlan(s, kellyCap, kellyP == null ? undefined : kellyP / 100);
+  const chg = s.change, c = cheapness(s);
+  const kelly = !k ? '<div class="kpbig mute">–</div><div class="kps">ATR verisi yok</div>' : k.edge
+    ? `<div class="kpbig">%${fmt(k.f * 100, 1)}</div><div class="kps">kasadan pozisyon · stop çalışırsa ≈ %${fmt(k.f * k.S, 2)} risk${k.pUser != null ? " · girdiğiniz %" + fmt(k.pUser * 100, 0) + " olasılıkla" : ""}</div>`
+    : `<div class="kpbig mute">Pozisyon yok</div><div class="kps">Kelly ≤ 0: istatistiksel kenar yok (olasılık %${fmt(k.pWin * 100, 0)}, gereken ≈ %${fmt(100 / (1 + k.b), 0)})</div>`;
+  const lv = k ? `<div class="kpbig">${fmt(k.stop0)} <span class="mute">/</span> ${fmt(k.target)}</div><div class="kps">stop −%${fmt(k.S, 1)} (2×ATR) · hedef +%${fmt(k.T, 1)} (2R) · +1R sonrası ${fmt(k.k, 1)}×ATR izleyen stop</div>` : '<div class="kpbig mute">–</div>';
+  return `<div class="kphead"><div><div class="kpname">${esc(s.name)} <span class="kb">${esc(trSector(s.sector))}</span> ${c ? cheapBadge(s) : ""}</div><div class="kps">${esc(s.description || "")}</div><div class="kpprice">${fmt(s.close)} TL <span class="${chg > 0 ? "up" : chg < 0 ? "down" : ""}">${chg > 0 ? "+" : ""}${fmt(chg)}%</span> <span class="kps">· hacim ~${fmt(avgTl(s), 0)} mn TL/gün · RS ${fmt(s.rs, 0)}</span></div></div>
+    <div class="kpsealbox"><span class="kpseal ${sl.cls}">${esc(sl.label)}</span><div class="kps" style="max-width:300px;text-align:right">${sl.why.slice(0, 2).map(esc).join(" · ")}</div></div></div>
+    <div class="kpgrid"><div class="kpcard"><div class="kpl">Ağırlıklı karar skoru</div><div class="kpbig"><span class="up">%${d.al}</span> Boğa · <span class="down">%${d.sat}</span> Ayı</div><div class="dbt"><i class="a" style="width:${d.al}%"></i><i class="t" style="width:${d.tut}%"></i><i class="s" style="width:${d.sat}%"></i></div><div class="kps">%${d.tut} nötr · ${esc(d.label)}</div></div>
+    <div class="kpcard"><div class="kpl">Kelly kriteri · kasa önerisi</div>${kelly}</div>
+    <div class="kpcard"><div class="kpl">Dinamik stop ve hedef (ATR)</div>${lv}</div></div>`;
+}
+function kpHome() {
+  const cand = current.slice(0, 25).map(s => { try { return [s, committee(s)]; } catch (e) { return null; } }).filter(Boolean);
+  const hc = cand.filter(([s, r]) => highConfidence(s, r).ok), risk = cand.filter(([s, r]) => r.veto || r.veto2).slice(0, 6), qd = qualityDipList(UNIVERSE).slice(0, 5);
+  const chip = (s, tag) => `<span class="kpchip" data-kp="${esc(s.name)}"><b>${esc(s.name)}</b> <span class="${s.change > 0 ? "up" : s.change < 0 ? "down" : ""}">${s.change > 0 ? "+" : ""}${fmt(s.change, 1)}%</span>${tag ? ` <span class="kps">${tag}</span>` : ""}</span>`;
+  return `<div class="kpcard" style="margin:0 0 12px"><div class="kpl">Bir hisse seçin: kod ya da şirket adını yukarıdaki kutuya yazın</div><div class="kps">Kokpit tek bakışta karar mührünü, ağırlıklı kararı, Kelly pozisyonunu ve ATR stop/hedefi verir; ayrıntılar kapalı kartların içindedir.</div></div>
+    <div class="kpgrid2"><div class="kpcard"><div class="kpl">✅ Yüksek güvenilirlikli sinyaller</div><div>${hc.length ? hc.map(([s]) => chip(s)).join("") : '<span class="kps">Şu an tüm filtreleri geçen sinyal yok (nadir olması beklenir).</span>'}</div></div>
+    <div class="kpcard"><div class="kpl">⚠ Risk / veto altındakiler (aday listesinden)</div><div>${risk.length ? risk.map(([s, r]) => chip(s, r.veto ? "veto" : "uzman itirazı")).join("") : '<span class="kps">Yok.</span>'}</div></div>
+    <div class="kpcard"><div class="kpl">🔍 Kaliteli ama düşüşte (izleme)</div><div>${qd.length ? qd.map(x => chip(x.s, "kalite " + fmt(x.qual, 0))).join("") : '<span class="kps">Yok.</span>'}</div></div></div>
+    <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
+}
+function renderKokpit() {
+  const m = $("kpMarket"), b = $("kpBody"); if (!m || !b) return;
+  m.innerHTML = kpMarketHtml(); if (!UNIVERSE.length) { b.innerHTML = ""; return; }
+  const s = kpSym && UNIVERSE.find(x => x.name === kpSym); if ($("kpIn") && document.activeElement !== $("kpIn")) $("kpIn").value = s ? s.name : "";
+  if (!s) { b.innerHTML = kpHome(); return; }
+  const r = committee(s);
+  b.innerHTML = kpDecision(s, r) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
+    <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür, ajanların oy özetidir; kazanç garantisi vermez. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar →</a> · <a href="#" data-kp="">Seçimi temizle</a></p>`;
+}
+function kpSelect(name) {
+  name = String(name || "").trim().toUpperCase(); kpSym = name && UNIVERSE.some(s => s.name === name) ? name : null; store.set("kpSym", kpSym);
+  if (view !== "kokpit") show("kokpit"); else renderKokpit(); window.scrollTo(0, 0);
+}
+document.addEventListener("click", e => { if (view !== "kokpit") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); e.stopPropagation(); show(g.dataset.go); return; } const x = e.target.closest("[data-kp],[data-x]"); if (!x) return; e.preventDefault(); e.stopPropagation(); kpSelect(x.dataset.kp !== undefined ? x.dataset.kp : x.dataset.x); }, true);
+document.addEventListener("toggle", e => { const d = e.target; if (!d || !d.dataset || !d.dataset.kpa) return; d.open ? kpOpen.add(d.dataset.kpa) : kpOpen.delete(d.dataset.kpa); store.set("kpOpen", [...kpOpen]); }, true);
+document.addEventListener("change", e => { if (e.target.id === "kpIn") kpSelect(e.target.value); });
+document.addEventListener("keydown", e => { if (e.target.id === "kpIn" && e.key === "Enter") kpSelect(e.target.value); });
+document.addEventListener("click", e => { if (e.target.closest("#kpRefresh")) loadData(true); if (e.target.closest("#kpTheme")) $("theme").click(); });
+
 /* ---------- Kara kuğu stres testi, Kelly + izleyen stop, tahta derinliği, gölge arena ---------- */
 function stressHtml(s) {
-  const st = stressOf(s); if (!st) return `<div class="note">🌪 Kara kuğu stres testi: bu hisse için duyarlılık verisi yok (yalnızca en likit ~130 hisse için hesaplanır).</div>`;
-  const m = STRESS.meta, cls = x => x ? "down" : "up";
-  return `<details class="meet"><summary>🌪 Kara kuğu stres testi · <b class="${cls(!st.ok)}">${st.ok ? "GEÇTİ" : "GEÇEMEDİ: Şeytanın Avukatı reddediyor"}</b> · en kötü senaryo ${fmt(st.worst, 1)}%</summary>
-    <table class="peert"><tr><th>Senaryo</th><th>Tahmini kayıp</th><th>Sınır</th><th>Sonuç</th></tr>${STRESS_SC.map(([id, lab]) => `<tr><td>${esc(lab)}</td><td class="${st.loss[id] <= STRESS_LIM[id] ? "down" : ""}"><b>${fmt(st.loss[id], 1)}%</b></td><td>${fmt(STRESS_LIM[id], 1)}%</td><td class="${cls(st.fail.includes(id))}">${st.fail.includes(id) ? "geçemedi" : "geçti"}</td></tr>`).join("")}</table>
-    <p class="note">Duyarlılıklar ${st.n} günlük veriden (${esc(m.from)} → ${esc(m.to)}) regresyonla bulundu: piyasa betası ${fmt(st.b.bm, 2)}, çöküş (düşüş) betası ${fmt(st.b.bmd, 2)}, kur duyarlılığı ${fmt(st.b.bf, 2)}, faiz duyarlılığı ${fmt(st.b.by, 2)} (R² ${fmt(st.b.r2, 2)}${st.weak ? ", düşük: tahmin zayıf" : ""}). Model doğrulaması: BIST 100'ün ≥ %2 düştüğü ${m.crash_days} günde öngörülen ortalama hisse getirisi ${fmt(m.calibration.pred, 2)}%, gerçekleşen ${fmt(m.calibration.real, 2)}%.
-    <b>Sınırlar:</b> kur şoku, gözlenen en büyük günlük artışın (%${fmt(m.usdtry_max, 2)}) ${fmt(st.extrap.kur, 1)} katı, faiz şoku gözlenen en büyük günlük artışın (${fmt(m.tr10y_max, 2)} puan) ${fmt(st.extrap.faiz, 1)} katıdır: doğrusal ekstrapolasyon, kesin tahmin değildir. Geçmiş tek rejimdir. Testi geçemeyen hisse yeni alım için reddedilir (kapatmak için R.stressVeto = 0).</p></details>`;
+  const st = stressOf(s); if (!st) return `<div class="note">🌪 Kara kuğu stres testi: bu hisse için duyarlılık/bilanço verisi yok (regresyon yalnızca en likit ~130 hisse, borç yükü ise FAVÖK'ü olan finans dışı hisseler için hesaplanır).</div>`;
+  const m = STRESS && STRESS.meta, cls = x => x ? "down" : "up", rows = [];
+  if (st.loss) STRESS_SC.forEach(([id, lab]) => rows.push(`<tr><td>${esc(lab)}</td><td class="${st.loss[id] <= STRESS_LIM[id] ? "down" : ""}"><b>${fmt(st.loss[id], 1)}%</b></td><td>${fmt(STRESS_LIM[id], 1)}%</td><td class="${cls(st.fail.includes(id))}">${st.fail.includes(id) ? "geçemedi" : "geçti"}</td></tr>`));
+  if (st.debt) rows.push(`<tr><td>Faiz +500 baz puan: tüm borç yeniden fiyatlanırsa ek faiz gideri / FAVÖK</td><td class="${st.debt.fail ? "down" : ""}"><b>%${fmt(st.debt.burden * 100, 0)}</b> <span class="mute">(${fmt(st.debt.extra / 1e9, 2)} mlr TL)</span></td><td>%${fmt(STRESS_LIM.borc500 * 100, 0)}</td><td class="${cls(st.debt.fail)}">${st.debt.fail ? "geçemedi" : "geçti"}</td></tr>`);
+  if (st.fxOpen) rows.push(`<tr><td>Döviz açık pozisyonu vekili: kur duyarlılığı ≤ ${fmt(STRESS_LIM.kurBf, 2)} ve net borç/özsermaye ≥ ${fmt(STRESS_LIM.kurNd, 2)}</td><td class="${st.fxOpen.fail ? "down" : ""}">duyarlılık ${fmt(st.fxOpen.bf, 2)} · borç/özsermaye ${fmt(st.fxOpen.ndEq, 1)}</td><td>–</td><td class="${cls(st.fxOpen.fail)}">${st.fxOpen.fail ? "şüpheli" : "geçti"}</td></tr>`);
+  return `<details class="meet"><summary>🌪 Kara kuğu stres testi · <b class="${cls(!st.ok)}">${st.ok ? "GEÇTİ" : "GEÇEMEDİ: Şeytanın Avukatı ve Makro Risk Uzmanı onay vermiyor"}</b>${st.worst != null ? " · en kötü senaryo " + fmt(st.worst, 1) + "%" : ""}</summary>
+    <table class="peert"><tr><th>Senaryo</th><th>Tahmini etki</th><th>Sınır</th><th>Sonuç</th></tr>${rows.join("")}</table>
+    <p class="note">${st.b ? `Piyasa duyarlılıkları ${st.n} günlük veriden (${esc(m.from)} → ${esc(m.to)}) regresyonla bulundu: piyasa betası ${fmt(st.b.bm, 2)}, çöküş betası ${fmt(st.b.bmd, 2)}, kur duyarlılığı ${fmt(st.b.bf, 2)}, faiz duyarlılığı ${fmt(st.b.by, 2)} (R² ${fmt(st.b.r2, 2)}${st.weak ? ", düşük: tahmin zayıf" : ""}). Doğrulama: BIST 100'ün ≥ %2 düştüğü ${m.crash_days} günde öngörülen ortalama hisse getirisi ${fmt(m.calibration.pred, 2)}%, gerçekleşen ${fmt(m.calibration.real, 2)}%. <b>Sınırlar:</b> kur şoku, gözlenen en büyük günlük artışın (%${fmt(m.usdtry_max, 2)}) ${fmt(st.extrap.kur, 1)} katı; faiz şoku ${fmt(st.extrap.faiz, 1)} katı: doğrusal ekstrapolasyondur. ` : "Bu hisse için piyasa duyarlılığı (regresyon) verisi yok; yalnızca bilanço tabanlı testler uygulandı. "}
+    <b>+500 baz puan testi</b> en kötü durumu varsayar: tüm finansal borç yeniden fiyatlanır (gerçekte bir kısmı sabit faizli/uzun vadeli olabilir). <b>Döviz açık pozisyonu</b> için bilançodaki döviz borcu/varlığı KAP dipnotlarındadır ve ücretsiz yapılandırılmış veri yoktur; bu yüzden kur duyarlılığı + net borç vekil olarak kullanılır. Testi geçemeyen hisse yeni alım için reddedilir (kapatmak için R.stressVeto = 0).</p></details>`;
 }
 let kellyCap = store.get("kellyCap", 100000);
+let kellyP = store.get("kellyP", null);
 function kellyHtml(s) {
-  const k = kellyPlan(s, kellyCap); if (!k) return "";
-  return `<details class="meet" open><summary>🎯 Pozisyon büyüklüğü (Kelly) ve dinamik izleyen stop · <b class="${k.edge ? "up" : "mute"}">${k.edge ? "kenar var" : "kenar yok: pozisyon önerilmez"}</b></summary>
-    <div class="note"><label>Kasa (TL) <input id="kellyCap" type="number" min="1000" step="1000" value="${kellyCap}" style="width:110px"></label></div>
-    <div>${esc(k.text)}</div>
-    ${k.edge ? `<div class="note">Önerilen: <b>${fmt(k.amount, 0)} TL</b> (≈ ${k.shares} adet). Başlangıç stop <b>${fmt(k.stop0)} TL</b> (−%${fmt(k.S, 1)} = 2×ATR), hedef <b>${fmt(k.target)} TL</b> (+%${fmt(k.T, 1)}, 2R). Karar verilen olasılık dışında ${k.days} günde ikisine de değmeyen yollar %${fmt(k.pN * 100, 0)}.</div>
+  const k = kellyPlan(s, kellyCap, kellyP == null ? undefined : kellyP / 100); if (!k) return "";
+  return `<details class="meet" open><summary>🎯 Pozisyon büyüklüğü (Kelly), dinamik izleyen stop ve kar al · <b class="${k.edge ? "up" : "mute"}">${k.edge ? "kenar var" : "kenar yok: pozisyon önerilmez"}</b></summary>
+    <div class="note" style="display:flex;gap:14px;flex-wrap:wrap;align-items:end"><label>Kasa (TL) <input id="kellyCap" type="number" min="1000" step="1000" value="${kellyCap}" style="width:110px"></label>
+      <label>Sinyal güvenilirliği % <input id="kellyP" type="number" min="1" max="99" step="1" value="${kellyP == null ? "" : kellyP}" placeholder="model: ${fmt(k.pModel * 100, 0)}" style="width:80px"></label><span class="mute">boş bırakırsanız model olasılığı (Monte Carlo) kullanılır</span></div>
+    <div>${esc(k.text)}</div>${k.warn ? `<div class="note down">${esc(k.warn)}</div>` : ""}
+    ${k.edge ? `<div class="note">Önerilen: <b>${fmt(k.amount, 0)} TL</b> (≈ ${k.shares} adet; stop çalışırsa kasanın <b>%${fmt(k.riskTl / kellyCap * 100, 2)}</b>'i, ${fmt(k.riskTl, 0)} TL kaybedilir). Başlangıç stop <b>${fmt(k.stop0)} TL</b> (−%${fmt(k.S, 1)} = 2×ATR), hedef <b>${fmt(k.target)} TL</b> (+%${fmt(k.T, 1)}, 2R). Fiyatlar BIST fiyat adımına (kademe) yuvarlanmıştır.</div>
+    <table class="peert"><tr><th>Kar al</th><th>Seviye</th><th>Satış</th><th>Sonra</th></tr>${k.tp.map((x, i) => `<tr><td>+${x.r}R</td><td><b>${fmt(x.px)} TL</b> (+%${fmt((x.px / s.close - 1) * 100, 1)})</td><td>pozisyonun ${i === 0 ? "1/3'ü" : "1/3'ü"}</td><td>${i === 0 ? "stop girişe çekilir" : "kalan 1/3 izleyen stopla taşınır"}</td></tr>`).join("")}</table>
     <table class="peert"><tr><th>Tepe fiyat</th><th>Kazanç</th><th>İzleyen stop</th><th>Kilitlenen</th></tr>${k.ladder.map(x => `<tr><td>${fmt(x.peak)} (+${x.r}R)</td><td class="up">+%${fmt((x.peak / s.close - 1) * 100, 1)}</td><td><b>${fmt(x.stop)}</b></td><td>${x.stop >= s.close ? "+%" + fmt((x.stop / s.close - 1) * 100, 1) : "−%" + fmt((1 - x.stop / s.close) * 100, 1)}</td></tr>`).join("")}</table>` : ""}
-    <p class="note">Kenar = Simons'ın model beklentisi ile çok zamanlı haftalık skorun geçmiş beklentisinin ortalaması (günlük sürüklenme %${fmt(k.mu * 100, 3)}); olasılık 10.000 senaryoluk ilk-geçiş simülasyonundan gelir. Yarım Kelly + %1 risk sınırı + %20 tavan uygulanır. İzleyen stop: +1R'ye kadar sabit, sonra max(giriş, tepe − ${fmt(k.k, 1)}×ATR) (k = 2 + ATR%/3, 2,2–3,5). Eğitim amaçlıdır.</p></details>`;
+    <div class="note"><b>Olasılığa göre Kelly</b> (ödül/risk ${fmt(k.b, 1)}; yarım Kelly, %1 risk ve %20 tavanla):</div>
+    <table class="peert"><tr><th>Güvenilirlik</th>${k.tbl.map(r => `<th>%${fmt(r.p * 100, 0)}</th>`).join("")}</tr><tr><td>Tam Kelly</td>${k.tbl.map(r => `<td class="${r.kelly > 0 ? "up" : "down"}">${fmt(r.kelly * 100, 1)}%</td>`).join("")}</tr><tr><td>Uygulanan (kasa %)</td>${k.tbl.map(r => `<td><b>${fmt(r.f * 100, 1)}%</b></td>`).join("")}</tr></table>
+    <p class="note">Gerçeklik notu: geçmişte ölçülen en iyi sinyal grubunun isabeti BIST'te ≈ %53'tür (Ajan Arenası); %70-85 gibi güvenilirlikler bu veriyle desteklenmez. Model kenarı = Simons'ın model beklentisi ile haftalık skor beklentisinin ortalaması (günlük sürüklenme %${fmt(k.mu * 100, 3)}). İzleyen stop: +1R'ye kadar sabit, sonra max(giriş, tepe − ${fmt(k.k, 1)}×ATR) (k = 2 + ATR%/3, 2,2–3,5). Eğitim amaçlıdır.</p></details>`;
 }
+document.addEventListener("change", e => { if (e.target.id !== "kellyP") return; const v = e.target.value.trim(); kellyP = v === "" ? null : Math.max(1, Math.min(99, +v || 1)); store.set("kellyP", kellyP); if (selected) detail(selected); });
 document.addEventListener("change", e => { if (e.target.id !== "kellyCap") return; kellyCap = Math.max(1000, +e.target.value || 100000); store.set("kellyCap", kellyCap); if (selected) detail(selected); });
 
 /* Tahta derinliği (Level-2): kullanıcının kendi dışa aktardığı tahta görüntüleri */
@@ -3536,6 +3678,7 @@ function refreshView() {
   else if (view === "ozelveri") renderOzelVeri();
   else if (view === "arsiv") renderArsiv();
   else if (view === "arena") renderArena();
+  else if (view === "kokpit") renderKokpit();
   else if (view === "kalite") renderQualityDip();
   else if (view === "yorumcu") renderCommentators();
   else if (view === "halkaarz") renderIpo();
@@ -3564,7 +3707,7 @@ function closeDetail() { selected = null; $("drawer").classList.remove("open"); 
 function show(v) {
   $("favonly").checked = v === "favoriler";
   if (v === "favoriler") v = "adaylar";
-  view = v;
+  view = v; document.body.classList.toggle("kp", v === "kokpit");
   document.querySelectorAll(".view").forEach(el => el.classList.toggle("show", el.id === "v-" + v));
   const activeKey = v === "adaylar" && $("favonly").checked ? "favoriler" : v;
   document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.view === activeKey));
@@ -3743,14 +3886,14 @@ window.addEventListener("resize", () => { if (view === "dashboard") renderDashbo
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 paintIcons();
 buildRules();
-applyTheme(store.get("theme", matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+applyTheme(store.get("theme", "dark")); // varsayılan premium koyu tema; kullanıcı seçimi korunur
 let first = location.hash.slice(1);
 if (first.startsWith("tarama=")) { try { scr = JSON.parse(decodeURIComponent(escape(atob(first.slice(7))))); scrSave(); } catch (err) {} first = "tarayici"; }
 if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).toUpperCase(); first = "grafik"; }
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "dashboard");
+show(["kokpit", "dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "kokpit");
 loadData(false);
 startTourIfFirst();
 </script>

@@ -523,17 +523,19 @@ function macroNewsHeat() {
 }
 function macroP(s) {
   const sh = macroShield(), beta = s.beta, hi = beta != null && beta > 1.2;
-  const veto = !!(R.makroVeto && sh.count >= R.makroN);
+  const stx = stressOf(s), stFail = !!(stx && !stx.ok && (R.stressVeto ?? 1));
+  const veto = stFail || !!(R.makroVeto && sh.count >= R.makroN);
   const v = veto ? -1 : 0;
   const checks = sh.items.map(x => chk(x.on ? false : (x.val === "–" ? null : true), `${x.name}: ${x.hint}`, x.val)).concat([
+    chk(stx ? stx.ok : null, "Kara kuğu stres testi (BIST çöküşü, kur şoku, +500 baz puan faiz, döviz açık pozisyonu): geçti", stx ? stx.text : "duyarlılık/bilanço verisi yok"),
     chk(sh.inverted ? false : true, "Getiri eğrisi normal (2 yıllık < 10 yıllık)", sh.inverted ? "ters: kısa vade faizi uzundan yüksek" : "normal"),
     chk(beta == null ? null : !hi, "Piyasa duyarlılığı (beta) ≤ 1,2: makro şokta hisse fazla savrulmaz", beta == null ? "–" : fmt(beta, 2))]);
-  const t = sh.count >= 3
+  const t = stFail ? `ONAY VERMİYORUM: ${stx.text} Makro şokta bu hisse sınırı aşıyor; alım onayı yok.` : sh.count >= 3
     ? `Dikkat: makro tablo ${sh.level.toLowerCase()} risk gösteriyor (${sh.count}/7 bayrak). Ama sayılara dürüst olalım: ${sh.evidence} Bu piyasada kur şoku dönemlerinde hisse enflasyon ve kur koruması gibi davranıyor; bu yüzden ${veto ? "vetomu açtım" : "alım vetosu koymuyorum"}, yalnızca pozisyonu küçültmenizi öneririm${hi ? "; üstelik bu hisse yüksek betalı" : ""}.`
     : sh.count === 2 ? `Makro tablo orta düzeyde karışık (${sh.count}/7 bayrak). Büyük resim alım kararını engellemiyor ama haber akışını izleyin; ${sh.evidence}`
     : `Makro tabloda belirgin bir stres yok (${sh.count}/7 bayrak${sh.inverted ? "; getiri eğrisi ters, para sıkı" : ""}). ${sh.geo.tot ? `Son 3 günün haberlerinin ${sh.geo.n}/${sh.geo.tot}'i jeopolitik/makro konulu (zayıf bir gösterge).` : ""} Rüzgâr ne lehe ne aleyhte; karar hissenin kendi hikâyesine kalıyor.`;
   const plan = sh.count >= 3 ? "Pozisyon boyutunu normalin yarısına indirin; stop'u önceden belirleyin; yeni alımları kademeli yapın." : "Makro nedeniyle ek bir kısıt yok; her zamanki risk kuralları geçerli.";
-  return {v, score: tally(checks).score, checks, t, plan, shield: sh, veto};
+  return {v, score: tally(checks).score, checks, t, plan: stFail ? "Stres testini geçene kadar yeni alım yok; mevcut pozisyonu küçültün." : plan, shield: sh, veto, stress: stx};
 }
 
 /* Z-skor, ortalamaya dönüş yarı ömrü (AR(1)) ve oynaklık sıkışması; HIST kapanışlarından */
@@ -591,8 +593,10 @@ function akilliP(s) {
   const au = AKD_USER ? AKD_USER[s.name] : null; // kullanıcı CSV (Matriks vb.): doğrulanamaz; çok günlük takas filtresi yalnızca kullanıcı "oya kat" derse oyu etkiler
   const ast = akdState(au, s);
   if (AKD_VOTE && ast && ast.strong && ast.days >= 3) { if (ast.dir > 0 && v === 0) v = 1; else if (ast.dir < 0) v = v > 0 ? 0 : -1; }
-  if (viopV !== 0 && v === 0) v = viopV; else if (viopV < 0 && v > 0) v = 0; // vadeli olumsuz ise kuvvetli CMF oyunu nötrle
+  if (viopV !== 0 && v === 0) v = viopV; else if (viopV < 0 && v > 0) v = 0;
+  const dpA = DEPTH_USER ? DEPTH_USER[s.name] : null; if (DEPTH_GATE && dpA && dpA.block.length && v > 0) v = 0; // tahta teyit etmiyorsa (sahte duvar, satış duvarı, satıcı ağırlığı) para girişi oyu verilmez // vadeli olumsuz ise kuvvetli CMF oyunu nötrle
   const checks = [
+    chk(dpA ? (dpA.block.length ? false : true) : null, "Tahta derinliği (Level-2): sahte duvar/spoofing yok, satış duvarı ve satıcı baskısı yok", dpA ? dpA.text + (DEPTH_GATE ? " · kapı açık" : " · bilgi (kapı kapalı)") : "tahta verisi yok (Özel Veri sayfasından yükleyin)"),
     chk(vp ? (viopV > 0 ? true : viopV < 0 ? false : null) : null, "Vadeli (VİOP) pozisyonlanma: taşıma maliyeti düşülmüş fazla prim", vp ? `${viopTxt} · ${vf ? vf.verdict : "test yok"}` : "bu hissenin vadelisi yok"),
     chk(ast ? (ast.dir > 0 ? true : ast.dir < 0 ? false : null) : null, "Takas filtresi: mal toplanıyor mu (birikim) boşaltılıyor mu (dağıtım)? Çok günlük AKD + takas saklama", ast ? ast.text + (AKD_VOTE ? " · oya katıldı" : " · bilgi (oya katılmadı)") : "yeterli gün yok (≥ 2 günlük AKD içe aktarın)"),
     chk(au ? (au.bal > 0.05 ? true : au.bal < -0.05 ? false : null) : null, "Kullanıcı AKD verisi: ilk 5 alıcı − ilk 5 satıcı dengesi (toplam hacme oranı)", au ? `${au.d}: %${fmt(au.bal * 100, 1)} (alıcı yoğunlaşması %${fmt(au.conc * 100, 1)})${au.foreign != null ? ", yabancı oranı %" + fmt(au.foreign, 1) : ""} · kullanıcı verisi, doğrulanamadı` : "içe aktarılmadı (Özel Veri sayfası)"),
@@ -609,7 +613,7 @@ function akilliP(s) {
     : v < 0 ? `Tahta bana ${dist ? "dağıtım" : "para çıkışı"} gösteriyor: ${dist ? "hacim yüksek ama fiyat yerinde, CMF negatif: biri sessizce mal veriyor" : `CMF ${fmt(cmf, 2)}`}. Geçmişte bu sinyal olumsuz çıktı (${k2ev(dist ? "dagitim" : "cmf_zayif")}). Büyük oyuncunun kim olduğunu bilmiyorum ama yönü çıkışa bakıyor.`
     : acc ? `Hacim yüksek, fiyat yerinde, CMF pozitif: emilim izi var. Ama dürüst olayım, bu "birikim" sinyali geçmişte kanıtlanmadı (${k2ev("birikim")}); izleme listesine alırım.`
     : "Tahtada belirgin bir izi yok: ne güçlü bir para girişi ne de dağıtım var. Gerçek takas verisi olmadan daha fazlasını söylemem.");
-  return {v, score: tally(checks).score, checks, t, vp, viopV, au, ast, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
+  return {v, score: tally(checks).score, checks, t, vp, viopV, au, ast, depth: dpA, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
 }
 /* Piyasa coşku/korku göstergesi (tüm piyasa): sosyal medya yerine fiyat davranışından */
 function crowdMeter() {
@@ -1572,16 +1576,28 @@ function commentConsensus(entries, name) {
    Doğrulama (stress.json meta.calibration): BIST 100'ün ≥ %2 düştüğü günlerde modelin öngördüğü ve gerçekleşen ortalama hisse getirisi. UYARI: kur/faiz şokları
    gözlenen en büyük günlük hareketin katlarıdır (ör. USDTRY +%10 ≈ gözlenen azami günlük artışın ~3 katı): doğrusal ekstrapolasyondur, kesin tahmin değildir. */
 let STRESS = null; // stress.json
-const STRESS_LIM = {bist5: -7.5, kur10: -15, faiz3: -9, swan: -16};
+const STRESS_LIM = {bist5: -7.5, kur10: -15, faiz3: -9, swan: -16, borc500: 0.5, kurBf: -0.15, kurNd: 0.75}; // borc500: ek faiz gideri / FAVÖK; kurBf/kurNd: kur duyarlılığı ve net borç/özsermaye
 const STRESS_SC = [["bist5", "BIST 100 −%5 çöküş"], ["kur10", "Ani kur şoku (USDTRY +%10)"], ["faiz3", "Faiz şoku (TR 10 yıllık +3 puan)"], ["swan", "Kara kuğu: BIST −%10, USDTRY +%8, faiz +4 puan"]];
 function stressOf(s) {
-  const b = STRESS && STRESS.stocks ? STRESS.stocks[s.name] : null, m = STRESS && STRESS.meta; if (!b || !m) return null;
-  const loss = {bist5: b.bmd * -5, kur10: b.bm2 * Math.min(0, m.km * 10) + b.bf * 10, faiz3: b.bm2 * Math.min(0, m.ky * 3) + b.by * 3, swan: b.bmd * -10 + b.bf * 8 + b.by * 4};
-  const fail = STRESS_SC.filter(([id]) => loss[id] <= STRESS_LIM[id]).map(([id]) => id), worst = Math.min(...Object.values(loss));
-  const lab = id => STRESS_SC.find(x => x[0] === id)[1];
-  return {loss, fail, ok: !fail.length, worst, weak: b.r2 < 0.1, b, n: b.n,
-    extrap: {kur: m.usdtry_max ? 10 / m.usdtry_max : null, faiz: m.tr10y_max ? 3 / m.tr10y_max : null},
-    text: `Stres testi: ${STRESS_SC.map(([id, l]) => `${l.split(":")[0].replace(/ \(.*\)/, "")} ${fmt(loss[id], 1)}%`).join(", ")}. ${fail.length ? `GEÇEMEDİ (${fail.map(lab).join("; ")}; sınır aşıldı).` : "Dört senaryoda da kayıp sınırların içinde."}`};
+  const b = STRESS && STRESS.stocks ? STRESS.stocks[s.name] : null, m = STRESS && STRESS.meta, fin = isFin(s);
+  // (c) +500 baz puan: tüm borcun yeniden fiyatlandığı en kötü durumda ek faiz gideri / FAVÖK (bilançodan; regresyondan bağımsız, tüm hisselere uygulanır)
+  const shares = s.mcap > 0 && s.close > 0 ? s.mcap / s.close : null, equity = s.bvps > 0 && shares ? s.bvps * shares : null, nd = s.debt != null ? s.debt - (s.cash || 0) : null, ndEq = nd != null && equity ? nd / equity : null;
+  const debt = !fin && s.debt != null && s.ebitda > 0 ? {extra: s.debt * 0.05, burden: s.debt * 0.05 / s.ebitda, ndEq, ndEbitda: nd != null ? nd / s.ebitda : null} : null;
+  if (debt) debt.fail = debt.burden >= STRESS_LIM.borc500;
+  // (b) döviz açık pozisyonu vekili: bilançodaki döviz borcu/varlığı KAP dipnotundadır (yapılandırılmış ücretsiz veri yok); kur duyarlılığı negatif VE net borcu yüksek şirket = açık pozisyon şüphesi
+  const fxOpen = b && !fin && ndEq != null ? {bf: b.bf, ndEq, fail: b.bf <= STRESS_LIM.kurBf && ndEq >= STRESS_LIM.kurNd} : null;
+  if (!b && !debt) return null;
+  const loss = b && m ? {bist5: b.bmd * -5, kur10: b.bm2 * Math.min(0, m.km * 10) + b.bf * 10, faiz3: b.bm2 * Math.min(0, m.ky * 3) + b.by * 3, swan: b.bmd * -10 + b.bf * 8 + b.by * 4} : null;
+  const fail = (loss ? STRESS_SC.filter(([id]) => loss[id] <= STRESS_LIM[id]).map(([id]) => id) : []);
+  if (debt && debt.fail) fail.push("borc500"); if (fxOpen && fxOpen.fail) fail.push("kurborc");
+  const worst = loss ? Math.min(...Object.values(loss)) : null, lab = id => (STRESS_SC.find(x => x[0] === id) || [id, id === "borc500" ? "Faiz +500 baz puan: borç yükü" : "Döviz açık pozisyonu şüphesi"])[1];
+  const parts = [];
+  if (loss) parts.push(STRESS_SC.map(([id, l]) => `${l.split(":")[0].replace(/ \(.*\)/, "")} ${fmt(loss[id], 1)}%`).join(", "));
+  if (debt) parts.push(`faiz +500 baz puan: ek faiz gideri FAVÖK'ün %${fmt(debt.burden * 100, 0)}'i`);
+  if (fxOpen) parts.push(`kur duyarlılığı ${fmt(fxOpen.bf, 2)}, net borç/özsermaye ${fmt(ndEq, 1)}`);
+  return {loss, debt, fxOpen, fail, ok: !fail.length, worst, weak: b ? b.r2 < 0.1 : false, b, n: b ? b.n : 0, lab,
+    extrap: m ? {kur: m.usdtry_max ? 10 / m.usdtry_max : null, faiz: m.tr10y_max ? 3 / m.tr10y_max : null} : {},
+    text: `Stres testi: ${parts.join("; ")}. ${fail.length ? `GEÇEMEDİ (${fail.map(lab).join("; ")}; sınır aşıldı).` : "Tüm senaryolarda kayıp sınırların içinde."}`};
 }
 
 /* =====================================================================================
@@ -1601,17 +1617,25 @@ function trailingStop(o) { // {entry, stop0, peak, atr, k, S}: izleyen stop sevi
   const lvl = o.entry * (1 + o.S / 100);
   return o.peak >= lvl ? Math.max(o.entry, o.stop0 || 0, o.peak - o.k * o.atr) : (o.stop0 || 0);
 }
-function kellyPlan(s, capital) {
+function tickRound(p, mode) { const tk = bistTick(p), q = p / tk; return Number(((mode === "up" ? Math.ceil(q - 1e-9) : mode === "down" ? Math.floor(q + 1e-9) : Math.round(q)) * tk).toFixed(2)); }
+function kellyFrac(p, b) { const k = p - (1 - p) / b; return {kelly: k, half: k / 2}; }
+/* Kullanıcı kendi güvenilirlik olasılığını (ör. %70, %85) girebilir: aynı formül, ama geçmiş testte ölçülen isabet BIST'te ≈ %53'tür: uyarı üretilir. */
+const KELLY_P_TABLE = [0.30, 0.45, 0.55, 0.70, 0.85];
+function kellyPlan(s, capital, pOverride) {
   if (!(s.atrPct > 0) || !(s.close > 0) || !(s.atr > 0)) return null;
   const S = Math.max(3, Math.min(15, 2 * s.atrPct)), T = 2 * S, sm = simons(s), mexp = mtfExpect(s);
   const mus = [sm.exp != null ? sm.exp / 10 : null, mexp != null ? mexp / 20 : null].filter(x => x != null).map(x => x / 100), mu = mus.length ? mus.reduce((a, b) => a + b, 0) / mus.length : 0;
   const fp = mcFirstPassage(s, T, S, mu); if (!fp) return null;
-  const decided = fp.pT + fp.pS, pWin = decided > 0 ? fp.pT / decided : 0, b = T / S, kelly = pWin - (1 - pWin) / b, half = kelly / 2, fRisk = 1 / S; // %1 risk: f × S% = %1
-  const f = Math.max(0, Math.min(half, fRisk, 0.2)), k = Math.max(2.2, Math.min(3.5, 2 + s.atrPct / 3)), stop0 = s.close * (1 - S / 100);
-  const ladder = [1, 2, 3, 5].map(r => { const peak = s.close * (1 + r * S / 100); return {r, peak, stop: trailingStop({entry: s.close, stop0, peak, atr: s.atr, k, S})}; });
-  const amount = capital > 0 ? f * capital : null;
-  return {S, T, mu, pT: fp.pT, pS: fp.pS, pN: fp.pN, pWin, b, kelly, half, fRisk, f, k, stop0, target: s.close * (1 + T / 100), ladder, amount, shares: amount ? Math.floor(amount / s.close) : null, edge: mu > 0 && kelly > 0, days: fp.days,
-    text: kelly > 0 ? `Kelly: başarı olasılığı %${fmt(pWin * 100, 0)} (hedefe stop'tan önce ulaşma, ${fp.days} gün), ödül/risk ${fmt(b, 1)}; tam Kelly %${fmt(kelly * 100, 1)}, yarım Kelly %${fmt(half * 100, 1)}; %1 risk sınırı %${fmt(fRisk * 100, 1)} → önerilen pozisyon sermayenin %${fmt(f * 100, 1)}'i.` : `Kelly ≤ 0: başarı olasılığı %${fmt(pWin * 100, 0)} (${fmt(b, 1)} ödül/risk için gereken ≈ %${fmt(100 / (1 + b), 0)}); istatistiksel kenar yok, pozisyon önerilmez.`};
+  const decided = fp.pT + fp.pS, pModel = decided > 0 ? fp.pT / decided : 0, pWin = pOverride != null ? Math.max(0.01, Math.min(0.99, pOverride)) : pModel, b = T / S, kelly = pWin - (1 - pWin) / b, half = kelly / 2, fRisk = 1 / S; // %1 risk: f × S% = %1
+  const f = Math.max(0, Math.min(half, fRisk, 0.2)), k = Math.max(2.2, Math.min(3.5, 2 + s.atrPct / 3)), stop0 = tickRound(s.close * (1 - S / 100), "down");
+  const ladder = [1, 2, 3, 5].map(r => { const peak = tickRound(s.close * (1 + r * S / 100), "up"); return {r, peak, stop: tickRound(trailingStop({entry: s.close, stop0, peak, atr: s.atr, k, S}), "down")}; });
+  const tp = [{r: 1, frac: 1 / 3}, {r: 2, frac: 1 / 3}].map(x => ({...x, px: tickRound(s.close * (1 + x.r * S / 100), "up")})); // kar al: +1R'de üçte biri (stop başa baş), +2R'de üçte biri, kalan izleyen stopla
+  const amount = capital > 0 ? f * capital : null, riskTl = amount ? amount * S / 100 : null;
+  const tbl = KELLY_P_TABLE.map(p => ({p, ...kellyFrac(p, b), f: Math.max(0, Math.min(kellyFrac(p, b).half, fRisk, 0.2))}));
+  const emp = 0.53, over = pOverride != null && pOverride > 0.6;
+  return {S, T, mu, pT: fp.pT, pS: fp.pS, pN: fp.pN, pWin, pModel, pUser: pOverride != null ? pWin : null, b, kelly, half, fRisk, f, k, stop0, target: tickRound(s.close * (1 + T / 100), "up"), ladder, tp, tbl, amount, riskTl, shares: amount ? Math.floor(amount / s.close) : null, edge: kelly > 0 && (pOverride != null || mu > 0), days: fp.days,
+    warn: over ? `Girdiğiniz olasılık (%${fmt(pWin * 100, 0)}) geçmişte ölçülen BIST isabetinin (≈ %${fmt(emp * 100, 0)}) çok üstünde; bu güvenilirliği destekleyen bir test yok, pozisyonu abartabilir.` : null,
+    text: kelly > 0 ? `Kelly: ${pOverride != null ? "girdiğiniz" : "model"} başarı olasılığı %${fmt(pWin * 100, 0)} (hedefe stop'tan önce ulaşma${pOverride != null ? "" : ", " + fp.days + " gün"}), ödül/risk ${fmt(b, 1)}; tam Kelly %${fmt(kelly * 100, 1)}, yarım Kelly %${fmt(half * 100, 1)}; %1 risk sınırı %${fmt(fRisk * 100, 1)} → önerilen pozisyon sermayenin %${fmt(f * 100, 1)}'i.` : `Kelly ≤ 0: başarı olasılığı %${fmt(pWin * 100, 0)} (${fmt(b, 1)} ödül/risk için gereken ≈ %${fmt(100 / (1 + b), 0)}); istatistiksel kenar yok, pozisyon önerilmez.`};
 }
 
 /* =====================================================================================
@@ -1670,3 +1694,19 @@ function paperWeights(st) {
   return out;
 }
 function setPaper(st) { return PAPER_W = paperWeights(st); }
+
+/* =====================================================================================
+   KOKPİT KARAR MÜHRÜ (Baş Denetçi): tek bakışta okunan sonuç. Sıra önemlidir (üstteki kural alttakini ezer):
+   KİLİTLİ (Hata Avcısı: rakamlar ham veriyle çelişiyor) > RİSKLİ (Şeytanın Avukatı vetosu ya da kara kuğu stres testi/uzman itirazı) > GÜÇLÜ AL (tüm filtreleri geçen
+   yüksek güvenilirlikli sinyal) > AL (masa skoru ≥ 2 ve ağırlıklı kararda ≥ %40 Al) > UZAK DUR (masa skoru ≤ −2 ya da ≥ %50 Sat) > NÖTR.
+   "AL" bir tavsiye değil, ajanların oy özetidir; tahmin kazanç garantisi vermez (BIST'te ölçülen en iyi isabet ≈ %53). */
+function kokpitSeal(s, r) {
+  const f = factCheck(s, r), d = debate(s, r), hc = highConfidence(s, r), why = [];
+  if (f.locked) return {label: "KİLİTLİ", cls: "lock", why: ["Hata Avcısı: rakamlar ham veriyle çelişiyor, düzeltme bekleniyor"].concat(f.issues.map(i => i.msg)), d, hc, f};
+  if (r.veto) { r.l.seytan.severe.forEach(x => why.push("Şeytanın Avukatı: " + x)); return {label: "RİSKLİ", cls: "risk", why, d, hc, f}; }
+  if (r.veto2) { if (r.k2.makro.veto) why.push("Makro Risk Uzmanı onay vermiyor"); why.push(`Yeni uzmanların net oyu ${r.net2}`); return {label: "RİSKLİ", cls: "risk", why, d, hc, f}; }
+  if (hc.ok) return {label: "GÜÇLÜ AL", cls: "strong", why: ["Masa ≥ 3, veto yok, haftalık lider, stop riski düşük, rakamlar doğrulandı"], d, hc, f};
+  if (r.score >= 2 && d.al >= 40) return {label: "AL", cls: "buy", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
+  if (r.score <= -2 || d.sat >= 50) return {label: "UZAK DUR", cls: "avoid", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
+  return {label: "NÖTR", cls: "neutral", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
+}

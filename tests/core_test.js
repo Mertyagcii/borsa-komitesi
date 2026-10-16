@@ -53,7 +53,7 @@ if (k2lines < 5) errs.push("yeni uzmanlar toplantıda yeterince konuşmuyor: " +
 const savedMacro = HIST.macro; HIST.macro = {date: "2026-10-12", rf10: 32, rf2: 30, usdtry_d5: 5, vix: 30, brent_d20: 20, dxy_d20: 3, gold_d20: 8, rf10_d20: 2, us10y_d20: 0.5};
 const sh = macroShield(); if (!(sh.count === 7 && sh.level === "Şiddetli" && sh.items.length === 7)) errs.push("makro kalkan sentetik: " + sh.count + "/" + sh.level);
 const any = UNI.find(x => x.ok && x.tl >= 20);
-R.makroVeto = 0; if (macroP(any).veto) errs.push("makro veto kapalıyken veto verdi");
+R.makroVeto = 0; R.stressVeto = 0; if (macroP(any).veto) errs.push("makro veto kapalıyken veto verdi"); R.stressVeto = 1;
 R.makroVeto = 1; R.makroN = 4; if (!macroP(any).veto || !committee(any).veto2) errs.push("makro veto açıkken veto vermedi"); R.makroVeto = 0;
 HIST.macro = {date: "2026-10-12", rf10: 32, rf2: 30, usdtry_d5: 0.2, vix: 14, brent_d20: 1, dxy_d20: 0, gold_d20: 0, rf10_d20: 0, us10y_d20: 0}; if (macroShield().count !== 0) errs.push("makro sakin sentetik 0 olmalı");
 HIST.macro = savedMacro;
@@ -298,14 +298,14 @@ if (STRESS) {
   const stk = Object.keys(STRESS.stocks).find(k => UNI.some(u => u.name === k && u.ok)), stS = UNI.find(u => u.name === stk), sx = stressOf(stS), bb = STRESS.stocks[stk], mm = STRESS.meta;
   const expBist = bb.bmd * -5, expKur = bb.bm2 * Math.min(0, mm.km * 10) + bb.bf * 10, expFaiz = bb.bm2 * Math.min(0, mm.ky * 3) + bb.by * 3, expSwan = bb.bmd * -10 + bb.bf * 8 + bb.by * 4;
   if (!sx || Math.abs(sx.loss.bist5 - expBist) > 1e-9 || Math.abs(sx.loss.kur10 - expKur) > 1e-9 || Math.abs(sx.loss.faiz3 - expFaiz) > 1e-9 || Math.abs(sx.loss.swan - expSwan) > 1e-9) errs.push("stres kayıp formülü hatalı");
-  const synS = Object.assign({}, any, {name: "SYNSTRESS"}), setB = o => { STRESS.stocks.SYNSTRESS = Object.assign({bm: 1, bm2: 1, bmd: 1, bf: 0, by: 0, r2: 0.5, n: 800}, o); };
+  const synS = Object.assign({}, any, {name: "SYNSTRESS", debt: null, ebitda: null}), setB = o => { STRESS.stocks.SYNSTRESS = Object.assign({bm: 1, bm2: 1, bmd: 1, bf: 0, by: 0, r2: 0.5, n: 800}, o); };
   setB({}); if (!stressOf(synS).ok) errs.push("zararsız hisse stres testini geçemedi");
   setB({bmd: 2.5}); let sf = stressOf(synS); if (sf.ok || !sf.fail.includes("bist5") || !sf.fail.includes("swan")) errs.push("yüksek düşüş betası yakalanmadı");
   setB({bf: -2}); sf = stressOf(synS); if (sf.ok || !sf.fail.includes("kur10")) errs.push("kur duyarlılığı yakalanmadı: " + JSON.stringify(sf.loss));
   setB({by: -4}); sf = stressOf(synS); if (sf.ok || !sf.fail.includes("faiz3")) errs.push("faiz duyarlılığı yakalanmadı");
   setB({bmd: 2.5}); mcCache = {}; R.stressVeto = 1; let dv1 = devil(synS, null); if (!dv1.veto || !dv1.severe.some(x => /kara kuğu/.test(x)) || !/GEÇEMEDİ/.test(dv1.plan)) errs.push("Şeytanın Avukatı stres testini geçemeyen hisseyi reddetmedi");
   R.stressVeto = 0; mcCache = {}; const dv0 = devil(synS, null); if (dv0.severe.some(x => /kara kuğu/.test(x))) errs.push("stressVeto=0 iken red verdi"); R.stressVeto = 1;
-  if (stressOf(Object.assign({}, any, {name: "YOKTUR"})) !== null) errs.push("verisi olmayan hisse için null beklenir");
+  if (stressOf(Object.assign({}, any, {name: "YOKTUR", debt: null, ebitda: null})) !== null) errs.push("verisi olmayan hisse için null beklenir");
   delete STRESS.stocks.SYNSTRESS; mcCache = {};
   const failN = UNI.filter(u => u.ok && stressOf(u) && !stressOf(u).ok).length, haveN = UNI.filter(u => u.ok && stressOf(u)).length; stat.stress = failN + "/" + haveN;
   if (haveN > 20 && failN > haveN * 0.3) errs.push("stres testi çok fazla hisseyi reddediyor: " + failN + "/" + haveN);
@@ -320,9 +320,53 @@ if (trailingStop(tsA) !== 94 || trailingStop(tsB) !== 101 || trailingStop(tsC) !
 if (trailingStop(Object.assign({}, tsA, {peak: 107, atr: 10})) !== 100) errs.push("izleyen stop girişin altına düşmemeli (başa baş koruması)");
 let nEdge = 0, nNo = 0; for (const x of UNI.filter(y => y.ok && y.tl >= 20 && y.atr).slice(0, 150)) { const kp = kellyPlan(x, 100000); if (!kp) continue;
   if (!(kp.S >= 3 && kp.S <= 15) || Math.abs(kp.T - 2 * kp.S) > 1e-9 || kp.f < 0 || kp.f > 0.2 + 1e-9 || kp.f > kp.fRisk + 1e-9 || kp.f > Math.max(0, kp.half) + 1e-9) errs.push("Kelly sınırları ihlal: " + x.name);
-  if (kp.kelly <= 0 && (kp.f !== 0 || kp.edge)) errs.push("kenar yokken pozisyon önerildi: " + x.name); if (kp.edge) { nEdge++; if (!(kp.amount > 0) || kp.ladder.some((l, i) => l.stop < kp.stop0 - 1e-9 || (i && l.stop < kp.ladder[i - 1].stop - 1e-9)) || kp.ladder[0].stop < x.close - 1e-9) errs.push("izleyen stop merdiveni hatalı: " + x.name); } else nNo++;
+  if (kp.kelly <= 0 && (kp.f !== 0 || kp.edge)) errs.push("kenar yokken pozisyon önerildi: " + x.name); if (kp.edge) { nEdge++; if (!(kp.amount > 0) || kp.ladder.some((l, i) => l.stop < kp.stop0 - 1e-9 || (i && l.stop < kp.ladder[i - 1].stop - 1e-9)) || kp.ladder[0].stop < x.close - bistTick(x.close) - 1e-9) errs.push("izleyen stop merdiveni hatalı: " + x.name); } else nNo++;
   if (Math.abs(kp.pT + kp.pS + kp.pN - 1) > 1e-9) errs.push("Kelly olasılıkları tutarsız"); }
 stat.kelly = nEdge + "/" + (nEdge + nNo); if (nEdge + nNo < 20) errs.push("Kelly planı çok az hissede üretildi");
+// --- +500 baz puan faiz yükü, döviz açık pozisyonu, Makro Risk Uzmanı onayı ---
+if (STRESS) {
+  const synD = Object.assign({}, any, {name: "SYNDEBT", sector: "Industrial Services", debt: 1e10, cash: 0, ebitda: 1e9, close: 10, mcap: 1e9, bvps: 5}), setD = o => { STRESS.stocks.SYNDEBT = Object.assign({bm: 1, bm2: 1, bmd: 1, bf: 0, by: 0, r2: 0.5, n: 800}, o); };
+  setD({}); let sd = stressOf(synD); if (!sd.debt || Math.abs(sd.debt.burden - 0.5) > 1e-9 || !sd.fail.includes("borc500") || sd.ok) errs.push("+500 bp faiz yükü hatalı: " + JSON.stringify(sd.debt));
+  const lowDebt = Object.assign({}, synD, {debt: 4e9}); sd = stressOf(lowDebt); if (!sd.debt || sd.debt.fail || Math.abs(sd.debt.burden - 0.2) > 1e-9) errs.push("düşük borç yükü geçmeli: " + JSON.stringify(sd.debt));
+  if (stressOf(Object.assign({}, synD, {debt: null, name: "YOKX"})) !== null) errs.push("borç ve regresyon yoksa null beklenir");
+  const noEb = Object.assign({}, synD, {ebitda: -5, name: "SYNDEBT2"}); if (stressOf(noEb) && stressOf(noEb).debt) errs.push("FAVÖK ≤ 0 iken faiz yükü hesaplanmamalı");
+  const finS = Object.assign({}, synD, {sector: "Finance", name: "SYNFIN"}); if (isFin(finS)) { const sf = stressOf(finS); if (sf && sf.debt) errs.push("banka/finans için borç testi uygulanmamalı"); }
+  setD({bf: -0.4}); sd = stressOf(Object.assign({}, lowDebt, {debt: 6e8, ebitda: 1e9, cash: 0})); if (!sd.fxOpen || !sd.fxOpen.fail || !sd.fail.includes("kurborc")) errs.push("döviz açık pozisyonu vekili yakalanmadı: " + JSON.stringify(sd.fxOpen));
+  setD({bf: -0.4}); sd = stressOf(Object.assign({}, lowDebt, {debt: 1e8, ebitda: 1e9, cash: 5e7})); if (sd.fxOpen && sd.fxOpen.fail) errs.push("düşük borçlu şirket döviz riski sayılmamalı");
+  setD({bf: 0.5}); sd = stressOf(Object.assign({}, lowDebt, {debt: 6e8, ebitda: 1e9, cash: 0})); if (sd.fxOpen && sd.fxOpen.fail) errs.push("ihracatçı (pozitif kur duyarlılığı) döviz açığı sayılmamalı");
+  setD({}); R.stressVeto = 1; mcCache = {}; const mk = macroP(synD); if (!(mk.veto === true && mk.v === -1 && /ONAY VERMİYORUM/.test(mk.t) && mk.checks.some(c => c.s === BAD && /stres/i.test(c.t)))) errs.push("Makro Risk Uzmanı stres testini geçemeyene onay vermedi");
+  const cm = committee(synD); if (!(cm.k2.makro.v === -1 && cm.veto2 === true && cm.l.seytan.veto)) errs.push("komitede stres: Şeytanın Avukatı vetosu ve makro itirazı birlikte beklenir");
+  R.stressVeto = 0; mcCache = {}; if (macroP(synD).veto === true) errs.push("stressVeto=0 iken makro onayı kapatılmamalı"); R.stressVeto = 1; mcCache = {};
+  const hcS = highConfidence(synD, committee(synD)); if (hcS.ok) errs.push("stres testini geçemeyen hisse yüksek güvenilirlikli sayıldı");
+  delete STRESS.stocks.SYNDEBT; mcCache = {};
+}
+// --- Kelly: kullanıcı olasılığı, kar al, kademe yuvarlama ---
+const kx = UNI.find(y => y.ok && y.tl >= 20 && y.atr && kellyPlan(y, 100000)), kU = kellyPlan(kx, 100000, 0.85), kL = kellyPlan(kx, 100000, 0.3), kM = kellyPlan(kx, 100000);
+if (!(Math.abs(kU.kelly - (0.85 - 0.15 / 2)) < 1e-9 && kU.pUser === 0.85 && kU.f <= 0.2 + 1e-9 && kU.f <= kU.fRisk + 1e-9 && kU.warn && /çok üstünde/.test(kU.warn))) errs.push("kullanıcı olasılıklı Kelly hatalı: " + JSON.stringify([kU.kelly, kU.f, kU.warn]));
+if (!(kL.kelly < 0 && kL.f === 0 && !kL.edge && /pozisyon önerilmez/.test(kL.text))) errs.push("düşük olasılıkta pozisyon önerilmemeli");
+if (kM.pUser !== null || kM.warn) errs.push("model olasılığında uyarı/override olmamalı");
+if (!(kM.tbl.length === 5 && kM.tbl.every((r, i) => i === 0 || r.kelly > kM.tbl[i - 1].kelly - 1e-12) && kM.tbl[0].kelly < 0 && kM.tbl[4].f > 0)) errs.push("olasılık-Kelly tablosu hatalı");
+const onTick = v => Math.abs(v / bistTick(v) - Math.round(v / bistTick(v))) < 1e-6; if (![kM.stop0, kM.target, ...kM.tp.map(x => x.px), ...kM.ladder.map(x => x.peak)].every(onTick)) errs.push("fiyatlar kademeye yuvarlanmamış: " + [kM.stop0, kM.target, kM.tp.map(x => x.px)]);
+if (!(kM.tp.length === 2 && kM.tp[0].px < kM.tp[1].px && kM.tp[0].px > kx.close && Math.abs(kM.tp[0].frac - 1 / 3) < 1e-9 && kM.stop0 < kx.close && kM.target >= kM.tp[1].px - bistTick(kM.target))) errs.push("kar al merdiveni hatalı");
+if (!(tickRound(33.337, "down") === 33.32 && tickRound(33.337, "up") === 33.34 && tickRound(100.04, "down") === 100 && tickRound(100.04, "up") === 100.1 && tickRound(7.234, "round") === 7.23)) errs.push("kademe yuvarlama hatalı: " + [tickRound(33.337, "down"), tickRound(33.337, "up"), tickRound(100.04, "down"), tickRound(100.04, "up")]);
+// --- Akıllı Para + derinlik (sahte kırılımı engelleme) ---
+const synDP = Object.assign({}, any, {name: "SYNDP", cmf: 0.3, rvol: 1.2, change: 1, close: 110, sma50: 100, sma200: 90, sma20: 105}); const dBlk = {block: ["fiyatın %2 üstünde satış duvarı"], text: "Tahta: şüpheli (deneme).", spoof: false, suspect: true, walls: [], flags: [], verdict: "ŞÜPHELİ DERİNLİK"}; DEPTH_USER = null; DEPTH_GATE = false; const ap0d = akilliP(synDP);
+if (ap0d.v === 1) { DEPTH_USER = {SYNDP: dBlk}; DEPTH_GATE = false; const apI = akilliP(synDP); if (apI.v !== 1 || !apI.checks.some(c => /Tahta derinliği/.test(c.t) && c.s === BAD)) errs.push("kapı kapalıyken derinlik yalnızca bilgi olmalı");
+  DEPTH_GATE = true; const apG = akilliP(synDP); if (apG.v !== 0) errs.push("derinlik kapısı Akıllı Para para-girişi oyunu kapatmadı"); }
+else stat.akilliDepthSkipped = 1; DEPTH_USER = null; DEPTH_GATE = false;
+// --- Kokpit karar mührü ---
+const SEALS = ["KİLİTLİ", "RİSKLİ", "GÜÇLÜ AL", "AL", "UZAK DUR", "NÖTR"], sealCnt = {};
+for (const x of UNI.filter(y => y.ok && y.tl >= 10).slice(0, 260)) { const rr = committee(x), sl = kokpitSeal(x, rr); sealCnt[sl.label] = (sealCnt[sl.label] || 0) + 1;
+  if (!SEALS.includes(sl.label) || !sl.why.length || !sl.cls) errs.push("mühür bozuk: " + x.name);
+  if (sl.f.locked && sl.label !== "KİLİTLİ") errs.push("kilitli rapor KİLİTLİ mühür almadı: " + x.name);
+  if (!sl.f.locked && rr.veto && sl.label !== "RİSKLİ") errs.push("vetolu hisse RİSKLİ değil: " + x.name);
+  if (!sl.f.locked && !rr.veto && rr.veto2 && sl.label !== "RİSKLİ") errs.push("uzman itirazlı hisse RİSKLİ değil: " + x.name);
+  if (sl.label === "GÜÇLÜ AL" && !(rr.score >= 3 && !rr.veto && !rr.veto2 && sl.hc.ok)) errs.push("GÜÇLÜ AL koşulları ihlal: " + x.name);
+  if (sl.label === "AL" && !(rr.score >= 2 && sl.d.al >= 40)) errs.push("AL koşulları ihlal: " + x.name);
+  if (sl.label === "UZAK DUR" && !(rr.score <= -2 || sl.d.sat >= 50)) errs.push("UZAK DUR koşulları ihlal: " + x.name);
+  if (sl.d.al + sl.d.tut + sl.d.sat !== 100) errs.push("ağırlıklı karar 100 etmiyor"); }
+stat.seals = JSON.stringify(sealCnt); if (Object.keys(sealCnt).length < 3) errs.push("mühür çeşitliliği yok: " + stat.seals);
+const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); const lkSeal = kokpitSeal(lkS, committee(lkS)); if (factCheck(lkS, committee(lkS)).stale === false && lkSeal.label !== "KİLİTLİ") errs.push("uydurma RSI KİLİTLİ mührü vermedi"); lkS.rsi = lkR; fcReset();
 // --- Tahta derinliği ---
 const dpBase = (extra) => ({t: "10:30", bids: [{p: 100, q: 1000, o: 20}, {p: 99.9, q: 1200, o: 25}, {p: 99.8, q: 900, o: 18}, {p: 99.7, q: 1100, o: 22}, {p: 99.6, q: 1000, o: 20}].concat(extra && extra.bids || []), asks: [{p: 100.1, q: 900, o: 18}, {p: 100.2, q: 1100, o: 22}, {p: 100.3, q: 1000, o: 20}, {p: 100.4, q: 950, o: 19}, {p: 100.5, q: 1050, o: 21}].concat(extra && extra.asks || [])});
 const dA = depthAnalyze(dpBase(), {avgVol: 500000, close: 100}); if (!dA || dA.verdict !== "dengeli" || dA.walls.length || dA.spreadTicks !== 1) errs.push("sağlıklı tahta 'dengeli' çıkmadı: " + JSON.stringify(dA && [dA.verdict, dA.walls.length, dA.spreadTicks]));
