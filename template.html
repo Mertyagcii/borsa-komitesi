@@ -3526,31 +3526,31 @@ function applyData(d) {
   DATA = d; UNIVERSE = d.stocks.map(enrich);
   return changed;
 }
-async function getJson(url) { try { const r = await fetch(url, {cache: "no-store"}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+async function getJson(url, mode) { try { const r = await fetch(url, {cache: mode || "no-store"}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
+/* Yardımcı dosyalar PARALEL iner (önceden sırayla ~20 istek = ilk çizim saniyelerce beklerdi). Saatlik damgalı dosyalar tarayıcı önbelleğini kullanır. */
 async function loadAux() {
-  const n = await getJson("news.json?t=" + Date.now()); if (n && n.news) NEWS = n.news;
-  loadNewsLog();
-  if (!RESEARCH) { const rs = await getJson("research.json?t=" + Math.floor(Date.now() / 36e5)); if (rs && rs.signals) { RESEARCH = rs; screenCache = null; } }
-  if (!MTFR) { const m = await getJson("mtf_composite.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFR = m; }
-  if (!MTFS) { const m = await getJson("mtf_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tests) MTFS = m; }
-  if (!MTFW) { const m = await getJson("mtf_walkforward.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.core) MTFW = m; }
-  { const m = await getJson("mtf_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) MLOG = m; }
-  if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
-  if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
-  { const m = await getJson("scan_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) SLOG = m; }
-  { const p = await getJson("picks.json?t=" + Math.floor(Date.now() / 36e5)); if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks, p.regime); } }
-  { const m = await getJson("viop.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) VIOP = m; }
-  if (!VIOP_R) { const m = await getJson("viop_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.factors) VIOP_R = m; }
-  { const m = await getJson("newsmood.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) NMOOD = m; }
-  { const m = await getJson("geo.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.now) GEO = m; }
-  if (!KUR2) { const m = await getJson("kurul2_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.signals) KUR2 = m; }
-  if (!MACRO_R) { const m = await getJson("macro_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.conds) MACRO_R = m; }
-  if (!IPOR) { const m = await getJson("ipo_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.cond) IPOR = m; }
-  if (!LIM) { const m = await getJson("limit_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.tavan) LIM = m; }
-  if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) {
-    const h = await getJson("history.json?t=" + Math.floor(Date.now() / 36e5));
-    if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; }
-  }
+  const H = Math.floor(Date.now() / 36e5), hj = f => getJson(f + "?t=" + H, "default"), job = [];
+  job.push(getJson("news.json?t=" + Date.now()).then(n => { if (n && n.news) NEWS = n.news; }));
+  job.push(loadNewsLog());
+  if (!RESEARCH) job.push(hj("research.json").then(rs => { if (rs && rs.signals) { RESEARCH = rs; screenCache = null; } }));
+  if (!MTFR) job.push(hj("mtf_composite.json").then(m => { if (m && m.tests) MTFR = m; }));
+  if (!MTFS) job.push(hj("mtf_research.json").then(m => { if (m && m.tests) MTFS = m; }));
+  if (!MTFW) job.push(hj("mtf_walkforward.json").then(m => { if (m && m.core) MTFW = m; }));
+  job.push(hj("mtf_log.json").then(m => { if (m && m.days) MLOG = m; }));
+  if (!GDT) job.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
+  if (!GON) job.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
+  job.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
+  job.push(hj("picks.json").then(p => { if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks, p.regime); } }));
+  job.push(hj("viop.json").then(m => { if (m && m.stocks) VIOP = m; }));
+  if (!VIOP_R) job.push(hj("viop_research.json").then(m => { if (m && m.factors) VIOP_R = m; }));
+  job.push(hj("newsmood.json").then(m => { if (m && m.stocks) NMOOD = m; }));
+  job.push(hj("geo.json").then(m => { if (m && m.now) GEO = m; }));
+  if (!KUR2) job.push(hj("kurul2_research.json").then(m => { if (m && m.signals) KUR2 = m; }));
+  if (!MACRO_R) job.push(hj("macro_research.json").then(m => { if (m && m.conds) MACRO_R = m; }));
+  if (!IPOR) job.push(hj("ipo_research.json").then(m => { if (m && m.cond) IPOR = m; }));
+  if (!LIM) job.push(hj("limit_research.json").then(m => { if (m && m.tavan) LIM = m; }));
+  if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) job.push(hj("history.json").then(h => { if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; } }));
+  await Promise.all(job);
 }
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 async function loadData(refresh) {
@@ -3561,13 +3561,14 @@ async function loadData(refresh) {
   const btn = $("refresh");
   if (refresh) { btn.disabled = true; btn.style.opacity = .5; }
   try {
+    const early = !HIST ? loadAux().catch(() => {}) : null; // ilk açılışta veri ve yardımcı dosyalar aynı anda iner
     const res = LOCAL ? await fetch("/api/" + (refresh ? "refresh" : "data"), refresh ? {method: "POST"} : {})
                       : await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
     if (!res.ok) throw new Error(res.status);
     const d = await res.json();
     const changed = applyData(d);
     if (changed || refresh || !HIST) {
-      await loadAux(); mcCache = {}; fcReset(); screenCache = null; render(); checkAlerts(); checkAlarms(); accTick(); updateInboxBadge();
+      await (early || loadAux()); mcCache = {}; fcReset(); screenCache = null; render(); checkAlerts(); checkAlarms(); accTick(); updateInboxBadge();
       if (Object.values(store.get("scrSaved", {})).some(x => x.watch)) loadScreener().then(() => { buildComp(false); scrSavedWatchCheck(); });
       if (pendingOpen && UNIVERSE.some(s => s.name === pendingOpen)) { openDetail(pendingOpen); pendingOpen = null; }
     }

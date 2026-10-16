@@ -34,7 +34,7 @@ setTimeout(async function () {
     var sim = similarStocks(lead, 6); ok("benzer_hisse_sayisi", sim.top.length === 6 && sim.top.every(function (o) { return o.s.name !== lead.name; }));
     /* ---- Degerleme ---- */
     var ve = UNIVERSE.filter(function (s) { return s.eps > 0 && s.bvps > 0 && s.tl > 20; })[0]; openAnalysis(ve.name); ok("deger_aciklama", document.body.innerHTML.indexOf("hesaplan") >= 0);
-    var sv = valSens(ve); ok("duyarlilik_3x3", sv && sv.rows.length === 3 && sv.rows[0][0] < sv.rows[2][2]); var iv = intrinsic(ve); ok("carpan_aralik", iv.mult >= 3 && iv.mult <= 20);
+    var sv = valSens(ve); ok("duyarlilik_3x3", sv && sv.rows.length === 3 && sv.rows[0][0] <= sv.rows[2][2] && sv.rows.every(function (r) { return r.every(function (v) { return v > 0; }); })); var iv = intrinsic(ve); ok("carpan_aralik", iv.mult >= 3 && iv.mult <= 20);
     var med = UNIVERSE.filter(function (s) { return s.ok && s.tl >= 10 && s.eps > 0; }).map(function (s) { return valuation(s).upside; }).filter(function (x) { return x != null; }).sort(function (a, b) { return a - b; }); var md = med[Math.floor(med.length / 2)]; ok("adil_deger_medyan_makul", md > -40 && md < 60);
     /* ---- Veri sagligi, skor sagligi, brifing, isi haritasi ---- */
     var dhh = dataHealth(5); ok("veri_sagligi", dhh && dhh.score >= 0 && dhh.score <= 100 && ["IYI", "İYİ", "DİKKAT", "KÖTÜ"].indexOf(dhh.label) >= 0);
