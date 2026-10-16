@@ -87,6 +87,11 @@ setTimeout(async function () {
     var dp = $("detail").innerHTML; ok("detay_munazara", dp.indexOf('class="dbt"') >= 0 && dp.indexOf("dbline") >= 0); ok("detay_sektor_kiyasi", dp.indexOf("peert") >= 0);
     buildMemory([{ d: "2026-01-02", src: "komite", n: ps.name, e: ps.close * 0.9, sc: 1, v: [1, 1, 1, 1, 1] }]); openDetail(ps.name); ok("detay_hafiza_satiri", $("detail").innerHTML.indexOf("Hafıza") >= 0 || $("detail").innerHTML.indexOf("Hafiza") >= 0 || $("detail").innerHTML.indexOf("Fikrim") >= 0); buildMemory([]);
     closeDetail();
+    /* ---- Bilanco denetimi, Monte Carlo matrisi, haber duygusu, takas filtresi ---- */
+    openDetail(ps.name); var dh2 = $("detail").innerHTML; ok("detay_bilanco_denetimi", dh2.indexOf("peert") >= 0 && /(TEM|DİK|ZAY|VER)/.test(dh2) && dh2.indexOf("PD/DD") >= 0); ok("detay_mc_matrisi", dh2.indexOf("Sharpe") >= 0 && dh2.indexOf("CVaR") >= 0); ok("detay_haber_duygusu", dh2.indexOf("Haber duygusu") >= 0); closeDetail();
+    var csv3 = "tarih;hisse;kurum;alış;satış;net;pay\n2026-10-08;THYAO;A;100;10;90;30\n2026-10-08;THYAO;B;10;60;-50;20\n2026-10-09;THYAO;A;120;10;110;32\n2026-10-09;THYAO;B;10;50;-40;21\n2026-10-12;THYAO;A;150;10;140;34\n2026-10-12;THYAO;B;10;40;-30;22\n2026-10-12;THYAO;C;20;5;15;10";
+    var pr3 = akdParse(csv3); store.set("akdUser", {}); ovSave(pr3); ok("akd_cok_gunluk_gecmis", AKD_USER.THYAO && AKD_USER.THYAO.hist.length === 3 && AKD_USER.THYAO.hist[2].sak5 != null);
+    var st3 = akdState(AKD_USER.THYAO, { pw: 0 }); ok("akd_takas_filtresi_birikim", !!st3 && st3.dir > 0 && st3.days === 3); show("ozelveri"); ok("ozel_veri_takas_sutunu", $("ovView").innerHTML.indexOf("ovVote") >= 0); store.set("akdUser", {}); AKD_USER = {}; AKD_VOTE = false;
     /* ---- Seviye grafigi, Arena ---- */
     await loadCandles(); var cs = UNIVERSE.filter(function (s) { return s.ok && CANDLES && CANDLES.stocks[s.name]; })[0];
     if (cs) { openDetail(cs.name); await new Promise(function (r) { setTimeout(r, 600); }); ok("seviye_detayda", $("lv") != null && $("lvn").innerHTML.indexOf("Livermore") >= 0 && $("lvn").innerHTML.indexOf("Simons") >= 0);
@@ -95,7 +100,7 @@ setTimeout(async function () {
       chSym = cs.name; chMode = "lv"; show("grafik"); await new Promise(function (r) { setTimeout(r, 800); }); ok("seviye_grafik_sayfasi", $("lvCv") != null && $("lvLiv") != null && $("lvInfo").innerHTML.indexOf("Livermore") >= 0); chMode = "tv"; }
     else ok("seviye_mum_verisi_yok_atlandi", true);
     PICKS = { picks: [{ d: "2026-01-02", src: "komite", n: "AAA", e: 10, sc: 2, v: [1, 1, 0, 0, -1], r: { 10: 5 }, b: { 10: 1 } }] }; show("arena"); await new Promise(function (r) { setTimeout(r, 300); });
-    ok("arena_sayfasi", $("arenaView").innerHTML.indexOf("arena") >= 0 && $("arenaView").innerHTML.indexOf("yetersiz") >= 0); PICKS = null; show("dashboard");
+    ok("arena_sayfasi", $("arenaView").innerHTML.indexOf("arena") >= 0 && $("arenaView").innerHTML.indexOf("yetersiz") >= 0); ok("arena_dinamik_denetci", $("arenaView").innerHTML.indexOf("data-arenareg") >= 0 && $("arenaView").innerHTML.indexOf("x1,00") < 0 && $("arenaView").innerHTML.indexOf("\u00d71,00") >= 0); PICKS = null; show("dashboard");
     /* ---- Ozel veri (AKD/takas CSV), dis veri kaynaklari ---- */
     var csv = "tarih;hisse;kurum;alış;satış;net\n2026-10-12;THYAO;A;1.200.000;300.000;900.000\n2026-10-12;THYAO;B;100.000;800.000;-700.000\n2026-10-12;THYAO;C;50.000;40.000;10.000\n2026-10-12;GARAN;A;10;500;-490";
     var pr = akdParse(csv); ok("akd_ayristirma", !pr.error && pr.nstock === 2 && pr.stocks.THYAO["2026-10-12"].bal > 0 && pr.stocks.GARAN["2026-10-12"].bal < 0);

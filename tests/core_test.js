@@ -194,6 +194,64 @@ if (__candles) {
   }
   if (levelsData(cs, {dates: [], o: [], h: [], l: [], c: []}) !== null || levelsData(cs, null) !== null) errs.push("boş mum verisi null dönmeli");
 }
+// --- Haber/KAP duygu katmanı ---
+const sT = (a, b) => sentiment(a).score > 0 && sentiment(b).score < 0;
+if (!(sT("Şirketin zararı azaldı", "Şirketin zararı arttı") && sT("Şirket kâra geçti", "Şirket zarara geçti") && sT("Net kârı arttı", "Net kârı geriledi") && sT("Temettü dağıtımı onaylandı", "Hakkında soruşturma başlatıldı"))) errs.push("duygu: yön değiştiren kalıplar hatalı");
+if (!(sentiment("Konkordato ilan etti").score <= -0.8) || !(sentiment("Rekor kâr açıkladı").score > 0.4)) errs.push("duygu: yoğunluk hatalı");
+if (sentiment("Bedelsiz sermaye artırımı yok").score >= sentiment("Bedelsiz sermaye artırımı").score) errs.push("duygu: olumsuzlama (yok) çalışmıyor");
+if (Math.abs(sentiment("Hisse günü yatay kapattı").score) > 0.2) errs.push("duygu: nötr başlık puanlandı");
+const nowS = NOW / 1000; NEWS["SYNS"] = {ok: true, score: 0, items: [{t: "Rekor kâr açıkladı", ts: nowS - 3600}, {t: "Temettü dağıtımı onaylandı", ts: nowS - 7200}, {t: "Konkordato ilan etti", ts: nowS - 86400 * 2.9}, {t: "Soruşturma başlatıldı", ts: nowS - 86400 * 5}]};
+const ssn = stockSentiment("SYNS"); if (!ssn || ssn.n !== 3 || ssn.score <= 0.2 || ssn.label !== "pozitif" || ssn.kap < 2) errs.push("hisse duygusu (yeniliğe göre ağırlık/3 gün sınırı) hatalı: " + JSON.stringify(ssn));
+NEWS["SYNS"].items.push({t: "Konkordato ilan etti", ts: nowS - 600}, {t: "İflas başvurusu", ts: nowS - 900}, {t: "Hakkında soruşturma", ts: nowS - 1200}); if (stockSentiment("SYNS").score >= ssn.score) errs.push("yeni olumsuz haberler skoru düşürmedi");
+delete NEWS["SYNS"]; if (stockSentiment("YOKTUR") !== null) errs.push("haber yokken null dönmeli");
+// --- Bilanço denetimi / hakiki PD/DD ---
+const bs0 = UNI.find(x => x.ok && x.tl >= 20 && x.eps > 0 && x.bvps > 0 && x.mcap > 0 && !isFin(x) && x.roe > 0 && x.roe < 80);
+const mkB = o => Object.assign({}, bs0, {name: "SYNB"}, o), shares0 = bs0.mcap / bs0.close;
+const bCash = balanceAudit(mkB({debt: 1e9, cash: 5e9, ebitda: 2e9})), bDebt = balanceAudit(mkB({debt: bs0.bvps * shares0 * 4, cash: 0, ebitda: bs0.bvps * shares0 * 0.5, fcf: -1e9, cr: 0.7}));
+const fl = (b, k) => (b.items.find(x => x.key === k) || {}).flag;
+if (fl(bCash, "nd") !== "ok" || fl(bCash, "ndEbitda") !== "ok") errs.push("net nakit 'ok' sayılmadı");
+if (fl(bDebt, "ndEq") !== "kötü" || fl(bDebt, "ndEbitda") !== "kötü" || fl(bDebt, "conv") !== "kötü" || bDebt.verdict !== "ZAYIF BİLANÇO") errs.push("aşırı borç yakalanmadı: " + bDebt.verdict);
+if (balanceAudit(mkB({roe: 150})).items.find(x => x.key === "roe").flag !== "uyarı") errs.push("olağandışı ROE işaretlenmedi");
+if (fl(balanceAudit(mkB({pe: bs0.close / bs0.eps * 2})), "pe") !== "uyarı") errs.push("F/K tutarsızlığı işaretlenmedi");
+const bFin = balanceAudit(mkB({sector: "Finance"})); if (isFin(mkB({sector: "Finance"})) && !bFin.items.some(x => x.key === "fin")) errs.push("banka/finans için borç ölçütleri geçersiz sayılmadı");
+const hk = balanceAudit(bs0), rjB = roePbValue(bs0, intrinsic(bs0)); if (rjB && hk.pb && Math.abs(hk.ratio - hk.pb / rjB.pbJ) > 1e-9) errs.push("hakiki PD/DD formülü hatalı");
+if (!/Bilanço denetimi/.test(buffett(bs0).t) || !buffett(bs0).audit) errs.push("Buffett yorumuna bilanço denetimi eklenmedi");
+// Buffett oyu denetimden etkilenmemeli (aynı hissede iki hesap aynı)
+if (buffett(bs0).v !== buffett(Object.assign({}, bs0)).v) errs.push("Buffett oyu tutarsız");
+// --- Takas filtresi (AKD birikim/dağıtım) ---
+const hist3 = [0.15, 0.2, 0.12].map((b, i) => ({d: "2026-10-1" + i, bal: b, conc: 0.1, vol: 1000, sak5: 40 + i * 2})), au3 = {d: "2026-10-12", bal: 0.12, conc: 0.1, n: 3, hist: hist3};
+let as1 = akdState(au3, {pw: -2}); if (!as1 || as1.state !== "birikim" || !as1.strong || !/sessiz birikim/.test(as1.div || "") || !/artıyor/.test(as1.cust || "")) errs.push("birikim tespiti hatalı: " + JSON.stringify(as1));
+as1 = akdState({hist: hist3.map(x => Object.assign({}, x, {bal: -0.2, sak5: 50 - 2}))}, {pw: 3}); if (!as1 || as1.state !== "dağıtım" || !/yükselirken boşaltma/.test(as1.div || "")) errs.push("dağıtım tespiti hatalı: " + JSON.stringify(as1));
+as1 = akdState({hist: hist3.slice(0, 2)}, {pw: 0}); if (!as1 || as1.strong || as1.state !== "olası birikim") errs.push("2 günlük veri 'olası' sayılmalı");
+if (akdState({hist: hist3.slice(0, 1)}, {}) !== null || akdState(null, {}) !== null) errs.push("yetersiz AKD null dönmeli");
+const nz = Object.assign({}, any, {cmf: 0, rvol: 1, change: 0, name: "SYNAKD"}); AKD_USER = {SYNAKD: au3}; AKD_VOTE = false; const v0 = akilliP(nz).v; AKD_VOTE = true; const v1 = akilliP(nz).v;
+if (!(v0 === 0 && v1 === 1)) errs.push("takas filtresi oya katılma anahtarı hatalı: " + v0 + "→" + v1);
+AKD_USER = {SYNAKD: {hist: hist3.map(x => Object.assign({}, x, {bal: -0.2}))}}; if (akilliP(nz).v !== -1) errs.push("dağıtım oyu (-1) üretmedi"); AKD_VOTE = false; AKD_USER = null;
+// --- Monte Carlo (10.000 senaryo) ---
+const mcS = UNI.find(x => x.ok && x.tl >= 20 && sigmaOf(x)); mcCache = {}; const m1 = monteCarlo(mcS);
+if (m1.n !== 10000 || m1.finals.length !== 10000 || !isFinite(m1.sharpe0) || !(m1.cvar5 <= m1.p05 + 1e-9) || !(m1.p05 <= m1.p50 && m1.p50 <= m1.p95) || !(m1.sd > 0)) errs.push("Monte Carlo istatistikleri hatalı");
+mcCache = {}; if (monteCarlo(mcS).probStop !== m1.probStop) errs.push("Monte Carlo deterministik değil");
+const mm1 = mcMatrix(mcS); if (!mm1 || mm1.cells.length !== 4 || mm1.cells[0].length !== 3) errs.push("risk/ödül matrisi boyutu hatalı");
+else {
+  for (const row of mm1.cells) for (const c of row) { if (c.pT + c.pS > 1 + 1e-9 || c.pN < -1e-9 || Math.abs(c.ev - (c.pT * c.T - c.pS * c.S)) > 1e-9) errs.push("matris hücresi tutarsız"); }
+  for (let b = 0; b < 3; b++) for (let a = 1; a < 4; a++) if (mm1.cells[a][b].pT > mm1.cells[a - 1][b].pT + 1e-9) errs.push("hedef yükseldikçe isabet olasılığı artmamalı");
+  for (let a = 0; a < 4; a++) for (let b = 1; b < 3; b++) if (mm1.cells[a][b].pS > mm1.cells[a][b - 1].pS + 1e-9) errs.push("stop genişledikçe stop olasılığı artmamalı");
+}
+const sh1 = mcSharpe(mcS, 1), sh2 = mcSharpe(mcS, 3); if (!(sh2.sharpe > sh1.sharpe) || !(sh2.ir > sh1.ir)) errs.push("Sharpe beklentiyle artmıyor"); if (mcSharpe(mcS, null) !== null) errs.push("beklenti yokken Sharpe null olmalı");
+const simAny = UNI.filter(x => x.ok && x.tl >= 20).map(x => simons(x)).find(x => x.mcs); if (simAny && !/Sharpe/.test(simAny.plan)) errs.push("Simons planında Monte Carlo Sharpe yok");
+if (!/CVaR/.test(committee(mcS).l.seytan.plan)) errs.push("Şeytanın Avukatı planında CVaR yok");
+stat.mcN = m1.n;
+// --- Rejime duyarlı dinamik ağırlık ---
+const regMap = {}, rp = []; for (let i = 0; i < 40; i++) { const dB = "2026-03-" + String(1 + i % 28).padStart(2, "0") + "b" + i, dR = "2026-04-" + String(1 + i % 28).padStart(2, "0") + "r" + i; regMap[dB] = {trend: "bull"}; regMap[dR] = {trend: "bear"};
+  rp.push({d: dB, src: "komite", n: "B" + i, e: 10, sc: 1, v: [0, 1, 0, 0, 0], r: {10: i < 30 ? 5 : -5}, b: {10: 0}}); rp.push({d: dR, src: "komite", n: "R" + i, e: 10, sc: 1, v: [0, 1, 0, 0, 0], r: {10: i < 10 ? 5 : -5}, b: {10: 0}}); }
+buildMemory(rp, regMap); const regSave = REGIME;
+REGIME = {trend: "bull", label: "Boğa", a50: 60}; const wBull = memWeights().simons; REGIME = {trend: "bear", label: "Ayı", a50: 30}; const wBear = memWeights().simons; REGIME = {trend: "mixed", label: "Geçiş", a50: 50}; const wMix = memWeights().simons; REGIME = regSave;
+if (!(wBull.src === "rejim" && wBull.w > 1.3 && wBear.src === "rejim" && wBear.w < 0.7 && wMix.src === "genel" && Math.abs(wMix.w - 1) < 1e-9)) errs.push("rejime duyarlı ağırlık hatalı: " + JSON.stringify([wBull, wBear, wMix]));
+const br = arenaByRegime(rp, 10, regMap); if (!(br.bull.top && br.bull.top.id === "simons" && br.bear.top === null && br.mixed.top === null)) errs.push("rejime göre en iyi ajan hatalı: " + JSON.stringify([br.bull.top, br.bear.top]));
+buildMemory([], {}); if (memWeights().simons.src !== "eşit") errs.push("örneksizken eşit ağırlık beklenir");
+// --- Arşivde yeni bölümler ---
+const dayN = archiveDay("2026-10-13", __data.ts), mdN = archiveMd(dayN, {});
+for (const k of ["Bilanço denetimi", "Risk/ödül matrisi", "Dinamik ağırlıklar", "CVaR", "senaryo)"]) if (mdN.indexOf(k) < 0) errs.push("arşivde eksik: " + k);
 ({stat, tiers: cnt, medianUpside: md, errs: errs.slice(0, 20), nerr: errs.length})
 `, ctx);
 console.log(JSON.stringify(out));

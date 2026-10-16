@@ -160,24 +160,33 @@ function sigmaOf(s) {
   if (s.atrPct != null) return {v: 0.8 * s.atrPct / 100, src: "0,8×ATR% tahmini"};
   return null;
 }
-function monteCarlo(s, n = 2000) {
+/* Ortak rastgele sayılar (common random numbers): standart normal şoklar bir kez üretilir, her hissede kendi σ'sı ile ölçeklenir. Her hissenin dağılımı doğru kalır,
+   hisseler arası karşılaştırma gürültüsüz olur ve 10.000 senaryo ~50 kat ucuzlar. */
+let MC_Z = null;
+function mcZ(n, days) {
+  if (MC_Z && MC_Z.n === n && MC_Z.days === days) return MC_Z.z;
+  const z = new Float64Array(n * days), r = rng(20261013);
+  for (let i = 0; i < z.length; i += 2) { const m = Math.sqrt(-2 * Math.log(1 - r())), a = 2 * Math.PI * r(); z[i] = m * Math.cos(a); if (i + 1 < z.length) z[i + 1] = m * Math.sin(a); }
+  MC_Z = {n, days, z}; return z;
+}
+function monteCarlo(s, n = 10000) {
   const key = s.name; if (mcCache[key]) return mcCache[key];
   const sg = sigmaOf(s); if (!sg) return null;
-  const days = Math.max(1, Math.round(R.mDays)), stop = R.mStop, sigma = Math.max(sg.v, 1e-4), r = rng(hash(s.name));
+  const days = Math.max(1, Math.round(R.mDays)), stop = R.mStop, sigma = Math.max(sg.v, 1e-4), z = mcZ(n, days), drift = -0.5 * sigma * sigma, lstop = Math.log(1 - stop / 100);
   const finals = new Float64Array(n); let stopHit = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0, k = 0; i < n; i++) {
     let lp = 0, min = 0;
-    for (let d = 0; d < days; d++) {
-      const z = Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
-      lp += -0.5 * sigma * sigma + sigma * z;
-      if (lp < min) min = lp;
-    }
+    for (let d = 0; d < days; d++, k++) { lp += drift + sigma * z[k]; if (lp < min) min = lp; }
     finals[i] = Math.exp(lp) - 1;
-    if (Math.exp(min) <= 1 - stop / 100) stopHit++;
+    if (min <= lstop) stopHit++;
   }
-  const sorted = Array.from(finals).sort((a, b) => a - b), q = p => sorted[Math.floor(p * (n - 1))] * 100;
-  return mcCache[key] = { sigma: sigma * 100, src: sg.src, days, stop, p05: q(.05), p50: q(.5), p95: q(.95),
-    probLoss: sorted.filter(x => x < 0).length / n * 100, probStop: stopHit / n * 100, finals: sorted };
+  finals.sort();
+  const sorted = finals, q = p => sorted[Math.floor(p * (n - 1))] * 100;
+  let sum = 0, loss = 0; for (let i = 0; i < n; i++) { sum += sorted[i]; if (sorted[i] < 0) loss++; }
+  const mean = sum / n * 100; let ss = 0; for (let i = 0; i < n; i++) ss += (sorted[i] * 100 - mean) ** 2; const sd = Math.sqrt(ss / n);
+  const nt = Math.max(1, Math.floor(n * 0.05)); let ts = 0; for (let i = 0; i < nt; i++) ts += sorted[i]; const cvar5 = ts / nt * 100, rf = macro().rf * days / 250 * 100;
+  return mcCache[key] = { sigma: sigma * 100, src: sg.src, days, stop, n, p05: q(.05), p50: q(.5), p95: q(.95), mean, sd, cvar5, rf, sharpe0: sd > 0 ? (mean - rf) / sd : null,
+    probLoss: loss / n * 100, probStop: stopHit / n * 100, finals: Array.from(sorted) };
 }
 
 /* ---------- Eski geri test (history.json): Geri Test sayfası ve hesaplayıcı kullanır ---------- */
@@ -301,7 +310,8 @@ function buffett(s) {
   const cap = iv.fv ? iv.fv * (1 - R.bMos / 100) : null;
   const plan = cap ? `En fazla ${fmt(cap)} TL'ye alırdım (adil değer ${fmt(iv.fv)} TL − %${R.bMos} güvenlik marjı). Stop kullanmam; fiyat düşerse işletmenin değeri değişti mi diye bakarım. Fiyat adil değere ulaşırsa ya da iş bozulursa satarım, aksi halde yıllarca tutarım.`
     : "Adil değer hesaplanamadı (EPS/nakit akışı eksik): bu yüzden fiyat veremem. Stop kullanmam; uzun vadeli sahiplik gözüyle bakarım.";
-  return {v, score: all.score, checks, t, plan, fv: iv.fv, mos: iv.mos, cap, quality: quality.score};
+  const audit = balanceAudit(s);
+  return {v, score: all.score, checks, t: t + (audit.text ? " " + audit.text : ""), plan, fv: iv.fv, mos: iv.mos, cap, quality: quality.score, audit};
 }
 
 /* =====================================================================================
@@ -343,7 +353,9 @@ function simons(s) {
     : "Beklenti avantaj eşiğinin altında. Avantaj yoksa işlem yok; modeli zorlamam.";
   const plan = w > 0 ? `Önerilen ağırlık %${fmt(w, 1)} (kesirli Kelly ${R.sKelly}, tavan %${R.sCap}). Ufuk 10 iş günü; süre dolunca ya da model skoru bozulunca çıkar. Aşırı sapmaya karşı −%8 emniyet stopu.`
     : "Ağırlık sıfır: model bu hissede avantaj görmüyor.";
-  return {v, score: k.score, checks, t, plan, exp, edge, w, dec, mexp};
+  const mcs = mcSharpe(s, exp), mcq = mcs ? monteCarlo(s) : null;
+  const plan2 = plan + (mcs && mcq ? ` Monte Carlo (${mcq.n.toLocaleString("tr-TR")} senaryo, ${mcq.days} gün): model beklentisiyle Sharpe ${fmt(mcs.sharpe, 2)} (risksiz getiri %${fmt(mcq.rf, 1)} düşülmüş), bilgi oranı ${fmt(mcs.ir, 2)}; en kötü %5 senaryonun ortalaması (CVaR) %${fmt(mcq.cvar5, 1)}.` : "");
+  return {v, score: k.score, checks, t, plan: plan2, exp, edge, w, dec, mexp, mcs};
 }
 
 /* =====================================================================================
@@ -460,7 +472,8 @@ function devil(s, others) {
     : "Tersini düşündüm ve belirgin bir batma nedeni bulamadım. Yine de makro şokta (kur, faiz, jeopolitik) korelasyonlar 1'e gider; pozisyon küçük olsun.";
   const plan = stopPct ? `Stres testi: ATR stopu (2×ATR) ≈ %${fmt(stopPct, 1)}. Sermayenin %1'ini riske atma kuralıyla azami pozisyon ≈ portföyün %${fmt(maxPos, 1)}. −%10 gap açarsa zarar portföyün ≈ %${fmt(maxPos * 0.1, 2)}'i. ${veto ? "Veto sürdükçe pozisyon açılmaz." : ""}`
     : "ATR verisi yok; stres testi yapılamadı.";
-  return {v, score: k.score, checks, t, plan, veto, severe, maxPos, stopPct};
+  const mcx = mc ? ` Monte Carlo (${mc.n.toLocaleString("tr-TR")} senaryo, ${mc.days} gün): en kötü %5 senaryonun ortalaması (CVaR) %${fmt(mc.cvar5, 1)}; %${mc.stop} stop'a değme olasılığı %${fmt(mc.probStop, 0)}; Sharpe (tarafsız sürüklenme) ${fmt(mc.sharpe0, 2)}.` : "";
+  return {v, score: k.score, checks, t, plan: plan + mcx, veto, severe, maxPos, stopPct, cvar5: mc ? mc.cvar5 : null};
 }
 
 /* =====================================================================================
@@ -471,7 +484,7 @@ function devil(s, others) {
    (z-skor > 2,5) ortalamaya DÖNMEDİ (momentum sürdü); makro risk-off bayrakları BIST'in sonraki getirisini düşürmedi (nominal TL piyasasında kur şoku dönemlerinde hisseler yükseldi).
    Yeni uzmanların oyları mevcut komite skoruna KARIŞMAZ (sanal portföylerin kaydı bozulmasın); net oy ve itiraz vetosu ayrıca gösterilir. */
 let KUR2 = null, MACRO_R = null; // kurul2_research.json, macro_research.json (tarayıcı yükler)
-let VIOP = null, VIOP_R = null, NMOOD = null, GEO = null, AKD_USER = null; // viop.json (vadeli prim), viop_research.json, newsmood.json (Google Haberler), geo.json (GDELT), kullanıcıya özel AKD/takas özeti
+let VIOP = null, VIOP_R = null, NMOOD = null, GEO = null, AKD_USER = null, AKD_VOTE = false; // viop.json (vadeli prim), viop_research.json, newsmood.json (Google Haberler), geo.json (GDELT), kullanıcıya özel AKD/takas özeti
 const k2sig = id => KUR2 && KUR2.signals ? KUR2.signals[id] : null;
 const k2ev = id => { const e = k2sig(id); if (!e || !e.h10) return "kanıt yok"; return `${e.verdict}: 10g ${e.h10.excess > 0 ? "+" : ""}${fmt(e.h10.excess, 2)}% (t ${fmt(e.h10.t, 1)}, n ${e.h10.n})`; };
 const k2bad = id => { const e = k2sig(id); return !!(e && e.verdict === "ters kanıt"); };   // sinyalin tersi doğru çıktı
@@ -571,10 +584,13 @@ function akilliP(s) {
     if (vf && vf.verdict === "kanıt var") viopV = hi ? 1 : lo ? -1 : 0; else if (vf && vf.verdict === "ters kanıt") viopV = hi ? -1 : lo ? 1 : 0;
     viopTxt = `Vadelide fazla prim %${fmt(vp.excess, 2)} (ham prim %${fmt(vp.basis, 2)}, vade ${VIOP.expiry}; hisse vadeli hacmi ${fmt(vp.vol_ratio, 1)}x)`;
   }
-  const au = AKD_USER ? AKD_USER[s.name] : null; // kullanıcı CSV (Matriks vb.): yalnızca bilgi/teyit, oyu değiştirmez (doğrulanamaz)
+  const au = AKD_USER ? AKD_USER[s.name] : null; // kullanıcı CSV (Matriks vb.): doğrulanamaz; çok günlük takas filtresi yalnızca kullanıcı "oya kat" derse oyu etkiler
+  const ast = akdState(au, s);
+  if (AKD_VOTE && ast && ast.strong && ast.days >= 3) { if (ast.dir > 0 && v === 0) v = 1; else if (ast.dir < 0) v = v > 0 ? 0 : -1; }
   if (viopV !== 0 && v === 0) v = viopV; else if (viopV < 0 && v > 0) v = 0; // vadeli olumsuz ise kuvvetli CMF oyunu nötrle
   const checks = [
     chk(vp ? (viopV > 0 ? true : viopV < 0 ? false : null) : null, "Vadeli (VİOP) pozisyonlanma: taşıma maliyeti düşülmüş fazla prim", vp ? `${viopTxt} · ${vf ? vf.verdict : "test yok"}` : "bu hissenin vadelisi yok"),
+    chk(ast ? (ast.dir > 0 ? true : ast.dir < 0 ? false : null) : null, "Takas filtresi: mal toplanıyor mu (birikim) boşaltılıyor mu (dağıtım)? Çok günlük AKD + takas saklama", ast ? ast.text + (AKD_VOTE ? " · oya katıldı" : " · bilgi (oya katılmadı)") : "yeterli gün yok (≥ 2 günlük AKD içe aktarın)"),
     chk(au ? (au.bal > 0.05 ? true : au.bal < -0.05 ? false : null) : null, "Kullanıcı AKD verisi: ilk 5 alıcı − ilk 5 satıcı dengesi (toplam hacme oranı)", au ? `${au.d}: %${fmt(au.bal * 100, 1)} (alıcı yoğunlaşması %${fmt(au.conc * 100, 1)})${au.foreign != null ? ", yabancı oranı %" + fmt(au.foreign, 1) : ""} · kullanıcı verisi, doğrulanamadı` : "içe aktarılmadı (Özel Veri sayfası)"),
     chk(cmf == null ? null : cmf > 0, "Para akışı (CMF günlük) pozitif: alıcı baskın", cmf == null ? "–" : fmt(cmf, 2)),
     chk(cmfw == null ? null : cmfw > 0, "Haftalık para akışı pozitif: birikim sürüyor", cmfw == null ? "–" : fmt(cmfw, 2)),
@@ -589,7 +605,7 @@ function akilliP(s) {
     : v < 0 ? `Tahta bana ${dist ? "dağıtım" : "para çıkışı"} gösteriyor: ${dist ? "hacim yüksek ama fiyat yerinde, CMF negatif: biri sessizce mal veriyor" : `CMF ${fmt(cmf, 2)}`}. Geçmişte bu sinyal olumsuz çıktı (${k2ev(dist ? "dagitim" : "cmf_zayif")}). Büyük oyuncunun kim olduğunu bilmiyorum ama yönü çıkışa bakıyor.`
     : acc ? `Hacim yüksek, fiyat yerinde, CMF pozitif: emilim izi var. Ama dürüst olayım, bu "birikim" sinyali geçmişte kanıtlanmadı (${k2ev("birikim")}); izleme listesine alırım.`
     : "Tahtada belirgin bir izi yok: ne güçlü bir para girişi ne de dağıtım var. Gerçek takas verisi olmadan daha fazlasını söylemem.");
-  return {v, score: tally(checks).score, checks, t, vp, viopV, au, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
+  return {v, score: tally(checks).score, checks, t, vp, viopV, au, ast, plan: v > 0 ? "Para girişi sürdükçe tutun; CMF negatife dönerse azaltın." : v < 0 ? "Yeni alım yapmayın; mevcut pozisyonda CMF'yi izleyin." : "Bekleyin: akış teyidi yok.", dist, acc, strong, weak};
 }
 /* Piyasa coşku/korku göstergesi (tüm piyasa): sosyal medya yerine fiyat davranışından */
 function crowdMeter() {
@@ -650,6 +666,9 @@ function meeting(s, r) {
     : kl.v < 0 ? "Hacimli düşüş var; bu satıcı baskısı. Ben uzağım." : `Benim için ${s.name}'de hacim ve kırılım birlikte yok; ilgi çekmeyen yerde vakit harcamam.`);
   say("seytan", dv.veto ? `Durun. ${dv.severe.join(" ve ")}. Bu koşulda işlem olmaz.` : dv.v < 0 ? `Tersini düşünelim: ${s.name} nasıl para kaybettirir? ${dv.checks.filter(c => c.s === BAD).slice(0, 3).map(c => c.t.replace(/ \(.*?\)/g, "").replace(/:.*$/, "")).join("; ")}. Karşıyım.`
     : `Tersini düşündüm; büyük bir batma nedeni görmüyorum. Ama pozisyon, stop mesafesine göre en çok %${fmt(dv.maxPos, 1)} olsun.`);
+  if (bf.audit && bf.audit.text && (bf.audit.verdict === "ZAYIF BİLANÇO" || bf.audit.verdict === "DİKKAT" || bf.v > 0)) lines.push({who: "buffett", text: bf.audit.text, gen: true});
+  if (sm.mcs && sm.v !== 0) { const mq = monteCarlo(s); if (mq) lines.push({who: "simons", text: `Simülasyona baktım (${mq.n.toLocaleString("tr-TR")} senaryo, ${mq.days} gün): model beklentisiyle Sharpe ${fmt(sm.mcs.sharpe, 2)}, bilgi oranı ${fmt(sm.mcs.ir, 2)}; en kötü %5 senaryonun ortalaması %${fmt(mq.cvar5, 1)}. ${sm.mcs.sharpe > 0.3 ? "Risk/ödül makul." : "Sharpe düşük: avantaj gürültüye yakın, küçük pozisyon."}`, gen: true}); }
+  const snt = stockSentiment(s.name); if (snt && snt.n >= 2 && Math.abs(snt.score) >= 0.25) lines.push({who: "psiko", text: `Haber akışı (KAP/basın başlıkları, son 3 gün, ${snt.n} başlık${snt.kap ? ", " + snt.kap + " tanesi KAP/özel durum türü" : ""}): duygu skoru ${snt.score > 0 ? "+" : ""}${fmt(snt.score, 2)} (${snt.label}). En belirgin başlık: "${snt.top}". Sözlük tabanlı bir okuma, oy değildir; başlıkları kendiniz de okuyun.`, gen: true});
   const mt = s.mtf, tier = mtfTier(s), mexp = mtfExpect(s);
   if (tier && (tier.id === "uyumlu" || tier.id === "hlider")) {
     say("simons", `Çok zamanlı tabloya bakın: günlük ${fmt(mt.d, 0)}, haftalık ${fmt(mt.w, 0)}, aylık ${fmt(mt.m, 0)}. Haftalık skoru bu dilimdeki hisseler geçmişte 20 günde piyasanın ortalamasının ${mexp != null ? (mexp > 0 ? "+" : "") + fmt(mexp, 1) + "% " : ""}üstünde kaldı ve bu iki yarıda, boğada da ayıda da tuttu. İsabet oranı %53 civarı: avantaj küçük, ama çok işleme yayılınca birikir. Heyecanlıyım, ama abartmıyorum.`);
@@ -1059,18 +1078,20 @@ function archiveDay(date, dataTs) {
   const cands = current.slice(), results = cands.map(s => [s, committee(s)]);
   const issues = auditIssues(cands, results, dataTs), locks = [];
   const stocks = results.map(([s, r]) => {
-    const f = factCheck(s, r), mc = monteCarlo(s), mt = meeting(s, r), v = r.l, db = mt.debate, pv = mt.peer;
+    const f = factCheck(s, r), mc = monteCarlo(s), mt = meeting(s, r), v = r.l, db = mt.debate, pv = mt.peer, mcm = mcMatrix(s), sn = stockSentiment(s.name), au = v.buffett.audit;
     if (f.locked) locks.push(f);
     return {n: s.name, desc: s.description, sector: s.sector, close: s.close, change: s.change, score: r.score, label: r.label, veto: r.veto, veto2: !!r.veto2, net2: r.net2,
       votes: {buffett: v.buffett.v, simons: v.simons.v, livermore: v.livermore.v, kellogg: v.kellogg.v, seytan: v.seytan.v, makro: r.k2.makro.v, akilli: r.k2.akilli.v, vol: r.k2.vol.v, psiko: r.k2.psiko.v},
-      mc: mc && {sigma: mc.sigma, days: mc.days, stop: mc.stop, p05: mc.p05, p50: mc.p50, p95: mc.p95, probLoss: mc.probLoss, probStop: mc.probStop},
+      mc: mc && {sigma: mc.sigma, days: mc.days, stop: mc.stop, n: mc.n, p05: mc.p05, p50: mc.p50, p95: mc.p95, probLoss: mc.probLoss, probStop: mc.probStop, sharpe0: mc.sharpe0, cvar5: mc.cvar5, mean: mc.mean, sd: mc.sd, rf: mc.rf},
+      mcs: v.simons.mcs || null, mcm: mcm && {days: mcm.days, best: mcm.best, cells: mcm.cells.map(row => row.map(c => [c.T, c.S, c.pT, c.pS, c.ev]))},
+      audit: au && {verdict: au.verdict, text: au.text, items: au.items.map(x => [x.label, x.val, x.flag])}, sent: sn && {score: sn.score, label: sn.label, n: sn.n, kap: sn.kap, top: sn.top},
       devil: {t: v.seytan.t, plan: v.seytan.plan, severe: v.seytan.severe},
       lines: mt.lines.map(x => [x.who, x.text]), verdict: mt.verdict,
       debate: {text: db.text, label: db.label, al: db.al, tut: db.tut, sat: db.sat, learned: db.learned, bull: db.bull.pts.map(p => p.text), bear: db.bear.pts.map(p => p.text), unrefBull: db.bull.unref, unrefBear: db.bear.unref, lines: db.lines.map(x => [x.side, x.who, x.text])},
       memory: mt.mem.ref ? {ref: mt.mem.ref, flips: mt.mem.flips.map(f => [f.k, f.from, f.to, f.tiny])} : null,
       peer: pv && {sector: pv.sector, n: pv.n, rank: pv.rank, rankOf: pv.rankOf, pePrem: pv.pePrem, rows: pv.rows.map(x => [x.label, x.st, x.sec, x.mkt, x.rel, x.type]), peers: pv.peers}, fact: {locked: f.locked, checked: f.checked, stale: f.stale, issues: f.issues.map(i => i.msg), request: f.request || null}};
   });
-  return {date, regime: REGIME && REGIME.label, a50: REGIME && Math.round(REGIME.a50), stocks, issues, locks: locks.map(l => l.name), audit: locks.length ? "RED (KİLİTLİ RAPOR VAR)" : issues.length ? "ŞARTLI ONAY" : "ONAY"};
+  return {date, weights: memWeights(), regime: REGIME && REGIME.label, a50: REGIME && Math.round(REGIME.a50), stocks, issues, locks: locks.map(l => l.name), audit: locks.length ? "RED (KİLİTLİ RAPOR VAR)" : issues.length ? "ŞARTLI ONAY" : "ONAY"};
 }
 const AR_VOTE = v => v > 0 ? "▲ olumlu" : v < 0 ? "▼ olumsuz" : "• nötr";
 const AR_NAME = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", seytan: "Şeytanın Avukatı", makro: "Makro & Jeopolitik", akilli: "Akıllı Para", vol: "Opsiyon & Volatilite", psiko: "Piyasa Psikolojisi"};
@@ -1081,6 +1102,7 @@ function archiveMd(day, extras) {
   L.push("## Mühürler", "", `- **Baş Denetçi:** ${day.audit}${day.issues.length ? "" : " (sorun bulunmadı)"}`);
   day.issues.forEach(i => L.push(`  - ${i}`));
   L.push(`- **Hata Avcısı (veri/rakam çapraz kontrolü):** ${day.locks.length ? `🔒 ${day.locks.length} rapor KİLİTLİ: ${day.locks.join(", ")}` : "✅ çelişki bulunmadı; metinlerdeki rakamlar TradingView kapanış geçmişiyle uyumlu"}`, "");
+  { const wl = Object.entries(day.weights || {}).filter(([, o]) => o.src !== "eşit"); L.push(`- **Dinamik ağırlıklar (rejime duyarlı denetçi):** ${wl.length ? wl.map(([k, o]) => `${AR_NAME[k]} ×${fmt(o.w, 2)} (${o.src})`).join(", ") : "tüm ajanlar eşit ağırlıkta (her rejimde ≥ 30 ölçülmüş oy gerekir; henüz birikmedi)"}`, ""); }
   if (x.alarms && x.alarms.length) { L.push("## Gün içi alarmlar", ""); x.alarms.slice(0, 25).forEach(a => L.push(`- ${a.t || ""} ${a.sev >= 3 ? "🚨" : "⚠"} ${a.text}`)); L.push(""); }
   L.push("## Özet tablo", "", "| Hisse | Kapanış | Gün % | Skor | Karar | B | S | L | K | Ş | Yeni uzman net | Ağırlıklı karar | Stop olasılığı | Mühür |", "|---|---:|---:|---:|---|:-:|:-:|:-:|:-:|:-:|---:|---|---:|---|");
   const sym = v => v > 0 ? "+" : v < 0 ? "−" : "0";
@@ -1091,7 +1113,10 @@ function archiveMd(day, extras) {
     if (s.fact.locked) { L.push(`> 🔒 **RAPOR KİLİTLİ (Hata Avcısı).** Karar bölümü yayınlanmadı.`, `> ${s.fact.request}`, ""); L.push("### Oylar", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- ${AR_NAME[k]}: ${AR_VOTE(v)}`)); L.push(""); return; }
     L.push("### Efsanelerin oyları", ""); Object.entries(s.votes).forEach(([k, v]) => L.push(`- **${AR_NAME[k]}:** ${AR_VOTE(v)}`));
     L.push("", `Yeni uzmanların net oyu: ${s.net2}${s.veto2 ? " (itiraz vetosu var)" : ""}`, "");
-    if (s.mc) L.push("### Monte Carlo (2000 yol)", "", `${s.mc.days} günlük ufuk, günlük oynaklık %${fmt(s.mc.sigma, 2)}: %5 / medyan / %95 getiri ${fmt(s.mc.p05, 1)}% / ${fmt(s.mc.p50, 1)}% / ${fmt(s.mc.p95, 1)}%; zarar olasılığı %${fmt(s.mc.probLoss, 0)}, %${s.mc.stop} stop'a değme olasılığı **%${fmt(s.mc.probStop, 0)}**.`, "");
+    if (s.mc) L.push(`### Monte Carlo (${s.mc.n.toLocaleString("tr-TR")} senaryo)`, "", `${s.mc.days} günlük ufuk, günlük oynaklık %${fmt(s.mc.sigma, 2)}: %5 / medyan / %95 getiri ${fmt(s.mc.p05, 1)}% / ${fmt(s.mc.p50, 1)}% / ${fmt(s.mc.p95, 1)}%; zarar olasılığı %${fmt(s.mc.probLoss, 0)}, %${s.mc.stop} stop'a değme olasılığı **%${fmt(s.mc.probStop, 0)}**. Sharpe (tarafsız sürüklenme, risksiz getiri %${fmt(s.mc.rf, 1)} düşülmüş) ${fmt(s.mc.sharpe0, 2)}${s.mcs ? `; Simons'ın model beklentisiyle Sharpe ${fmt(s.mcs.sharpe, 2)} (bilgi oranı ${fmt(s.mcs.ir, 2)})` : ""}; en kötü %5 senaryonun ortalaması (CVaR) ${fmt(s.mc.cvar5, 1)}%.`, "");
+    if (s.mcm) { L.push("**Risk/ödül matrisi** (hücre: önce hedefe / önce stop'a değme olasılığı · beklenen değer %):", "", "| Hedef \\ Stop | " + s.mcm.cells[0].map(c => `−%${c[1]}`).join(" | ") + " |", "|---|" + s.mcm.cells[0].map(() => "---:").join("|") + "|"); s.mcm.cells.forEach(row => L.push(`| +%${row[0][0]} | ` + row.map(c => `%${fmt(c[2] * 100, 0)} / %${fmt(c[3] * 100, 0)} · E ${c[4] > 0 ? "+" : ""}${fmt(c[4], 1)}%`).join(" | ") + " |")); L.push(""); }
+    if (s.audit) { L.push(`### Bilanço denetimi (hakiki PD/DD): ${s.audit.verdict}`, ""); s.audit.items.filter(i => i[2]).forEach(i => L.push(`- ${i[0]}: ${i[1]} (${i[2]})`)); L.push(""); }
+    if (s.sent) L.push(`### Haber duygusu (KAP/basın, son 3 gün)`, "", `Skor ${s.sent.score > 0 ? "+" : ""}${fmt(s.sent.score, 2)} (${s.sent.label}), ${s.sent.n} başlık${s.sent.kap ? `, ${s.sent.kap} KAP/özel durum türü` : ""}${s.sent.top ? `; en belirgin: "${s.sent.top}"` : ""}. Sözlük tabanlı okuma, oy değildir.`, "");
     L.push("### Masa tartışması", ""); s.lines.forEach(([w, t]) => L.push(`- **${(WHO_TXT[w] || w)}:** ${t}`));
     if (s.memory) { L.push("", "### Hafıza (geçmiş kararlar)", "", `Önceki kayıt: ${s.memory.ref.d} (${s.memory.ref.age} gün önce), masa skoru ${s.memory.ref.sc}, o günden fiyat ${s.memory.ref.px > 0 ? "+" : ""}${fmt(s.memory.ref.px, 1)}%.`); s.memory.flips.forEach(([k, a, b, tiny]) => L.push(`- ${AR_NAME[k]}: ${AR_VOTE(a)} → ${AR_VOTE(b)}${tiny ? " (eşik titremesi, fikir değişimi sayılmaz)" : ""}`)); if (!s.memory.flips.length) L.push("- Hiçbir efsane oyunu değiştirmedi (tutarlı)."); }
     L.push("", "### Boğa vs Ayı münazarası", "", `**Ağırlıklı karar skoru: ${s.debate.text} (${s.debate.label})**${s.debate.learned ? " · öğrenilmiş ağırlıklarla" : " · eşit ağırlık (öğrenme için yeterli sonuç birikmedi)"}`, "");
@@ -1114,17 +1139,19 @@ function archiveMd(day, extras) {
    Hafıza komite skorunu ve sanal portföyleri DEĞİŞTİRMEZ; yalnızca yorumu ve ağırlıklı karar skorunu etkiler. */
 let MEM = null;
 const MEM_KEYS = ["buffett", "simons", "livermore", "kellogg", "seytan"];
-function buildMemory(picks) {
-  const by = {}, skill = {}, days = new Set(); MEM_KEYS.forEach(k => { skill[k] = {n: 0, hit: 0}; });
+function buildMemory(picks, regime) {
+  const by = {}, skill = {}, skillR = {}, days = new Set(), K = MEM_KEYS.concat(["makro", "akilli", "vol", "psiko"]);
+  K.forEach(k => { skill[k] = {n: 0, hit: 0}; skillR[k] = {bull: {n: 0, hit: 0}, mixed: {n: 0, hit: 0}, bear: {n: 0, hit: 0}}; });
   (picks || []).forEach(p => {
     if (p.src !== "komite" || !p.v) return; days.add(p.d); (by[p.n] = by[p.n] || []).push(p);
     const h = p.r && p.r[10] != null && p.b && p.b[10] != null ? 10 : p.r && p.r[5] != null && p.b && p.b[5] != null ? 5 : null; if (!h) return;
-    const ex = p.r[h] - p.b[h]; MEM_KEYS.forEach((k, i) => { const v = p.v[i]; if (!v) return; skill[k].n++; if ((v > 0 && ex > 0) || (v < 0 && ex < 0)) skill[k].hit++; });
+    const ex = p.r[h] - p.b[h], reg = regime && regime[p.d] ? regime[p.d].trend : null, all = p.v.concat(p.v2 || [0, 0, 0, 0]);
+    K.forEach((k, i) => { const v = all[i]; if (!v) return; const ok = (v > 0 && ex > 0) || (v < 0 && ex < 0); skill[k].n++; if (ok) skill[k].hit++; if (reg && skillR[k][reg]) { skillR[k][reg].n++; if (ok) skillR[k][reg].hit++; } });
   });
   Object.values(by).forEach(a => a.sort((x, y) => x.d < y.d ? -1 : 1));
-  return MEM = {by, skill, days: days.size};
+  return MEM = {by, skill, skillR, days: days.size};
 }
-function memWeight(k) { const s = MEM && MEM.skill[k]; if (!s || s.n < 30) return 1; return Math.max(0.6, Math.min(1.4, 1 + (s.hit / s.n - 0.5) * 2)); }
+function memWeight(k) { const w = memWeights()[k]; return w ? w.w : 1; }
 function memBack(name) {
   const a = MEM && MEM.by[name]; if (!a) return null; const today = fcToday(), T = Date.parse(today);
   const old = a.filter(p => p.d < today && p.e > 0).map(p => ({p, age: Math.round((T - Date.parse(p.d)) / 864e5)})); if (!old.length) return null;
@@ -1168,7 +1195,7 @@ const DB_CAT = [["trend", /SMA|trend|RS\b|göreceli|haftalık|pivot|zirve|dip/i]
 const dbCat = t => { const c = DB_CAT.find(([, re]) => re.test(t)); return c ? c[0] : "diğer"; };
 function debate(s, r) {
   const L = r.l, K = r.k2;
-  const voters = MEM_KEYS.map(k => ({k, v: L[k].v, w: memWeight(k), checks: L[k].checks || []})).concat(PERSONAS2_KEYS.map(k => ({k, v: K[k].v, w: 1, checks: K[k].checks || []})));
+  const W = memWeights(), voters = MEM_KEYS.map(k => ({k, v: L[k].v, w: W[k].w, checks: L[k].checks || []})).concat(PERSONAS2_KEYS.map(k => ({k, v: K[k].v, w: W[k].w, checks: K[k].checks || []})));
   const pick = (pool, n) => { const out = [], seenC = new Set(); for (const p of pool) if (!seenC.has(p.cat) && out.length < n) { out.push(p); seenC.add(p.cat); } for (const p of pool) if (out.length < n && !out.includes(p)) out.push(p); return out; };
   const mk = (x, c) => ({who: x.k, text: c.t.replace(/ \(.*?\)/g, ""), val: c.val || "", cat: dbCat(c.t)});
   const poolOf = (voterList, st) => voterList.flatMap(x => x.checks.filter(c => c.s === st).map(c => mk(x, c)));
@@ -1298,4 +1325,154 @@ function levelsData(s, cand) {
   const marks = z.map((v, i) => v != null && Math.abs(v) > 2 ? {i, z: v} : null).filter(Boolean);
   const lv = livermore(s);
   return {dates, o, h, l, c, sma20, sma50, sd20, z, trend, liv, marks, zNow: z[n - 1], livVote: lv.v, simVote: simons(s).v, pivotNear: s.h1m ? s.close / s.h1m : null};
+}
+
+/* =====================================================================================
+   1) BİLANÇO DENETİM KATMANI ve HAKİKİ PD/DD: yüzeysel oranların arkasına bakar. Net borç (finansal borç − nakit), özsermaye yapısı, net borç/özsermaye ve /FAVÖK,
+   nakit dönüşümü (serbest nakit akışı / net kâr), TMS 29 (enflasyon muhasebesi) kaynaklı şüpheli rakamlar (taban etkisi, olağandışı ROE), F/K ve ROE tutarlılığı.
+   Hakiki PD/DD = piyasa PD/DD ÷ gerekçeli PD/DD (gerekçeli PD/DD = (reel ROE − g) / (reel iskonto − g), valuation ile aynı); 1'in üstü pahalı. Ek olarak
+   "fiyat / yatırılan sermaye" = (piyasa değeri + net borç) / (özsermaye + net borç): borçla şişmiş şirketlerde PD/DD'nin gizlediği tabloyu gösterir.
+   Buffett'ın yorumuna eklenir; oyunu değiştirmez (oyun kuralları araştırmayla kalibre edildi). Banka/finans için borç ölçütleri geçersizdir. */
+function balanceAudit(s) {
+  const fin = isFin(s), m = macro(), iv = intrinsic(s), shares = s.mcap > 0 && s.close > 0 ? s.mcap / s.close : null;
+  const equity = s.bvps > 0 && shares ? s.bvps * shares : null, nd = s.debt != null ? s.debt - (s.cash || 0) : null;
+  const ndEq = nd != null && equity ? nd / equity : null, ndEbitda = nd != null && s.ebitda > 0 ? nd / s.ebitda : null;
+  const pb = s.pb > 0 ? s.pb : s.bvps > 0 ? s.close / s.bvps : null, rj = roePbValue(s, iv), ratio = pb != null && rj ? pb / rj.pbJ : null;
+  const evInv = nd != null && s.mcap > 0 && equity ? (s.mcap + nd) / (equity + Math.max(nd, 0)) : null;
+  const roeReal = s.roe != null ? ((1 + s.roe / 100) / (1 + m.infl) - 1) * 100 : null, items = [];
+  const add = (key, label, val, flag, note) => items.push({key, label, val, flag, note: note || ""});
+  const bn = x => x == null ? "–" : (x < 0 ? "−" : "") + fmt(Math.abs(x) / 1e9, 2) + " mlr TL";
+  if (fin) add("fin", "Borç ölçütleri", "banka/finans: geçerli değil", null, "Finansal kuruluşlarda borç faaliyetin hammaddesidir; özsermaye ve ROE'ye bakılır.");
+  else {
+    add("nd", "Net borç (finansal borç − nakit)", nd == null ? "–" : nd <= 0 ? `net nakit ${bn(-nd)}` : bn(nd), nd == null ? null : nd <= 0 ? "ok" : null);
+    add("ndEq", "Net borç / özsermaye", ndEq == null ? "–" : fmt(ndEq, 2), ndEq == null ? null : ndEq <= 0.5 ? "ok" : ndEq <= 1.5 ? "uyarı" : "kötü", "≤ 0,5 rahat; > 1,5 borç özsermayeyi aşıyor.");
+    add("ndEbitda", "Net borç / FAVÖK", ndEbitda == null ? (nd != null && nd <= 0 ? "net nakit" : "–") : fmt(ndEbitda, 1) + "x", ndEbitda == null ? (nd != null && nd <= 0 ? "ok" : null) : ndEbitda <= 2.5 ? "ok" : ndEbitda <= 4 ? "uyarı" : "kötü", "borcun faaliyet kârıyla kaç yılda kapanacağı.");
+    const ni = s.eps > 0 && shares ? s.eps * shares : null, conv = s.fcf != null && ni ? s.fcf / ni : null;
+    add("conv", "Nakit dönüşümü (serbest nakit akışı / net kâr)", conv == null ? "–" : fmt(conv, 2) + "x", conv == null ? null : conv >= 0.7 ? "ok" : conv >= 0 ? "uyarı" : "kötü", "kâr nakde dönmüyorsa (< 0,3x) muhasebe kârı kalitesizdir.");
+    add("cr", "Cari oran", s.cr == null ? "–" : fmt(s.cr, 2), s.cr == null ? null : s.cr >= 1.2 ? "ok" : s.cr >= 1 ? "uyarı" : "kötü", "kısa vadeli borcu ödeme gücü.");
+  }
+  add("eq", "Özsermaye (defter değeri)", equity == null ? "–" : bn(equity), s.bvps == null ? null : s.bvps > 0 ? "ok" : "kötü", s.bvps != null && s.bvps <= 0 ? "Negatif özsermaye: PD/DD anlamsız." : "");
+  add("pb", "Piyasa PD/DD", pb == null ? "–" : fmt(pb, 2), null);
+  add("pbj", "Gerekçeli PD/DD (reel ROE ve iskonto oranına göre)", rj ? fmt(rj.pbJ, 2) : "–", null, "sürdürülebilir reel ROE yarı yarıya iskonto oranına sönümlenerek hesaplanır.");
+  add("hakiki", "HAKİKİ PD/DD (piyasa ÷ gerekçeli)", ratio == null ? "–" : fmt(ratio, 2) + "x", ratio == null ? null : ratio <= 1 ? "ok" : ratio <= 1.5 ? "uyarı" : "kötü", ratio == null ? "" : ratio <= 1 ? "gerekçeli değerin altında/yanında: iskontolu." : "gerekçeli PD/DD'nin " + fmt((ratio - 1) * 100, 0) + "% üstünde.");
+  if (!fin) add("evinv", "Fiyat / yatırılan sermaye ((piyasa değeri+net borç)/(özsermaye+net borç))", evInv == null ? "–" : fmt(evInv, 2) + "x", null, "borçlu şirketlerde PD/DD'nin düşük göstermesini düzeltir.");
+  add("roe", "Reel ROE (enflasyon düşülmüş)", roeReal == null ? "–" : pc(roeReal), roeReal == null ? null : s.roe > 80 ? "uyarı" : roeReal >= 5 ? "ok" : roeReal >= -5 ? "uyarı" : "kötü", s.roe > 80 ? "ROE > %80: TMS 29 parasal kazancı ya da tek seferlik kalem olabilir; sürdürülebilir saymayın." : "");
+  const base = s.epsg != null && Math.abs(s.epsg) > 200;
+  add("epsg", "EPS büyümesi", s.epsg == null ? "–" : pc(s.epsg), base ? "uyarı" : null, base ? "|büyüme| > %200: taban etkisi; değerlemede büyüme sıfır alındı." : "");
+  const peImp = s.eps > 0 ? s.close / s.eps : null, peOk = peImp == null || s.pe == null ? null : Math.abs(peImp / s.pe - 1) <= 0.15;
+  add("pe", "F/K tutarlılığı (tablo F/K ↔ fiyat/EPS)", peOk == null ? "–" : peOk ? "tutarlı" : `tabloda ${fmt(s.pe, 1)}, fiyat/EPS ${fmt(peImp, 1)}`, peOk == null ? null : peOk ? "ok" : "uyarı", "TTM ve dönem EPS'i farklıysa fark çıkabilir.");
+  const roeImp = s.eps > 0 && s.bvps > 0 ? s.eps / s.bvps * 100 : null, roeOk = roeImp == null || s.roe == null ? null : Math.abs(roeImp - s.roe) <= Math.max(10, 0.4 * Math.abs(s.roe));
+  add("roeimp", "ROE tutarlılığı (EPS/defter değeri ↔ tablo ROE)", roeOk == null ? "–" : roeOk ? "tutarlı" : `tabloda ${pc(s.roe)}, EPS/DD ${pc(roeImp)}`, roeOk == null ? null : roeOk ? "ok" : "uyarı", "uyumsuzluk enflasyon düzeltmesi/dönem farkından olabilir.");
+  const bad = items.filter(x => x.flag === "kötü").length, warn = items.filter(x => x.flag === "uyarı").length, known = items.filter(x => x.flag).length;
+  const verdict = !known ? "VERİ YETERSİZ" : bad >= 2 || (bad >= 1 && warn >= 2) ? "ZAYIF BİLANÇO" : bad || warn >= 2 ? "DİKKAT" : "TEMİZ";
+  const parts = [];
+  if (!fin && nd != null) parts.push(nd <= 0 ? `net nakit pozisyonu (${bn(-nd)})` : `net borç ${bn(nd)}${ndEq != null ? ` (özsermayenin ${fmt(ndEq, 1)} katı)` : ""}${ndEbitda != null ? `, FAVÖK'e göre ${fmt(ndEbitda, 1)} yıllık` : ""}`);
+  if (ratio != null) parts.push(`PD/DD ${fmt(pb, 2)}, gerekçeli PD/DD ${fmt(rj.pbJ, 2)}: hakiki PD/DD ${fmt(ratio, 2)}x (${ratio <= 1 ? "iskontolu" : ratio <= 1.5 ? "biraz pahalı" : "pahalı"})`);
+  if (!fin && evInv != null && ndEq != null && ndEq > 0.5) parts.push(`borcu sayınca fiyat/yatırılan sermaye ${fmt(evInv, 2)}x`);
+  const warns = items.filter(x => x.flag === "uyarı" || x.flag === "kötü").map(x => x.label.split(" (")[0].toLowerCase());
+  const text = known ? `Bilanço denetimi (${trLower(verdict)}): ${parts.length ? parts.join("; ") + "." : ""}${warns.length ? " Dikkat çeken: " + warns.slice(0, 4).join(", ") + "." : ""}` : "";
+  return {items, verdict, text, pb, pbJ: rj ? rj.pbJ : null, ratio, evInv, ndEq, ndEbitda, nd, equity, roeReal, bad, warn};
+}
+
+/* =====================================================================================
+   2) TAKAS FİLTRESİ (kullanıcının kendi AKD/takas CSV'si): birden çok günün ilk-5 alıcı/satıcı dengesi ve takas saklama yoğunluğundan
+   BİRİKİM (mal toplanıyor) ya da DAĞITIM (mal boşaltılıyor) tespiti; fiyatla ayrışma (fiyat düşerken alım = sessiz birikim; fiyat yükselirken satış = yükselirken boşaltma).
+   Veri herkese açık değil (lisanslı) ve geçmiş testi yoktur; bu yüzden oy yalnızca kullanıcı "oya kat" seçeneğini açarsa ve ≥ 3 gün verisi varsa etkiler. */
+function akdState(au, s) {
+  if (!au || !au.hist || au.hist.length < 2) return null;
+  const h = au.hist.slice(-5), last3 = h.slice(-3), avg = a => a.reduce((x, y) => x + y, 0) / a.length, b3 = avg(last3.map(x => x.bal || 0));
+  const dir = b3 >= 0.08 ? 1 : b3 <= -0.08 ? -1 : 0, consist = dir === 0 ? 0 : h.filter(x => Math.sign(x.bal || 0) === dir).length / h.length;
+  const sk = h.filter(x => x.sak5 != null), skD = sk.length >= 2 ? sk[sk.length - 1].sak5 - sk[0].sak5 : null;
+  const strong = dir !== 0 && h.length >= 3 && consist >= 0.67;
+  const state = dir > 0 ? (strong ? "birikim" : "olası birikim") : dir < 0 ? (strong ? "dağıtım" : "olası dağıtım") : "nötr";
+  const px = s && s.pw != null ? s.pw : null;
+  const div = dir > 0 && px != null && px <= 0 ? "sessiz birikim: fiyat yatay/düşerken ilk 5 alıcı baskın" : dir < 0 && px != null && px >= 0 ? "yükselirken boşaltma: fiyat yükselirken ilk 5 satıcı baskın" : null;
+  const cust = skD == null ? null : skD >= 2 ? "takas saklama yoğunluğu artıyor (az elde toplanma)" : skD <= -2 ? "takas saklama yoğunluğu azalıyor (dağılma)" : "takas saklama yoğunluğu sabit";
+  const text = `${au.hist.length} günlük AKD: son 3 gün ortalama ilk5 alıcı−satıcı dengesi %${fmt(b3 * 100, 1)} → ${state.toUpperCase()}${strong ? "" : " (teyit için daha çok gün/tutarlılık gerekir)"}${div ? "; " + div : ""}${cust ? "; " + cust : ""}.`;
+  return {state, dir, strong, b3, days: au.hist.length, consist, div, cust, skD, text};
+}
+
+/* =====================================================================================
+   3) MONTE CARLO RİSK ve STRES TESTİ: 10.000 senaryo (geometrik Brownian hareket, sigma = gerçekleşen oynaklık, ufuk = R.mDays gün, tarafsız sürüklenme).
+   monteCarlo(): olasılık dağılımı, ortalama/σ, Sharpe (risksiz getiri düşülmüş, tarafsız sürüklenmeyle), CVaR%5 (en kötü %5 senaryonun ortalaması), stop olasılığı.
+   mcMatrix(): risk/ödül matrisi: hedef (+5/10/15/20%) ve stop (−5/8/10%) çiftleri için "hangisine önce değer" olasılığı ve beklenen değer.
+   mcSharpe(): Simons'ın modelinin beklenen fazla getirisi eklenerek model Sharpe ve bilgi oranı. Jim Simons ve Şeytanın Avukatı bu çıktıları kullanır. */
+const MC_T = [5, 10, 15, 20], MC_S = [5, 8, 10];
+function mcSharpe(s, exp) {
+  const mc = monteCarlo(s); if (!mc || exp == null || !(mc.sd > 0)) return null;
+  const e = exp * mc.days / 10; // beklenti 10 günlük; ufka ölçekle
+  return {exp: e, sharpe: (mc.mean + e - mc.rf) / mc.sd, ir: e / mc.sd, rf: mc.rf};
+}
+function mcMatrix(s, n = 10000) {
+  const key = "m:" + s.name; if (mcCache[key]) return mcCache[key];
+  const sg = sigmaOf(s); if (!sg) return null;
+  const days = Math.max(1, Math.round(R.mDays)), sigma = Math.max(sg.v, 1e-4), z = mcZ(n, days), drift = -0.5 * sigma * sigma, nT = MC_T.length, nS = MC_S.length;
+  const lT = MC_T.map(T => Math.log(1 + T / 100)), lS = MC_S.map(S => Math.log(1 - S / 100)); // eşikler log uzayında: adım başına exp gerekmez
+  const tHit = new Int32Array(nT * nS), sHit = new Int32Array(nT * nS), done = new Uint8Array(nT * nS);
+  for (let i = 0, kz = 0; i < n; i++) {
+    done.fill(0); let lp = 0;
+    for (let d = 0; d < days; d++, kz++) {
+      lp += drift + sigma * z[kz];
+      for (let a = 0; a < nT; a++) for (let b = 0; b < nS; b++) { const k = a * nS + b; if (done[k]) continue; if (lp >= lT[a]) { tHit[k]++; done[k] = 1; } else if (lp <= lS[b]) { sHit[k]++; done[k] = 1; } }
+    }
+  }
+  const cells = MC_T.map((T, a) => MC_S.map((S, b) => { const k = a * nS + b, pT = tHit[k] / n, pS = sHit[k] / n; return {T, S, pT, pS, pN: 1 - pT - pS, rr: T / S, ev: pT * T - pS * S, be: S / (T + S)}; }));
+  const flat = cells.flat(), best = flat.reduce((x, y) => y.ev > x.ev ? y : x);
+  return mcCache[key] = {T: MC_T, S: MC_S, cells, days, n, best};
+}
+
+/* =====================================================================================
+   4) REJİME DUYARLI ÖZ-DÜZENLEMELİ AĞIRLIK (dinamik denetçi): her ajanın isabeti piyasa rejimine (boğa / yatay-geçiş / ayı) göre ayrı izlenir.
+   Bir rejimde ≥ 30 ölçülmüş oy varsa o rejimin isabeti, yoksa genel isabet (≥ 30), yoksa eşit ağırlık (1) kullanılır. Ağırlık = clamp(1 + (isabet − 0,5) × 2, 0,6, 1,4).
+   Ağırlık yalnızca ağırlıklı karar skorunu etkiler; komite skoru ve sanal portföyler değişmez. */
+function memWeights(regimeKey) {
+  const reg = regimeKey === undefined ? (REGIME ? REGIME.trend : null) : regimeKey, out = {};
+  MEM_KEYS.concat(["makro", "akilli", "vol", "psiko"]).forEach(k => {
+    const sk = MEM && MEM.skill[k], skr = MEM && MEM.skillR && MEM.skillR[k] && reg ? MEM.skillR[k][reg] : null, f = x => Math.max(0.6, Math.min(1.4, 1 + (x.hit / x.n - 0.5) * 2));
+    if (skr && skr.n >= 30) out[k] = {w: f(skr), src: "rejim", n: skr.n, rate: skr.hit / skr.n};
+    else if (sk && sk.n >= 30) out[k] = {w: f(sk), src: "genel", n: sk.n, rate: sk.hit / sk.n};
+    else out[k] = {w: 1, src: "eşit", n: sk ? sk.n : 0, rate: sk && sk.n ? sk.hit / sk.n : null};
+  });
+  return out;
+}
+/* rejim bazlı en başarılı ajan (≥ 30 ölçülmüş oy ve Wilson alt sınırına göre) */
+function arenaByRegime(picks, h, regimeMap) {
+  const out = {};
+  ["bull", "mixed", "bear"].forEach(g => {
+    const sub = (picks || []).filter(p => regimeMap && regimeMap[p.d] && regimeMap[p.d].trend === g), A = arenaStats(sub, h);
+    const top = A.rows.filter(r => r.n >= 30 && r.kind === "oy" && r.rate > 0.5).sort((a, b) => b.ci[0] - a.ci[0])[0] || null;
+    out[g] = {measured: A.measured, top: top && {id: top.id, name: top.name, n: top.n, rate: top.rate, lo: top.ci[0]}, rows: A.rows};
+  });
+  return out;
+}
+
+/* =====================================================================================
+   5) HABER / KAP DUYGU KATMANI (Türkçe sözlük tabanlı NLP): başlıkları olumsuzlama, yön değiştiren kalıplar ("zararı azaldı" = olumlu, "kârı düştü" = olumsuz)
+   ve KAP olay türü ağırlıklarıyla (temettü, bedelsiz, geri alım, ihale, dava, tedbir, konkordato ...) −1..+1 puanlar; hisse bazında son 3 günün başlıklarını
+   yeniliğe göre ağırlıklandırıp toplar. KAP'ın kendi API'si buradan güvenilir erişilemedi; KAP kaynaklı başlıklar Google Haberler akışıyla (news.json, 15 dakikada bir) gelir.
+   Sosyal medya (X/forum) için ücretsiz güvenilir kaynak yoktur: dahil değildir. Bu bir makine öğrenmesi modeli değil, kurallı sözlük yöntemidir; başlıkları okuyun. Oy vermez, bilgi olarak masaya iletilir. */
+const SENT_RULES = [ // yön değiştiren kalıplar: önce uygulanır, eşleşen kısım sözlüğe girmez
+  [/(zarar|borç|maliyet|gider)\w*.{0,28}?(azal|düş|geriled|iyileş|kapan)/, 1.2], [/(zarar|borç|maliyet|gider)\w*.{0,28}?(art|yüksel|büyü|derinleş)/, -1.3],
+  [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*.{0,28}?(düş|azal|geriled|eridi|daral)/, -1.2], [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*.{0,28}?(art|yüksel|büyü|rekor|katla|iyileş)/, 1.2],
+  [/zarar (etmedi|açıklamadı)|kâra geçti|kara geçti|zarardan kâra/, 1.4], [/kâr(a|ı)?\s*(ulaşamadı|açıklayamadı)|zarara geçti|zarara döndü/, -1.5]];
+const SENT_POS = [[/rekor/, 1.2], [/temettü|kâr payı|kar payı/, 1], [/bedelsiz/, 1.2], [/geri alım/, 1], [/ihale|sipariş|sözleşme imza|anlaşma imza|yeni anlaşma|iş ilişkisi/, 0.8], [/hedef fiyat\w*.{0,15}(yükselt|artır)/, 1], [/al tavsiyesi|endeksin üzerinde getiri|olumlu/, 0.8],
+  [/yükseliş|yükseldi|arttı|artış|büyüme|büyüdü|güçlü|onay|yatırım|kapasite artış|tavan|rekabetçi|kazandı/, 0.6]];
+const SENT_NEG = [[/konkordato|iflas|işlem yasağı|sermaye kaybı|tasfiye/, -2], [/borç yapılandırma|temerrüt|haciz|ödeyemedi/, -1.6], [/soruşturma|dava|ceza\b|ceza(sı)?|tedbir|yasak|fesih|iptal/, -1.2], [/zarar|zarara/, -1.1],
+  [/açığa satış|satış tavsiyesi|hedef fiyat\w*.{0,15}(düşür|indir)|endeksin altında getiri/, -0.9], [/düşüş|geriledi|azaldı|düştü|daraldı|kayıp|taban/, -0.7], [/bedelli|sermaye artırımı/, -0.5], [/uyarı|riskli|belirsizlik|olumsuz|baskı/, -0.5]];
+const SENT_NEGATE = /(değil|olmadı|olmayacak|gerçekleşmedi|beklenmiyor|yok)\b/;
+function sentiment(title) {
+  let t = trLower(title), score = 0; const hits = [];
+  for (const [re, w] of SENT_RULES) { const m = t.match(re); if (m) { score += w; hits.push(m[0].slice(0, 28)); t = t.replace(re, " "); } }
+  for (const [re, w] of SENT_POS) { const m = t.match(re); if (m) { const neg = SENT_NEGATE.test(t.slice(m.index, m.index + m[0].length + 24)); score += neg ? -0.6 * w : w; hits.push((neg ? "¬" : "") + m[0].slice(0, 20)); } }
+  for (const [re, w] of SENT_NEG) { const m = t.match(re); if (m) { const neg = SENT_NEGATE.test(t.slice(m.index, m.index + m[0].length + 20)); score += neg ? -0.5 * w : w; hits.push((neg ? "¬" : "") + m[0].slice(0, 20)); } }
+  return {score: Math.max(-1, Math.min(1, score / 2)), hits};
+}
+const KAP_TAGS = /temettü|kâr payı|bedelsiz|geri alım|ihale|sözleşme|bilanço|finansal sonuç|dava|soruşturma|tedbir|işlem yasağı|konkordato|sermaye artırımı|bedelli|pay alım|özel durum|kap\b/;
+function stockSentiment(name, nowMs) {
+  const n = typeof NEWS !== "undefined" && NEWS ? NEWS[name] : null; if (!n || !n.items || !n.items.length) return null;
+  const now = (nowMs || (typeof NOW === "number" ? NOW : Date.now())) / 1000, rows = n.items.map(i => ({t: i.t, ts: i.ts, age: (now - i.ts) / 86400, s: sentiment(i.t).score})).filter(x => x.age <= 3 && x.age >= -0.2);
+  if (!rows.length) return null;
+  let sw = 0, sv = 0; rows.forEach(x => { const w = Math.pow(0.5, Math.max(0, x.age) / 1.5); sw += w; sv += w * x.s; });
+  const score = sv / sw, kap = rows.filter(x => KAP_TAGS.test(trLower(x.t))).length, ext = rows.slice().sort((a, b) => Math.abs(b.s) - Math.abs(a.s))[0];
+  return {score, n: rows.length, kap, label: score >= 0.2 ? "pozitif" : score <= -0.2 ? "negatif" : "nötr", top: ext && ext.t, topScore: ext && ext.s, pos: rows.filter(x => x.s > 0.15).length, neg: rows.filter(x => x.s < -0.15).length};
 }

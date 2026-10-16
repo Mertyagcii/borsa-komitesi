@@ -510,6 +510,11 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
           <li><b>Seviye grafiği:</b> Grafik sayfasında ve hisse detayında, günlük mumların üzerine Livermore'un seviyeleri (pivot, yanılma noktası, SMA50/200, 52 hafta zirvesi, 60 günlük trend çizgisi) ve Simons'ın ±1σ/±2σ sapma bantları çizilir. Bant dışı = otomatik sinyal değildir (geçmiş araştırma bunu desteklemiyor).</li>
           <li><b>Ajan Arenası:</b> Her ajanın geçmiş oylarının 5/10/20 iş gün sonra piyasa ortalamasına göre isabeti, %95 güven aralığıyla gösterilir; en az 30 ölçülmüş oy gerekir. Gerçekçi isabet %50-55 civarıdır.</li>
           <li><b>Bildirimler:</b> Kapanışta "yüksek güvenilirlikli sinyal" (masa ≥3, veto yok, haftalık lider, düşük stop riski, rakamlar doğrulanmış) ve seans içinde kritik alarmlar Telegram'a/webhook'a gider (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ALARM_WEBHOOK_URL GitHub secret'ları tanımlıysa).</li>
+          <li><b>Bilanço denetimi:</b> Buffett'ın yorumuna net borç (finansal borç − nakit), net borç/özsermaye ve /FAVÖK, nakit dönüşümü, TMS 29 şüpheli rakamları (olağandışı ROE, taban etkisi) ve <b>hakiki PD/DD</b> (piyasa ÷ gerekçeli PD/DD, fiyat/yatırılan sermaye) eklenir. Oyu değiştirmez.</li>
+          <li><b>Takas filtresi:</b> Kendi AKD/takas CSV'nizden çok günlük birikim/dağıtım tespiti (Özel Veri sayfası); varsayılan olarak bilgi, isterseniz Akıllı Para oyuna katılır. Herkese açık takas verisi lisanslıdır, otomatik çekilemez.</li>
+          <li><b>Monte Carlo:</b> 10.000 senaryo; olasılık dağılımı, Sharpe, CVaR %5 ve hedef/stop risk-ödül matrisi. Simons modelinin Sharpe'ını, Şeytanın Avukatı stres/CVaR'ı kullanır.</li>
+          <li><b>Dinamik denetçi:</b> Ajan ağırlıkları piyasa rejimine (boğa/yatay/ayı) göre isabete bağlı otomatik ayarlanır (en az 30 ölçülmüş oy; öncesinde eşit ağırlık).</li>
+          <li><b>Haber duygusu:</b> KAP/basın başlıkları Türkçe sözlük tabanlı (olumsuzlama ve yön değiştiren kalıplarla) −1..+1 puanlanır ve masaya iletilir; oy değildir. Sosyal medya verisi yoktur.</li>
           <li><b>Hata Avcısı:</b> Ajanların metinlerindeki ve tablodaki rakamları (RSI, SMA, günlük değişim, 1 ay getiri, F/K, 52 hafta aralığı, z-skor) TradingView kapanış geçmişinden bağımsız yeniden hesaplar. Çelişki varsa o hissenin raporu KİLİTLENİR ve düzeltme talebi yazılır; veri düzelince kilit kalkar. Ajanlar kural tabanlıdır (yapay zekâ metni yok); bu kontrol veri/kod hatasını yakalar.</li>
           <li><b>Alarm motoru:</b> Seans içinde ani hacim patlaması, 50 günlük ortalama kırılımı (hisse ve BIST 100), Şeytanın Avukatı vetosu ve piyasa paniği izlenir; kritik olanlar kırmızı "Kritik Piyasa Alarmı" bandında görünür, sunucu tarafında webhook/Telegram'a gider.</li>
           <li><b>Arşiv:</b> Her seans kapanışında konsey tartışması, oylar, Monte Carlo, Baş Denetçi ve Hata Avcısı mührü Arsiv/ klasörüne Markdown olarak kaydedilir (Arşiv sayfasından okunur, PDF olarak kaydedilir).</li>
@@ -1290,15 +1295,16 @@ function akdParse(text) {
     const nets = rows.filter(x => x.net != null), pos = nets.filter(x => x.net > 0).sort((a, b) => b.net - a.net).slice(0, 5), neg = nets.filter(x => x.net < 0).sort((a, b) => a.net - b.net).slice(0, 5);
     const vol = sum(rows.map(x => x.buy || 0)) || sum(nets.map(x => Math.abs(x.net))) / 2 || null; if (!nets.length) { const fr = rows.find(x => x.foreign != null); if (fr) { (out[st] = out[st] || {})[d] = {foreign: fr.foreign}; } return; }
     const tb = sum(pos.map(x => x.net)), ts = sum(neg.map(x => x.net));
-    (out[st] = out[st] || {})[d] = {bal: vol ? (tb + ts) / vol : 0, conc: vol ? tb / vol : 0, foreign: (rows.find(x => x.foreign != null) || {}).foreign ?? null, vol};
+    const rr = rows.filter(x => x.ratio != null).map(x => x.ratio).sort((a, b) => b - a).slice(0, 5), sak5 = rr.length >= 3 ? sum(rr) : null; // takas saklama payının ilk 5 kurumdaki toplamı
+    (out[st] = out[st] || {})[d] = {bal: vol ? (tb + ts) / vol : 0, conc: vol ? tb / vol : 0, foreign: (rows.find(x => x.foreign != null) || {}).foreign ?? null, vol, sak5};
   });
   return {stocks: out, nrow, cols: Object.keys(idx), nstock: Object.keys(out).length};
 }
 function akdSummary(store_) { // her hisse için en son tarihli özet
-  const o = {}; Object.entries(store_ || {}).forEach(([st, byD]) => { const ds = Object.keys(byD).sort(); if (!ds.length) return; const last = byD[ds[ds.length - 1]]; o[st] = {d: ds[ds.length - 1], bal: last.bal ?? 0, conc: last.conc ?? 0, foreign: last.foreign ?? null, n: ds.length}; });
+  const o = {}; Object.entries(store_ || {}).forEach(([st, byD]) => { const ds = Object.keys(byD).sort(); if (!ds.length) return; const last = byD[ds[ds.length - 1]]; o[st] = {d: ds[ds.length - 1], bal: last.bal ?? 0, conc: last.conc ?? 0, foreign: last.foreign ?? null, n: ds.length, hist: ds.slice(-10).filter(k => byD[k].bal != null).map(k => ({d: k, bal: byD[k].bal, conc: byD[k].conc, vol: byD[k].vol, sak5: byD[k].sak5 ?? null}))}; });
   return o;
 }
-AKD_USER = akdSummary(store.get("akdUser", {}));
+AKD_USER = akdSummary(store.get("akdUser", {})); AKD_VOTE = !!store.get("akdVote", false);
 function renderOzelVeri() {
   const el = $("ovView"), cur = store.get("akdUser", {}), n = Object.keys(cur).length;
   el.innerHTML = `<h2>Özel Veri: Takas / AKD içe aktar <span class="sub">kendi aboneliğinizden (Matriks, Fintables vb.)</span></h2>
@@ -1308,8 +1314,8 @@ function renderOzelVeri() {
     <p class="note">Ya da metni yapıştırın:</p><textarea id="ovText" rows="5" style="width:100%" placeholder="tarih;hisse;kurum;alış;satış;net&#10;2026-10-12;THYAO;Kurum A;1200000;300000;900000"></textarea><div style="margin:6px 0"><button data-ovparse="1" class="pbtn">Önizle ve kaydet</button></div><div id="ovOut"></div>
     <h3 style="margin:12px 0 4px">Desteklenen biçim</h3>
     <ul class="note"><li><b>AKD (günlük):</b> sütunlar: hisse, tarih, kurum, alış, satış (ve/veya net). Her hisse-gün için ilk 5 alıcı − ilk 5 satıcı dengesi ve alıcı yoğunlaşması (toplam hacme oranı) hesaplanır.</li><li><b>Yabancı oranı / takas:</b> sütunlar: hisse, tarih, yabancı (oran). Son tarihli değer gösterilir.</li><li>Sütun başlıkları Türkçe/İngilizce olabilir; ayraç ; , ya da sekme otomatik bulunur. Başlıklar: ${Object.entries(AKD_SYN).map(([k, v]) => `<b>${k}</b>: ${v.slice(0, 3).join("/")}`).join(" · ")}.</li></ul>
-    <h3 style="margin:12px 0 4px">Mevcut kayıt: ${n} hisse</h3>${n ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Son tarih</th><th>İlk5 alıcı−satıcı</th><th>Alıcı yoğunlaşması</th><th>Yabancı oranı</th></tr></thead><tbody>${Object.entries(AKD_USER).slice(0, 60).map(([k, v]) => `<tr data-x="${esc(k)}"><td style="text-align:left"><b>${esc(k)}</b></td><td>${esc(v.d)}</td><td class="${sign(v.bal)}">${fmt(v.bal * 100, 1)}%</td><td>${fmt(v.conc * 100, 1)}%</td><td>${v.foreign == null ? "–" : "%" + fmt(v.foreign, 1)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="mute">Henüz veri yok.</p>'}
-    <p class="note">Bu veri doğrulanamaz ve geçmiş testi yoktur: Akıllı Para uzmanı onu <b>bilgi/teyit</b> olarak gösterir, oyunu değiştirmez.</p>`;
+    <h3 style="margin:12px 0 4px">Mevcut kayıt: ${n} hisse</h3>${n ? `<div class="tw"><table><thead><tr><th style="text-align:left">Hisse</th><th>Son tarih</th><th>İlk5 alıcı−satıcı</th><th>Alıcı yoğunlaşması</th><th>Yabancı oranı</th><th>Takas filtresi (birikim/dağıtım)</th></tr></thead><tbody>${Object.entries(AKD_USER).slice(0, 60).map(([k, v]) => `<tr data-x="${esc(k)}"><td style="text-align:left"><b>${esc(k)}</b></td><td>${esc(v.d)}</td><td class="${sign(v.bal)}">${fmt(v.bal * 100, 1)}%</td><td>${fmt(v.conc * 100, 1)}%</td><td>${v.foreign == null ? "–" : "%" + fmt(v.foreign, 1)}</td><td>${(() => { const a = akdState(v, UNIVERSE.find(u => u.name === k)); return a ? `<b class="${a.dir > 0 ? "up" : a.dir < 0 ? "down" : ""}">${esc(a.state)}</b> <span class="mute" style="font-size:11px">(${a.days} gün${a.div ? ", " + esc(a.div.split(":")[0]) : ""})</span>` : `<span class="mute">≥ 2 gün gerekli</span>`; })()}</td></tr>`).join("")}</tbody></table></div>` : '<p class="mute">Henüz veri yok.</p>'}
+    <p class="note"><b>Takas filtresi:</b> en az 2-3 günlük AKD yüklerseniz son 3 günün ilk-5 alıcı − satıcı dengesine (ve varsa takas saklama payı sütununa) bakılarak <b>birikim</b> (mal toplanıyor) ya da <b>dağıtım</b> (mal boşaltılıyor) tespit edilir; fiyat tersine gidiyorsa "sessiz birikim / yükselirken boşaltma" uyarısı çıkar. Bu veri doğrulanamaz ve geçmiş testi yoktur: varsayılan olarak yalnızca <b>bilgi/teyit</b> gösterilir.</p><label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="ovVote" ${AKD_VOTE ? "checked" : ""}> Takas filtresini Akıllı Para oyuna kat (yalnızca ≥ 3 günlük tutarlı AKD varsa; kendi sorumluluğunuzda)</label>`;
 }
 function ovSave(res) {
   const cur = store.get("akdUser", {}); Object.entries(res.stocks).forEach(([st, byD]) => { cur[st] = {...(cur[st] || {}), ...byD}; const ks = Object.keys(cur[st]).sort(); ks.slice(0, Math.max(0, ks.length - 40)).forEach(k => delete cur[st][k]); });
@@ -1462,6 +1468,25 @@ document.addEventListener("click", e => {
 
 
 
+
+/* ---------- Bilanço denetimi, Monte Carlo matrisi, haber duygusu ---------- */
+function auditHtml(s) {
+  const a = balanceAudit(s), cls = {ok: "up", "uyarı": "", "kötü": "down"};
+  return `<details class="meet"><summary>🧾 Bilanço denetimi · hakiki PD/DD · <b class="${a.verdict === "TEMİZ" ? "up" : a.verdict === "ZAYIF BİLANÇO" ? "down" : ""}">${esc(a.verdict)}</b></summary>
+    <table class="peert"><tr><th>Kalem</th><th>Değer</th><th>Durum</th></tr>${a.items.map(x => `<tr><td title="${esc(x.note)}">${esc(x.label)}</td><td>${esc(x.val)}</td><td class="${cls[x.flag] || "mute"}">${x.flag ? esc(x.flag) : "–"}</td></tr>`).join("")}</table>
+    <p class="note"><b>Hakiki PD/DD</b> = piyasa PD/DD ÷ gerekçeli PD/DD (sürdürülebilir reel ROE ve reel iskonto oranından türetilir); 1'in üstü pahalı. <b>Fiyat/yatırılan sermaye</b> borcu da sayar. Veriler TradingView'in TMS 29 sonrası (enflasyon düzeltilmiş) bilanço rakamlarıdır; şüpheli rakamlar (ROE &gt; %80, taban etkisi) işaretlenir. Buffett'ın yorumuna eklenir, oyunu değiştirmez. Banka/finansta borç ölçütleri geçersizdir. Satır üzerine gelince açıklama görünür.</p></details>`;
+}
+function mcExtraHtml(s, mc) {
+  const m = mcMatrix(s), sm = simons(s).mcs;
+  return `<div class="note">${mc.n.toLocaleString("tr-TR")} senaryo · Sharpe (tarafsız sürüklenme, risksiz getiri %${fmt(mc.rf, 1)} düşülmüş) <b>${fmt(mc.sharpe0, 2)}</b>${sm ? ` · Simons'ın model beklentisiyle Sharpe <b>${fmt(sm.sharpe, 2)}</b>, bilgi oranı ${fmt(sm.ir, 2)}` : ""} · CVaR %5 (en kötü %5 senaryonun ortalaması): <b>${fmt(mc.cvar5, 1)}%</b> · ortalama ${fmt(mc.mean, 1)}%, σ ${fmt(mc.sd, 1)}%</div>` +
+    (m ? `<div class="note" style="margin-top:6px"><b>Risk/ödül matrisi</b> (${m.days} gün; her hücre: önce hedefe / önce stop'a değme olasılığı, E = beklenen değer ≈ pHedef×hedef − pStop×stop):</div><table class="peert"><tr><th>Hedef \\ Stop</th>${m.S.map(S => `<th>−%${S}</th>`).join("")}</tr>${m.cells.map(row => `<tr><td>+%${row[0].T}</td>${row.map(c => `<td class="${c.ev > 0 ? "up" : c.ev < 0 ? "down" : ""}">%${fmt(c.pT * 100, 0)} / %${fmt(c.pS * 100, 0)}<br><span class="mute">E ${c.ev > 0 ? "+" : ""}${fmt(c.ev, 1)}%</span></td>`).join("")}</tr>`).join("")}</table><div class="note">En iyi hücre: +%${m.best.T} hedef / −%${m.best.S} stop (E ${m.best.ev > 0 ? "+" : ""}${fmt(m.best.ev, 1)}%). Tarafsız sürüklenmede (drift=0) beklenen değer sıfıra yakındır; avantaj yoksa matris bunu gösterir.</div>` : "");
+}
+function sentimentHtml(s) {
+  const sn = stockSentiment(s.name); if (!sn) return `<div class="note">📰 Haber duygusu: son 3 günde başlık yok.</div>`;
+  return `<div class="note">📰 Haber duygusu (KAP/basın başlıkları, son 3 gün): <b class="${sn.score >= 0.2 ? "up" : sn.score <= -0.2 ? "down" : ""}">${sn.score > 0 ? "+" : ""}${fmt(sn.score, 2)} ${esc(sn.label)}</b> · ${sn.n} başlık (${sn.pos}↑ ${sn.neg}↓${sn.kap ? ", " + sn.kap + " KAP/özel durum türü" : ""})${sn.top ? ` · en belirgin: "${esc(sn.top)}"` : ""}. Sözlük tabanlı okuma (olumsuzlama ve "zararı azaldı" gibi yön değiştiren kalıplar dahil); oy değildir.</div>`;
+}
+document.addEventListener("change", e => { if (e.target.id !== "ovVote") return; AKD_VOTE = e.target.checked; store.set("akdVote", AKD_VOTE); toast(AKD_VOTE ? "Takas filtresi Akıllı Para oyuna katıldı" : "Takas filtresi yalnızca bilgi"); renderOzelVeri(); });
+
 /* ---------- Seviye grafiği: mum + Livermore seviyeleri + Simons sapma bantları ---------- */
 let CANDLES = null;
 async function loadCandles() { if (CANDLES) return CANDLES; const o = await getJson("candles.json?t=" + Math.floor(Date.now() / 36e5)); if (o && o.dates && o.stocks) CANDLES = o; return CANDLES; }
@@ -1523,23 +1548,32 @@ function lvDetail(P, s) {
 }
 
 /* ---------- Ajan İsabet Arenası ---------- */
-let arenaH = store.get("arenaH", 10);
+let arenaH = store.get("arenaH", 10), arenaReg = store.get("arenaReg", "all");
+const REG_LABEL = {all: "Tüm rejimler", bull: "Boğa", mixed: "Yatay/geçiş", bear: "Ayı"};
 async function renderArena() {
-  const el = $("arenaView"), head = `<h2>Ajan İsabet Arenası <span class="sub">geçmiş oyların sonradan ölçülen başarısı</span></h2>`;
+  const el = $("arenaView"), head = `<h2>Ajan İsabet Arenası <span class="sub">geçmiş oyların sonradan ölçülen başarısı ve dinamik ağırlık</span></h2>`;
   el.innerHTML = head + "<p class='mute'>Yükleniyor…</p>";
   await loadPicks(); if (view !== "arena") return;
-  const A = PICKS && PICKS.picks ? arenaStats(PICKS.picks, arenaH) : null, pct = v => v == null ? "–" : "%" + fmt(v * 100, 0);
-  const medal = i => ["🥇", "🥈", "🥉"][i] || "";
+  const RM = (PICKS && PICKS.regime) || {}, all = PICKS && PICKS.picks ? PICKS.picks : [], sub = arenaReg === "all" ? all : all.filter(p => RM[p.d] && RM[p.d].trend === arenaReg);
+  const A = arenaStats(sub, arenaH), pct = v => v == null ? "–" : "%" + fmt(v * 100, 0), medal = i => ["🥇", "🥈", "🥉"][i] || "";
+  const W = memWeights(), BR = arenaByRegime(all, arenaH, RM), cur = REGIME ? REGIME.trend : null;
   let rank = 0;
-  el.innerHTML = head + `<p class="note">Her ajanın <b>olumlu</b> oyu hisse piyasa ortalamasını yenerse, <b>olumsuz</b> oyu piyasanın gerisinde kalırsa isabet sayılır; ölçüm ${arenaH} iş günü sonra yapılır. Sıralama, şansa karşı dayanıklı <b>%95 güven aralığının alt sınırına</b> göredir. <b>Gerçekçi beklenti:</b> BIST'te tek tahminin tutma olasılığı %50-55 civarıdır; %80 gibi bir oran beklenmemeli (araştırmamızda en iyi grup bile ≈%53). Avantaj küçüktür ve çok işleme yayılınca birikir. Kayıtlar ${A ? A.days : 0} günlük; ardışık günler örtüştüğü için gerçek bağımsız örnek, n'den azdır.</p>
+  const wRows = Object.entries(W).map(([k, o]) => `<tr><td style="text-align:left"><b>${esc(ARENA_NAMES[k])}</b></td><td class="${o.w > 1 ? "up" : o.w < 1 ? "down" : ""}"><b>×${fmt(o.w, 2)}</b></td><td>${o.src === "rejim" ? "bu rejimin isabeti" : o.src === "genel" ? "genel isabet" : "eşit (yetersiz örnek)"}</td><td>${o.n}</td><td>${o.rate == null ? "–" : pct(o.rate)}</td></tr>`).join("");
+  el.innerHTML = head + `<p class="note">Her ajanın <b>olumlu</b> oyu hisse piyasa ortalamasını yenerse, <b>olumsuz</b> oyu piyasanın gerisinde kalırsa isabet sayılır; ölçüm ${arenaH} iş günü sonra yapılır. Sıralama, şansa karşı dayanıklı <b>%95 güven aralığının alt sınırına</b> göredir. <b>Gerçekçi beklenti:</b> BIST'te tek tahminin tutma olasılığı %50-55 civarıdır; %80 gibi bir oran beklenmemeli (araştırmamızda en iyi grup bile ≈%53). Kayıtlar ${A.days} günlük; ardışık günler örtüştüğü için gerçek bağımsız örnek, n'den azdır.</p>
+    <h3 style="margin:10px 0 4px">Dinamik denetçi: oy ağırlıkları <span class="sub">şu anki rejim: <b>${cur ? REG_LABEL[cur] : "–"}</b></span></h3>
+    <div class="tw"><table class="arena"><thead><tr><th style="text-align:left">Ajan</th><th>Ağırlık</th><th>Kaynak</th><th>Ölçülen oy</th><th>İsabet</th></tr></thead><tbody>${wRows}</tbody></table></div>
+    <p class="note">Mekanizma: bir ajanın isabeti piyasa rejimine (boğa / yatay-geçiş / ayı) göre ayrı izlenir. O rejimde en az 30 ölçülmüş oyu varsa ağırlığı o isabete göre (×0,6 – ×1,4) otomatik ayarlanır; yoksa genel isabete, o da yetersizse eşit ağırlığa (×1,00) düşer. Az örnekten ders çıkarılmaz: şu an ${Object.values(W).every(o => o.src === "eşit") ? "<b>hiçbir ajanda yeterli ölçülmüş oy yok, hepsi eşit ağırlıkta</b>" : "bazı ajanlar yeterli örneğe ulaştı"}. Ağırlıklar yalnızca Boğa vs Ayı "ağırlıklı karar skorunu" etkiler; komite skoru ve sanal portföyler değişmez.</p>
+    <div class="note">Rejime göre en başarılı ajan (≥ 30 ölçülmüş oy): ${["bull", "mixed", "bear"].map(g => `<b>${REG_LABEL[g]}</b>: ${BR[g].top ? `${esc(BR[g].top.name)} (${pct(BR[g].top.rate)}, n ${BR[g].top.n})` : `henüz yok (ölçülen ${BR[g].measured})`}`).join(" · ")}</div>
+    <h3 style="margin:14px 0 4px">İsabet tablosu</h3>
     <div class="tabs">${[5, 10, 20].map(h => `<button class="tab ${arenaH === h ? "on" : ""}" data-arenah="${h}">${h} iş günü</button>`).join("")}</div>
-    ${!A || !A.rows.length ? "<p class='mute'>Henüz kayıt yok.</p>" : `<div class="tw"><table class="arena"><thead><tr><th></th><th>Ajan</th><th>Ölçülen oy (n)</th><th>İsabet</th><th>%95 aralık</th><th>Olumlu oy isabeti</th><th>Olumsuz oy isabeti</th><th>Olumlu oylarda ort. fazla getiri</th><th>Bekleyen</th><th>Durum</th></tr></thead><tbody>
+    <div class="tabs">${Object.entries(REG_LABEL).map(([k, n]) => `<button class="tab ${arenaReg === k ? "on" : ""}" data-arenareg="${k}">${n}</button>`).join("")}</div>
+    ${!A.rows.length ? "<p class='mute'>Bu filtrede kayıt yok.</p>" : `<div class="tw"><table class="arena"><thead><tr><th></th><th>Ajan</th><th>Ölçülen oy (n)</th><th>İsabet</th><th>%95 aralık</th><th>Olumlu oy isabeti</th><th>Olumsuz oy isabeti</th><th>Olumlu oylarda ort. fazla getiri</th><th>Bekleyen</th><th>Durum</th></tr></thead><tbody>
     ${A.rows.map(r => { const ok = r.n >= 30; const k = ok ? rank++ : -1; return `<tr><td>${ok ? medal(k) || k + 1 : "·"}</td><td><b>${esc(r.name)}</b></td><td>${r.n} <span class="mute">(${r.up.n}↑ ${r.dn.n}↓)</span></td>
       <td>${r.n ? `<b>${pct(r.rate)}</b> <span class="rbar"><i style="width:${r.rate * 100}%"></i><b></b></span>` : "–"}</td><td>${r.ci ? pct(r.ci[0]) + "–" + pct(r.ci[1]) : "–"}</td><td>${r.up.n ? pct(r.upRate) + " (" + r.up.n + ")" : "–"}</td><td>${r.dn.n ? pct(r.dnRate) + " (" + r.dn.n + ")" : "–"}</td>
       <td class="${r.avgUp > 0 ? "up" : r.avgUp < 0 ? "down" : ""}">${r.avgUp == null ? "–" : (r.avgUp > 0 ? "+" : "") + fmt(r.avgUp, 2) + " puan"}</td><td class="mute">${r.pending}</td><td class="${r.status === "anlamlı üstünlük" ? "up" : r.status === "anlamlı olarak kötü" ? "down" : "mute"}">${esc(r.status)}</td></tr>`; }).join("")}</tbody></table></div>
-    <p class="note">Ölçülen toplam oy: ${A.measured}. "Bekleyen": oy verildi ama ${arenaH} iş günü henüz geçmedi. "Yetersiz örnek": n &lt; 30; madalya yalnızca n ≥ 30 olanlara verilir. Yeni uzmanların (Makro, Akıllı Para, Volatilite, Psikoloji) oyları ${new Date().toISOString().slice(0, 10)} itibarıyla kaydedilmeye başladı; sonuçları birkaç hafta sonra görünür. Ekran satırları, efsane ekranlarının günlük listelerini ölçer. Eğitim amaçlıdır.</p>`}`;
+    <p class="note">Ölçülen toplam oy: ${A.measured}. "Bekleyen": oy verildi ama ${arenaH} iş günü henüz geçmedi. "Yetersiz örnek": n &lt; 30; madalya yalnızca n ≥ 30 olanlara verilir. Yeni uzmanların (Makro, Akıllı Para, Volatilite, Psikoloji) oyları kaydedilmeye başladı (bugünden önceki kayıtlarda yok); sonuçları birkaç hafta sonra görünür. Ekran satırları, efsane ekranlarının günlük listelerini ölçer. Eğitim amaçlıdır.</p>`}`;
 }
-document.addEventListener("click", e => { const b = e.target.closest("[data-arenah]"); if (!b) return; arenaH = +b.dataset.arenah; store.set("arenaH", arenaH); renderArena(); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-arenah]"); if (b) { arenaH = +b.dataset.arenah; store.set("arenaH", arenaH); renderArena(); return; } const g = e.target.closest("[data-arenareg]"); if (g) { arenaReg = g.dataset.arenareg; store.set("arenaReg", arenaReg); renderArena(); } });
 
 /* ---------- Boğa vs Ayı münazarası ve Sektör/Rakip kıyası ---------- */
 function debateHtml(s, r) {
@@ -3123,13 +3157,13 @@ function detail(name, target = "detail") {
     <div class="note" style="margin-top:4px">${valLine(s)}</div><div style="margin-top:6px">Fiyat <b>${fmt(s.close)}</b> <span class="${sign(s.change)}">(${fmt(s.change)}%)</span> · Alt bant ${fmt(s.bb_lower)} · Üst bant ${fmt(s.bb_upper)} · SMA50 ${fmt(s.sma50)} · RSI ${fmt(s.rsi, 0)} · Hacim ~${fmt(s.tl, 0)} mn TL</div>
     ${h ? `<canvas id="${P}pc" style="height:170px;margin-top:8px"></canvas><div class="note">Son 120 günlük kapanış: <span style="color:var(--accent2)">fiyat</span>, <span style="color:var(--warn)">SMA50</span>, kesikli: Bollinger bantları (son veri: ${h.last}).</div>` : `<p class="note">Bu hisse için fiyat geçmişi yok (grafik gösterilemiyor).</p>`}
     <p><b>Komite: ${badge(r.score)} <span class="mute">(skor ${r.score > 0 ? "+" : ""}${r.score})</span></b> ${chipsOf(r)} <span class="mute">· yeni uzmanlar:</span> ${chips2Of(r)}</p>` +
-    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r) + debateHtml(s, r) + peerHtml(s)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt) +
+    factBox(fc) + (fc.locked ? "" : decisionCard(s, r)) + similarHtml(s) + mtfBox(s) + (fc.locked ? "" : meetingHtml(s, r) + debateHtml(s, r) + peerHtml(s)) + flowHtml(s) + info("Teknik Analist", technical(s)) + info("Temel & Haber Analisti", fn.txt + " " + esc(balanceAudit(s).text)) + auditHtml(s) + sentimentHtml(s) +
     (fn.news && fn.news.items.length ? `<ul class="news">${fn.news.items.map(i => `<li class="${i.s > 0 ? "up" : i.s < 0 ? "down" : ""}">${tagHtml(i.t)}${esc(i.t)} <span class="mute">· ${esc(i.src)} · ${new Date(i.ts * 1000).toLocaleDateString("tr-TR")}</span></li>`).join("")}</ul>` : "") +
     PERSONAS.map(([k, n]) => personaCard(n, r.l[k])).join("") +
     `<h2 style="margin-top:12px">Genişletilmiş kurul <span class="sub">4 yeni uzman · net oy ${r.net2 > 0 ? "+" : ""}${r.net2}${r.veto2 ? " · İTİRAZ VETOSU" : ""}</span></h2><div class="note">Bu uzmanların oyları komite skoruna karışmaz; vekil göstergelerle (fiyat-hacim-makro) çalışırlar ve yalnızca geçmişte test edilmiş sinyallerle oy kullanırlar. Takas/aracı kurum, zımni oynaklık ve sosyal medya verisi yoktur.</div>` + PERSONAS2.map(([k, n]) => personaCard(n, r.k2[k])).join("") +
-    (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · 2000 yol</h2><canvas id="${P}cv" style="height:150px"></canvas>
+    (mc ? `<h2 style="margin-top:12px">Monte Carlo · ${mc.days} gün · ${mc.n.toLocaleString("tr-TR")} senaryo</h2><canvas id="${P}cv" style="height:150px"></canvas>
     <div class="note">%5: ${fmt(mc.p05, 1)}% · medyan: ${fmt(mc.p50, 1)}% · %95: ${fmt(mc.p95, 1)}% · zarar olasılığı %${fmt(mc.probLoss, 0)} · stop(-%${mc.stop}) olasılığı %${fmt(mc.probStop, 0)}.
-    Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>` : "");
+    Günlük σ ≈ %${fmt(mc.sigma, 2)} (${mc.src}); drift = 0 varsayımı.</div>${mcExtraHtml(s, mc)}` : "");
   T.insertAdjacentHTML("afterbegin", actionsHtml(name));
   const ev = eventsHtml(s); if (ev) T.querySelector("h2").insertAdjacentHTML("afterend", ev);
   if (h) { T.insertAdjacentHTML("beforeend", lvDetailHtml(P)); lvDetail(P, s); }
@@ -3413,7 +3447,7 @@ async function loadAux() {
   if (!GDT) { const m = await getJson("daytrade_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.strategies) GDT = m; }
   if (!GON) { const m = await getJson("overnight_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.groups) GON = m; }
   { const m = await getJson("scan_log.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.days) SLOG = m; }
-  { const p = await getJson("picks.json?t=" + Math.floor(Date.now() / 36e5)); if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks); } }
+  { const p = await getJson("picks.json?t=" + Math.floor(Date.now() / 36e5)); if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks, p.regime); } }
   { const m = await getJson("viop.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) VIOP = m; }
   if (!VIOP_R) { const m = await getJson("viop_research.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.factors) VIOP_R = m; }
   { const m = await getJson("newsmood.json?t=" + Math.floor(Date.now() / 36e5)); if (m && m.stocks) NMOOD = m; }
