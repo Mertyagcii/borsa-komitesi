@@ -44,6 +44,21 @@ if (!FORCE && (!afterClose || (store.picks.some(p => p.d === date) && sealLog.da
   process.exit(0);
 }
 
+/* ---- tatil / bayat veri koruması: kapanışlar önceki kayıtla ≥ %95 aynıysa piyasa kapalıydı (resmi tatil) ya da veri tazelenmemiş. Eski fiyatı "yeni gün" diye kaydetmek
+   ileri getiri ufuklarını bozar (tatil günü 0 getirili sahte bir gün eklenir). Tatil takvimi sabit yazılmaz: veri kendisi söyler. ---- */
+{
+  const prevD = Object.keys(snaps).filter(k => k < date).sort().pop(), ps = prevD ? snaps[prevD] : null;
+  if (!FORCE && ps) {
+    const live = data.stocks.filter(s => s.close > 0 && s.volume).map(s => [s.name, s.close, s.close * s.volume]).sort((a, b) => b[2] - a[2]).slice(0, 150).filter(x => ps[x[0]]);
+    const same = live.filter(x => Math.abs(x[1] / ps[x[0]] - 1) < 1e-9).length;
+    if (live.length >= 50 && same >= 0.95 * live.length) {
+      console.log(`${date}: kapanışlar ${prevD} ile %${Math.round(same / live.length * 100)} aynı (${same}/${live.length}); piyasa kapalı ya da veri tazelenmemiş: kayıt atlandı.`);
+      if (fs.existsSync("picks.json")) publish();
+      process.exit(0);
+    }
+  }
+}
+
 /* ---- core.js'i bir vm içinde çalıştır (tarayıcıyla aynı mantık) ---- */
 const coreSrc = fs.readFileSync(path.join(__dirname, "core.js"), "utf8");
 const ctx = vm.createContext({console, Intl, Math, Date, __data: data, __hist: hist, __news: news, __research: research, __mtfr: mtfr, __k2: k2r, __mr: macroR, __stress: stress, __NOW: Date.now()});
@@ -88,7 +103,7 @@ function evalList(list, dateOf) {
   let n = 0;
   for (const p of list) {
     const d0 = dateOf(p); if (d0 >= date) continue;
-    const age = bdays(d0, date), s0 = snaps[d0];
+    const s0 = snaps[d0], age = s0 ? Object.keys(snaps).filter(k => k > d0 && k < date).length + 1 : bdays(d0, date); // kayıtlı işlem günü sayısı (tatiller sayılmaz); bugünün anlığı henüz snaps'te değil
     for (const h of [5, 10, 20]) {
       if (age < h || (p.r && p.r[h] != null) || !nowClose[p.n]) continue;
       p.r = p.r || {}; p.b = p.b || {};

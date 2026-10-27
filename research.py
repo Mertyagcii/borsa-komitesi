@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 
 from fetcher import TZ, fetch_snapshot, liquid_names
+from freshness import is_fresh
 
 HERE = Path(__file__).parent
 CACHE = HERE / "cache" / "ohlcv.pkl"
@@ -346,7 +347,7 @@ if __name__ == "__main__":
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--if-stale", action="store_true", help="research.json 7 günden eskiyse çalıştır")
     a = ap.parse_args()
-    if a.if_stale and OUT.exists() and time.time() - OUT.stat().st_mtime < 7 * 86400:
+    if a.if_stale and is_fresh(OUT, 7 * 86400):  # içerik damgası: mtime CI'da hep "taze" görünür (freshness.py)
         print("research.json güncel, atlandı.")
         raise SystemExit(0)
     if a.if_stale:

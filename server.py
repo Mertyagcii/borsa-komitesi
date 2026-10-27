@@ -15,8 +15,16 @@ from news import fetch_news
 HERE = Path(__file__).parent
 CACHE = HERE / "data.json"
 NEWS = HERE / "news.json"
-HISTORY = HERE / "history.json"
+LIVE = HERE / "cache" / "live"  # yerel sunucunun yenilediği izlenen dosyalar (git'e girmez): history/ohlcv/screener burada tutulur.
+# Neden: bu dosyaları depodaki kopyanın üstüne yazmak CI'ın commit'leriyle çakışıyordu (tek satırlık JSON satır bazında birleşmez).
 PORT = 8765
+HISTORY = LIVE / "history.json"
+
+
+def live(name: str) -> Path:
+    """Yerel yenilenmiş kopya varsa o, yoksa depodaki kopya."""
+    p = LIVE / name
+    return p if p.exists() else HERE / name
 REFRESH_SECONDS = 15 * 60
 
 state = {"ts": 0, "generated": "–", "stocks": [], "error": None}
@@ -38,7 +46,8 @@ def fetch() -> None:
             return
         try:  # Tarayıcı sayfası için geniş tablo (tüm göstergeler)
             from fetcher import fetch_wide
-            (HERE / "screener.json").write_text(json.dumps(fetch_wide(), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            LIVE.mkdir(parents=True, exist_ok=True)
+            (LIVE / "screener.json").write_text(json.dumps(fetch_wide(), ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         except Exception:
             pass
         try:  # haber akışı hisse verisinden bağımsız; hata verirse eski haber kalır
@@ -53,13 +62,14 @@ def history_loop() -> None:
     import history
     while True:
         try:
-            if history.is_stale():
+            if history.is_stale(live("history.json")):
                 names = liquid_names(state["stocks"]) if state["stocks"] else []
                 if names:
                     data = history.build(names, log=lambda m: None)
                     ohlcv = data.pop("_ohlcv", None)
-                    history.write_ohlcv(ohlcv)
+                    history.write_ohlcv(ohlcv, LIVE)
                     if len(data["stocks"]) >= len(names) // 2:
+                        LIVE.mkdir(parents=True, exist_ok=True)
                         HISTORY.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         except Exception:
             pass
@@ -92,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/data":
             self._send(snapshot(), "application/json; charset=utf-8")
         elif self.path.split("?")[0] in ("/news.json", "/history.json", "/picks.json", "/core.js", "/research.json", "/mtf_research.json", "/mtf_composite.json", "/mtf_walkforward.json", "/mtf_log.json", "/daytrade_research.json", "/overnight_research.json", "/limit_research.json", "/ipo_research.json", "/scan_log.json", "/kurul2_research.json", "/alarm_log.json", "/candles.json", "/stress.json", "/viop.json", "/viop_research.json", "/newsmood.json", "/geo.json", "/macro_research.json", "/portfolios.json", "/snapshots.json", "/news_log.json", "/research_history.json", "/screener.json", "/fields.json", "/ohlcv.json", "/manifest.webmanifest", "/sw.js", "/icon.svg", "/icon-192.png", "/icon-512.png"):
-            f = HERE / self.path.split("?")[0].lstrip("/")
+            f = live(self.path.split("?")[0].lstrip("/"))
             if f.exists():
                 ct = {".js": "application/javascript; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json"}.get(f.suffix, "application/json; charset=utf-8")
                 self._send(f.read_bytes(), ct)

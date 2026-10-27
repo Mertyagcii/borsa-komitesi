@@ -2,7 +2,7 @@ name: Veri guncelle ve yayinla
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # her 15 dakikada bir (GitHub gecikebilir)
+    - cron: "4,19,34,49 * * * *"   # 15 dakikada bir; tam saat/çeyrek başları GitHub'da en yoğun anlardır, çalışmalar oralarda atlanıyor (ölçülen: 386 saatte 1544 yerine 97 çalışma)
   workflow_dispatch:          # elle de baslatilabilir
   push:
     branches: [main]
@@ -31,12 +31,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Fiyat gecmisi (gunde bir kez, kapanistan sonra)
         run: python history.py --if-stale
-      - name: Sistem arastirmasi (haftada bir)
-        run: python research.py --if-stale
-      - name: Cok zamanli gosterge arastirmasi (haftada bir)
-        env:
-          WIDE_CAP: "250"
-        run: python mtf_run.py --if-stale
+      # Haftalik agir arastirma (research.py, mtf_run.py) ayri is akisinda: research.yml. Burada olursa 15 dakikalik veri dongusunu bloklar.
       - name: Dis veriler (VIOP vadeli primi, Google Haberler ilgisi, GDELT; gunde bir kez)
         run: python extdata.py
       - name: history.json degistiyse kaydet
@@ -46,6 +41,7 @@ jobs:
             git config user.email "bot@users.noreply.github.com"
             git add history.json ohlcv.json candles.json
             git commit -m "history.json guncellendi"
+            git pull --rebase origin main
             git push
           fi
       - uses: actions/setup-node@v4

@@ -71,6 +71,8 @@ def static_checks():
         except Exception as e:
             badj.append(os.path.basename(f))
     check("json geçerli", not badj, ", ".join(badj))
+    r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tests" / "fresh_test.py")], capture_output=True, text=True, encoding="utf-8")
+    check("tazelik mantığı içerik tabanlı (CI'da mtime yanıltır)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")))
 
 
 def core_test(site):

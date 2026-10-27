@@ -1738,15 +1738,22 @@ function sealCard(days, opt) {
   const ds = (days || []).filter(x => x && x.d && x.r && x.v === SEAL_VER).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
   const card = {ver: SEAL_VER, ndays: ds.length, first: ds.length ? ds[0].d : null, last: ds.length ? ds[ds.length - 1].d : null, nrec: ds.reduce((a, x) => a + x.r.length, 0), h: {}, calib: null};
   if (ds.length < 2) return card;
-  const bn = {}; { let n = 0; const d = new Date(ds[0].d + "T12:00:00Z"), e = new Date(ds[ds.length - 1].d + "T12:00:00Z"); for (; d <= e; d.setUTCDate(d.getUTCDate() + 1)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) bn[d.toISOString().slice(0, 10)] = n++; } }
-  const byBn = new Map(); ds.forEach(x => { if (bn[x.d] != null) byBn.set(bn[x.d], x); });
+  // ufuk = KAYITLI işlem günü sırası (hafta içi sayısı değil: resmi tatiller kayıt almaz). Aradaki boşluk (kayıp gün) makul değilse çift atlanır.
+  const gap = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5), at = (i, k) => { const y = ds[i + k]; return y && gap(ds[i].d, y.d) <= Math.ceil(k * 1.45) + 5 ? y : null; };
+  const rk = a => { const o = a.map((v, i) => i).sort((i, j) => a[i] - a[j]), r = new Array(a.length); for (let i = 0; i < o.length;) { let j = i; while (j + 1 < o.length && a[o[j + 1]] === a[o[i]]) j++; for (let k = i; k <= j; k++) r[o[k]] = (i + j) / 2; i = j + 1; } return r; };
+  const corr = (a, b) => { const n = a.length, ma = a.reduce((s, v) => s + v, 0) / n, mb = b.reduce((s, v) => s + v, 0) / n; let sab = 0, saa = 0, sbb = 0; for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); saa += (a[i] - ma) ** 2; sbb += (b[i] - mb) ** 2; } return saa > 0 && sbb > 0 ? sab / Math.sqrt(saa * sbb) : null; };
+  const icStat = (arr, h) => { const v = arr.filter(x => x != null), n = v.length; if (!n) return null; const mean = v.reduce((s, x) => s + x, 0) / n, sd = n > 1 ? Math.sqrt(v.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1)) : 0, nIndep = Math.floor(n / h);
+    const t = nIndep >= 3 && sd > 0 ? mean / (sd / Math.sqrt(nIndep)) : null; // ardışık günlerin IC'leri örtüştüğünden bağımsız pencere sayısıyla temkinli t
+    return {mean, days: n, nIndep, t, verdict: nIndep < 5 || t == null ? "yetersiz veri" : Math.abs(t) >= 2 ? (mean > 0 ? "pozitif kanıt" : "ters kanıt") : "kanıt yok"}; };
   const cl = new Map(), closes = x => { let m = cl.get(x.d); if (!m) { m = new Map(x.r.map(a => [a[0], a[1]])); cl.set(x.d, m); } return m; };
   const buckets = SEAL_NAMES.concat([SEAL_BUY]);
   H.forEach(h => {
     const acc = {}; buckets.forEach(b => acc[b] = {n: 0, sum: 0, pos: 0, neg: 0, days: []}); let outDays = 0, mk = 0;
-    ds.forEach(x => { const y = byBn.get(bn[x.d] + h); if (!y || bn[x.d] == null) return; const cy = closes(y);
-      const rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[2], (cy.get(a[0]) / a[1] - 1) * 100]); if (rows.length < 50) return;
+    const ic = {sc: [], al: []};
+    ds.forEach((x, i) => { const y = at(i, h); if (!y) return; const cy = closes(y);
+      const rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[2], (cy.get(a[0]) / a[1] - 1) * 100, a[3], a[4]]); if (rows.length < 50) return;
       const m = rows.reduce((t, q) => t + q[1], 0) / rows.length, exs = rows.map(q => q[1] - m), by = {}; outDays++; mk += m;
+      { const rr = rk(rows.map(q => q[1])); ic.sc.push(corr(rk(rows.map(q => q[2])), rr)); ic.al.push(corr(rk(rows.map(q => q[3])), rr)); } // sıralama gücü: skor ↔ ileri getiri (Spearman)
       rows.forEach((q, i) => { const nm = SEAL_NAMES[q[0]]; if (!nm) return; (by[nm] = by[nm] || []).push(exs[i]); if (nm === "AL" || nm === "GÜÇLÜ AL") (by[SEAL_BUY] = by[SEAL_BUY] || []).push(exs[i]); });
       Object.entries(by).forEach(([nm, arr]) => { const a = acc[nm]; a.n += arr.length; arr.forEach(v => { a.sum += v; if (v > 0) a.pos++; else if (v < 0) a.neg++; }); a.days.push({k: arr.length, all: exs}); });
     });
@@ -1761,14 +1768,14 @@ function sealCard(days, opt) {
       }
       rowsOut[b] = {n, nEff, days: a.days.length, mean, rate: good / n, ci, p, verdict, dir};
     });
-    card.h[h] = {outDays, mkt: outDays ? mk / outDays : null, rows: rowsOut};
+    card.h[h] = {outDays, mkt: outDays ? mk / outDays : null, rows: rowsOut, ic: {sc: icStat(ic.sc, h), al: icStat(ic.al, h)}};
   });
   // Kelly olasılığı kalibrasyonu: tam gözlenmiş pencereler, günlük kapanışlarla hedef(2R)/stop(R) ilk geçişi
-  const lastBn = bn[ds[ds.length - 1].d], bins = [[0, 40], [40, 50], [50, 60], [60, 101]].map(([lo, hi]) => ({lo, hi, n: 0, win: 0, pred: 0}));
+  const bins = [[0, 40], [40, 50], [50, 60], [60, 101]].map(([lo, hi]) => ({lo, hi, n: 0, win: 0, pred: 0}));
   let dec = 0, win = 0, pSum = 0, brier = 0;
-  ds.forEach(x => { const b0 = bn[x.d]; if (b0 == null || lastBn < b0 + mD) return;
+  ds.forEach((x, i) => { if (!at(i, mD)) return; // yalnız penceresi tam gözlenmiş kayıtlar (sağdan kırpılma yanlılığı olmasın)
     x.r.forEach(a => { if (a[5] == null || a[6] == null || !(a[1] > 0)) return; const S = Math.max(3, Math.min(15, 2 * a[5])), T = 2 * S; let res = 0;
-      for (let k = 1; k <= mD && !res; k++) { const y = byBn.get(b0 + k); if (!y) continue; const c = closes(y).get(a[0]); if (!(c > 0)) continue; const ret = (c / a[1] - 1) * 100; if (ret >= T) res = 1; else if (ret <= -S) res = -1; }
+      for (let k = 1; k <= mD && !res; k++) { const y = at(i, k); if (!y) continue; const c = closes(y).get(a[0]); if (!(c > 0)) continue; const ret = (c / a[1] - 1) * 100; if (ret >= T) res = 1; else if (ret <= -S) res = -1; }
       if (!res) return; const w = res > 0 ? 1 : 0, p = a[6] / 100; dec++; win += w; pSum += p; brier += (p - w) ** 2;
       const bk = bins.find(q => a[6] >= q.lo && a[6] < q.hi); bk.n++; bk.win += w; bk.pred += p; });
   });

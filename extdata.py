@@ -17,6 +17,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import fetcher
+from freshness import is_fresh
 from viop_research import expiry_after
 
 HERE = Path(__file__).parent
@@ -28,8 +29,8 @@ def http(url, to=30):
 
 
 def fresh(name, hours=20):
-    p = HERE / name
-    return p.exists() and time.time() - p.stat().st_mtime < hours * 3600
+    # içerik damgası (ts/date): mtime GitHub Actions'ta her çalışmada "şimdi" olur ve bu işleri hiç çalıştırmazdı (freshness.py)
+    return is_fresh(HERE / name, hours * 3600)
 
 
 # ---------------- 1) VİOP ----------------
@@ -76,7 +77,7 @@ def run_viop(force=False):
             b = float(d["close"].iloc[-1] / s["close"].iloc[-1] - 1); idx = {"basis": round(b * 100, 2), "excess": round((b - carry) * 100, 2)}
     except Exception:
         pass
-    res = {"date": str(today), "expiry": str(exp), "days": T, "rate": round(rate * 100, 2), "carry_pct": round(carry * 100, 2), "index": idx, "stocks": out}
+    res = {"ts": int(time.time()), "date": str(today), "expiry": str(exp), "days": T, "rate": round(rate * 100, 2), "carry_pct": round(carry * 100, 2), "index": idx, "stocks": out}
     (HERE / "viop.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"viop.json: {len(out)} hisse vadelisi, vade {exp}, taşıma %{carry * 100:.1f}")
 
@@ -132,7 +133,7 @@ def run_news(force=False):
         except Exception:
             pass
         time.sleep(0.5)
-    res = {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "stocks": out, "market": mk}
+    res = {"ts": int(time.time()), "date": datetime.now().strftime("%Y-%m-%d %H:%M"), "stocks": out, "market": mk}
     (HERE / "newsmood.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     # günlük kayıt: ileride (≥ 30 gün) haber ilgisinin sonraki getiriyi öngörüp öngörmediğini ölçmek için
     lf = HERE / "newsmood_log.json"
@@ -163,6 +164,7 @@ def run_geo(force=False):
         time.sleep(6)
     if "tone" not in res:
         print("GDELT alınamadı (hız sınırı); önceki dosya korunur."); return
+    res["ts"] = int(time.time())
     tone_s = [v for _, v in res["tone"]]; vol_s = [v for _, v in res.get("vol", [])]
     z = lambda a, n=30: (a[-1] - sum(a[-n:]) / min(n, len(a))) / ((sum((x - sum(a[-n:]) / min(n, len(a))) ** 2 for x in a[-n:]) / min(n, len(a))) ** 0.5 or 1) if len(a) >= 5 else None
     res["now"] = {"date": res["tone"][-1][0], "tone": tone_s[-1], "tone_z30": round(z(tone_s), 2) if z(tone_s) is not None else None, "vol_z30": round(z(vol_s), 2) if vol_s and z(vol_s) is not None else None}

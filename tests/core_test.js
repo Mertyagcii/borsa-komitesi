@@ -96,7 +96,7 @@ else {
 // --- Alarm motoru ---
 const al0 = marketAlarms().length;
 const aS = UNI.find(s => s.ok && s.tl >= 30 && s.sma50 > 0 && s.change != null), aOrig = {rvol: aS.rvol, change: aS.change, tl: aS.tl, close: aS.close};
-aS.rvol = 6; aS.change = -5; aS.tl = 150; let am = marketAlarms();
+aS.rvol = 6; aS.change = -5; aS.tl = 1e7; let am = marketAlarms(); // tl çok büyük: seans saatlerinde (rvol tam güne ölçeklenir) çok hisse tetiklenir, alarm listesi tl'ye göre ilk 10 ile sınırlıdır; test saatten bağımsız olsun
 const av = am.find(a => a.id === "vol:" + aS.name); if (!av || av.sev !== 3) errs.push("hacim patlaması alarmı kritik değil: " + JSON.stringify(av));
 aS.change = 4; am = marketAlarms(); if (!am.find(a => a.id === "vol:" + aS.name)) errs.push("hacim patlaması (yükseliş) alarmı yok");
 aS.rvol = 1.2; am = marketAlarms(); if (am.find(a => a.id === "vol:" + aS.name)) errs.push("normal hacimde alarm üretildi");
@@ -312,7 +312,7 @@ if (STRESS) {
   if (!(mm.calibration && Math.abs(mm.calibration.pred - mm.calibration.real) < 1.5)) errs.push("stres modeli çöküş günlerinde kalibre değil: " + JSON.stringify(mm.calibration));
 }
 // --- Kelly ve izleyen stop ---
-const fp0 = mcFirstPassage(mcS, 12, 6, 0), fp1 = mcFirstPassage(mcS, 12, 6, 0.01);
+const fp0 = mcFirstPassage(mcS, 12, 6, 0), fp1 = mcFirstPassage(mcS, 12, 6, Math.max(0.01, 1.5 * sigmaOf(mcS).v)); // sürüklenme hissenin oynaklığına göre ölçeklenir: sabit %1, çok oynak hissede güçlü sayılmaz (test veriye bağımlı olmasın)
 if (!fp0 || Math.abs(fp0.pT / (fp0.pT + fp0.pS) - 1 / 3) > 0.07) errs.push("kenarsız ilk-geçiş olasılığı 1/3'e yakın değil: " + fp0.pT / (fp0.pT + fp0.pS));
 if (!(fp1.pT / (fp1.pT + fp1.pS) > 0.6)) errs.push("pozitif sürüklenmede hedef olasılığı artmadı"); if (Math.abs(fp1.pT + fp1.pS + fp1.pN - 1) > 1e-9) errs.push("ilk-geçiş olasılıkları 1 etmiyor");
 const tsA = {entry: 100, stop0: 94, peak: 105, atr: 2, k: 2.5, S: 6}, tsB = Object.assign({}, tsA, {peak: 106}), tsC = Object.assign({}, tsA, {peak: 120}), tsD = Object.assign({}, tsA, {peak: 130});
@@ -373,7 +373,7 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   const mkDays = (nd, drift) => { // drift: AL mührü (si=3) hisselerine günlük ek getiri %; NÖTR (si=5) 0
     const names = Array.from({length: 120}, (_, i) => "S" + i), px = Object.fromEntries(names.map(n => [n, 100])), days = []; let d = new Date("2026-01-05T12:00:00Z");
     for (let k = 0; k < nd; k++) { while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1);
-      const mkt = gauss() * 0.6; days.push({d: d.toISOString().slice(0, 10), v: SEAL_VER, r: names.map((n, i) => { const si = i < 30 ? 3 : i < 60 ? 4 : 5; if (k > 0) px[n] *= 1 + (mkt + gauss() * 1.2 + (si === 3 ? drift : 0)) / 100; return [n, Math.round(px[n] * 100) / 100, si, 1, 40, 2, 50]; })}); d.setUTCDate(d.getUTCDate() + 1); }
+      const mkt = gauss() * 0.6; days.push({d: d.toISOString().slice(0, 10), v: SEAL_VER, r: names.map((n, i) => { const si = i < 30 ? 3 : i < 60 ? 4 : 5; if (k > 0) px[n] *= 1 + (mkt + gauss() * 1.2 + (si === 3 ? drift : 0)) / 100; return [n, Math.round(px[n] * 100) / 100, si, si === 3 ? 3 : si === 4 ? -3 : 0, si === 3 ? 60 : si === 4 ? 10 : 35, 2, 50]; })}); d.setUTCDate(d.getUTCDate() + 1); }
     return days; };
   const cardPos = sealCard(mkDays(70, 0.5)), cardNull = sealCard(mkDays(70, 0)), cardNeg = sealCard(mkDays(70, -0.5)), cardShort = sealCard(mkDays(8, 0.5));
   const al5 = c => c.h[5].rows["AL"];
@@ -385,6 +385,16 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   if (!(cp["AL"].nEff === Math.floor(cp["AL"].n / 5))) errs.push("mühür karnesi: bağımsız örnek n/h değil");
   // UZAK DUR (si=4) hisselerinde ek getiri yok: yön beklentisi negatif ama kanıt çıkmamalı (ters kanıt şans eseri verilmemeli)
   if (cardNull.h[5].rows["UZAK DUR"] && cardNull.h[5].rows["UZAK DUR"].verdict === "pozitif kanıt") errs.push("mühür karnesi: UZAK DUR şans eseri 'pozitif kanıt' aldı");
+  // sıralama gücü (IC): skor ile ileri getiri ilişkisi yalnızca gerçek avantaj varken pozitif kanıt vermeli
+  const icP = cardPos.h[5].ic, icN = cardNull.h[5].ic, icG = cardNeg.h[5].ic;
+  if (!(icP && icP.sc && icP.sc.mean > 0.1 && icP.sc.verdict === "pozitif kanıt")) errs.push("mühür karnesi: skor↔getiri IC avantajda pozitif değil: " + JSON.stringify(icP && icP.sc));
+  if (!(icG.sc.mean < -0.05 && icG.sc.verdict === "ters kanıt")) errs.push("mühür karnesi: ters avantajda IC 'ters kanıt' vermedi: " + JSON.stringify(icG.sc));
+  if (!(icN.sc.verdict === "kanıt yok" || icN.sc.verdict === "yetersiz veri") || Math.abs(icN.sc.mean) > 0.08) errs.push("mühür karnesi: avantajsız dünyada IC anlamlı çıktı: " + JSON.stringify(icN.sc));
+  if (!(cardShort.h[5].ic.sc.verdict === "yetersiz veri")) errs.push("mühür karnesi: kısa kayıtta IC hüküm verdi");
+  // tatil: kayıtlı günlerde boşluk (tatil) varsa ufuk işlem günü sırasıyla sayılır; 3 haftalık kayıp (makul olmayan boşluk) çiftleri atlanır
+  { const base = mkDays(40, 0.5), hol = base.filter((x, i) => i !== 20), gapD = base.filter((x, i) => i < 15 || i > 36);
+    const ch = sealCard(hol).h[5], cb = sealCard(base).h[5]; if (!(ch.outDays >= cb.outDays - 5 && ch.outDays > 25)) errs.push("mühür karnesi: tek tatil günü kaydı ufku bozdu: " + ch.outDays + " vs " + cb.outDays);
+    const cg = sealCard(gapD).h[5]; if (!(cg.outDays <= 12)) errs.push("mühür karnesi: uzun boşluk üzerinden ufuk hesaplandı: " + cg.outDays); }
   const cardV2 = sealCard(mkDays(30, 0.5).map(x => ({...x, v: 99}))); if (cardV2.ndays !== 0) errs.push("mühür karnesi: farklı sürüm kayıtları karıştı");
   // kalibrasyon: AL hisselerinde model %50 diyor; sabit +%1,2/gün çıkan bir dünyada hedef (2R) hep stop'tan önce gelir: gerçek ≫ model
   const calDays = []; { let d = new Date("2026-01-05T12:00:00Z"); for (let k = 0; k < 70; k++) { while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1);

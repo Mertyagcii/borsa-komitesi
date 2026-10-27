@@ -175,28 +175,33 @@ def build(names: list[str], log=print) -> dict:
     }
 
 
-def write_ohlcv(ohlcv) -> None:
-    """Backtest verisi haftada bir yenilenir (depo şişmesin); mevcut dosya eksikse (≥%10 daha az hisse) hemen yenilenir."""
+def write_ohlcv(ohlcv, dest=None) -> None:
+    """Backtest verisi haftada bir yenilenir (depo şişmesin); mevcut dosya eksikse (≥%10 daha az hisse) hemen yenilenir.
+    Yaş, dosyanın İÇİNDEKİ son bar tarihinden hesaplanır (mtime GitHub Actions'ta hep 'şimdi' olduğundan dosya 2 hafta bayat kalmıştı).
+    dest: yerel sunucu için depo dışı klasör (izlenen dosyayı kirletmesin)."""
     if not ohlcv:
         return
-    of = HERE / "ohlcv.json"
-    fresh = not of.exists() or time.time() - of.stat().st_mtime > 6 * 86400
+    of = Path(dest or HERE) / "ohlcv.json"
+    fresh = not of.exists()
     if not fresh:
         try:
-            old_n = len(json.loads(of.read_text(encoding="utf-8")).get("stocks", {}))
-            fresh = len(ohlcv["stocks"]) > old_n * 1.1
+            old = json.loads(of.read_text(encoding="utf-8"))
+            d0, d1 = datetime.fromisoformat(old["dates"][-1]), datetime.fromisoformat(ohlcv["dates"][-1])
+            fresh = (d1 - d0).days >= 6 or len(ohlcv["stocks"]) > len(old.get("stocks", {})) * 1.1
         except Exception:
             fresh = True
     if fresh:
+        of.parent.mkdir(parents=True, exist_ok=True)
         of.write_text(json.dumps(ohlcv, separators=(",", ":")), encoding="utf-8")
 
 
-def is_stale() -> bool:
+def is_stale(path=None) -> bool:
     """Günde bir kez, piyasa kapandıktan sonra (18:45 TR) yenile."""
-    if not OUT.exists():
+    src = Path(path or OUT)
+    if not src.exists():
         return True
     try:
-        data = json.loads(OUT.read_text(encoding="utf-8"))
+        data = json.loads(src.read_text(encoding="utf-8"))
         age_h = (time.time() - data["ts"]) / 3600
         idx_last = (data.get("index") or {}).get("last")
     except Exception:

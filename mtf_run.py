@@ -7,7 +7,8 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 OUT = HERE / "mtf_composite.json"
-if "--if-stale" in sys.argv and OUT.exists() and time.time() - OUT.stat().st_mtime < 6 * 86400:
+from freshness import is_fresh  # içerik damgası: mtime CI'da hep "taze" görünür
+if "--if-stale" in sys.argv and is_fresh(OUT, 6 * 86400):
     print("mtf araştırması güncel, atlandı.")
     raise SystemExit(0)
 if not (HERE / "cache" / "ohlcv.pkl").exists():

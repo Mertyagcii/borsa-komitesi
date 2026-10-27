@@ -1,0 +1,54 @@
+name: Haftalik arastirma (sinyal kaniti, cok zamanli skor, kara kugu)
+
+# research.py ve mtf_run.py ağırdır (onlarca dakika). 15 dakikalık veri döngüsünü (pages.yml) bloklamasın diye ayrı iş akışında çalışır.
+# Tazelik kontrolü dosya içindeki üretim damgasına bakar (freshness.py); günlük tetiklenir, çıktı 7 günden eskiyse yeniler, değilse saniyeler içinde çıkar.
+on:
+  schedule:
+    - cron: "41 17 * * *"      # her gün 20:41 TR (piyasa kapanışından sonra)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Güncel olsa da yeniden çalıştır"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Arastirma (7 günden eskiyse ya da zorlanırsa)
+        env:
+          FORCE: ${{ inputs.force }}
+          WIDE_CAP: "250"
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            python research.py --force
+            python mtf_run.py
+          else
+            python research.py --if-stale
+            python mtf_run.py --if-stale
+          fi
+      - name: Arastirma ciktilarini kaydet
+        run: |
+          FILES=""; for f in research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json kurul2_research.json macro_research.json viop_research.json stress.json; do [ -e "$f" ] && FILES="$FILES $f"; done
+          if [ -n "$(git status --porcelain $FILES)" ]; then
+            git config user.name "tradingofis-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add $FILES
+            git commit -m "arastirma ciktilari guncellendi"
+            git pull --rebase origin main
+            git push
+          fi
