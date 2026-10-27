@@ -373,7 +373,7 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   const mkDays = (nd, drift) => { // drift: AL mührü (si=3) hisselerine günlük ek getiri %; NÖTR (si=5) 0
     const names = Array.from({length: 120}, (_, i) => "S" + i), px = Object.fromEntries(names.map(n => [n, 100])), days = []; let d = new Date("2026-01-05T12:00:00Z");
     for (let k = 0; k < nd; k++) { while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1);
-      const mkt = gauss() * 0.6; days.push({d: d.toISOString().slice(0, 10), v: SEAL_VER, r: names.map((n, i) => { const si = i < 30 ? 3 : i < 60 ? 4 : 5; if (k > 0) px[n] *= 1 + (mkt + gauss() * 1.2 + (si === 3 ? drift : 0)) / 100; return [n, Math.round(px[n] * 100) / 100, si, si === 3 ? 3 : si === 4 ? -3 : 0, si === 3 ? 60 : si === 4 ? 10 : 35, 2, 50]; })}); d.setUTCDate(d.getUTCDate() + 1); }
+      const mkt = gauss() * 0.6; days.push({d: d.toISOString().slice(0, 10), v: SEAL_VER, r: names.map((n, i) => { const si = i < 30 ? 3 : i < 60 ? 4 : 5; if (k > 0) px[n] *= 1 + (mkt + gauss() * 1.2 + (si === 3 ? drift : 0)) / 100; return [n, Math.round(px[n] * 100) / 100, si, si === 3 ? 3 : si === 4 ? -3 : 0, si === 3 ? 60 : si === 4 ? 10 : 35, 2, 50, si === 3 ? "uyumlu" : si === 4 ? "zayif" : "notr"]; })}); d.setUTCDate(d.getUTCDate() + 1); }
     return days; };
   const cardPos = sealCard(mkDays(70, 0.5)), cardNull = sealCard(mkDays(70, 0)), cardNeg = sealCard(mkDays(70, -0.5)), cardShort = sealCard(mkDays(8, 0.5));
   const al5 = c => c.h[5].rows["AL"];
@@ -385,6 +385,9 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   if (!(cp["AL"].nEff === Math.floor(cp["AL"].n / 5))) errs.push("mühür karnesi: bağımsız örnek n/h değil");
   // UZAK DUR (si=4) hisselerinde ek getiri yok: yön beklentisi negatif ama kanıt çıkmamalı (ters kanıt şans eseri verilmemeli)
   if (cardNull.h[5].rows["UZAK DUR"] && cardNull.h[5].rows["UZAK DUR"].verdict === "pozitif kanıt") errs.push("mühür karnesi: UZAK DUR şans eseri 'pozitif kanıt' aldı");
+  // haftalık skor kurulumu aynı yöntemle ölçülür (mühürden bağımsız)
+  { const hp = cardPos.h[5].rows, hn = cardNull.h[5].rows; if (!(hp["H:lider"] && hp["H:uyumlu"] && hp["H:uyumlu"].n === hp["AL"].n && hp["H:lider"].verdict === "pozitif kanıt")) errs.push("mühür karnesi: haftalık lider grubu ölçülmedi/pozitif değil: " + JSON.stringify(hp["H:lider"]));
+    if (!(hp["H:zayif"] && hn["H:lider"] && (hn["H:lider"].verdict === "kanıt yok" || hn["H:lider"].verdict === "yetersiz veri"))) errs.push("mühür karnesi: avantajsız dünyada haftalık lider anlamlı çıktı: " + JSON.stringify(hn["H:lider"])); }
   // sıralama gücü (IC): skor ile ileri getiri ilişkisi yalnızca gerçek avantaj varken pozitif kanıt vermeli
   const icP = cardPos.h[5].ic, icN = cardNull.h[5].ic, icG = cardNeg.h[5].ic;
   if (!(icP && icP.sc && icP.sc.mean > 0.1 && icP.sc.verdict === "pozitif kanıt")) errs.push("mühür karnesi: skor↔getiri IC avantajda pozitif değil: " + JSON.stringify(icP && icP.sc));
@@ -414,9 +417,16 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   if (!(g1.label === "NÖTR" && g1.gated && g1.rawLabel === "AL" && g1.why[0].indexOf("Canlı karne") === 0 && g2.label === "NÖTR")) errs.push("mühür düzeltmesi: ters kanıtta AL düşmedi");
   if (!(g3.label === "AL" && g4.label === "AL" && g5.label === "RİSKLİ" && g6.label === "AL" && !g3.gated)) errs.push("mühür düzeltmesi: kanıt yokken mühür değişti");
   R.sealGate = 0; const g7 = sealGateApply(mkSl("AL"), ev("ters kanıt")); delete R.sealGate; if (g7.label !== "AL") errs.push("mühür düzeltmesi: R.sealGate = 0 kapatmadı");
+  // haftalık lider kuralı: yalnızca (haftalık lider pozitif kanıt) VE (AL grubu pozitif değil) iken haftalık lider OLMAYAN AL düşer
+  const evH = (hv, bv) => ({h: {10: {rows: {"H:lider": {verdict: hv, mean: 2.1, p: 0.01, nEff: 40}, "AL+GÜÇLÜ AL": {verdict: bv, mean: 0.1, p: 0.6, nEff: 40}}}}}), mkL = (l, lead) => Object.assign(mkSl(l), {lead});
+  const h1 = sealGateApply(mkL("AL", false), evH("pozitif kanıt", "kanıt yok")), h2 = sealGateApply(mkL("AL", true), evH("pozitif kanıt", "kanıt yok")), h3 = sealGateApply(mkL("GÜÇLÜ AL", true), evH("pozitif kanıt", "kanıt yok")), h4 = sealGateApply(mkL("AL", false), evH("pozitif kanıt", "pozitif kanıt")), h5 = sealGateApply(mkL("AL", false), evH("kanıt yok", "kanıt yok")), h6 = sealGateApply(mkL("AL", false), evH("yetersiz veri", "yetersiz veri"));
+  if (!(h1.label === "NÖTR" && h1.gated && h1.why[0].indexOf("haftalık lider") > 0)) errs.push("haftalık lider kuralı: lider olmayan AL düşmedi");
+  if (!(h2.label === "AL" && h3.label === "GÜÇLÜ AL" && h4.label === "AL" && h5.label === "AL" && h6.label === "AL")) errs.push("haftalık lider kuralı: kanıt/lider koşulu olmadan mühür değişti");
+  R.sealGate = 0; const h7 = sealGateApply(mkL("AL", false), evH("pozitif kanıt", "kanıt yok")); delete R.sealGate; if (h7.label !== "AL") errs.push("haftalık lider kuralı: R.sealGate = 0 kapatmadı");
+  { const tk = UNI.find(x => x.ok && x.tl >= 10), sk = kokpitSeal(tk, committee(tk), {raw: true}); if (!(typeof sk.lead === "boolean" && (sk.tierId === null || SEAL_TIERS.includes(sk.tierId)))) errs.push("kokpitSeal lead/tierId alanı hatalı"); }
   // kayıt biçimi: gerçek hisse
   const rec = sealRecord(UNI.find(x => x.ok && x.tl >= 10), committee(UNI.find(x => x.ok && x.tl >= 10)));
-  if (!(rec.length === 7 && typeof rec[0] === "string" && rec[1] > 0 && rec[2] >= 0 && rec[2] < SEAL_NAMES.length && rec[4] >= 0 && rec[4] <= 100)) errs.push("mühür kaydı biçimi bozuk: " + JSON.stringify(rec));
+  if (!(rec.length === 8 && (rec[7] === null || SEAL_TIERS.includes(rec[7])) && typeof rec[0] === "string" && rec[1] > 0 && rec[2] >= 0 && rec[2] < SEAL_NAMES.length && rec[4] >= 0 && rec[4] <= 100)) errs.push("mühür kaydı biçimi bozuk: " + JSON.stringify(rec));
   // arena: örtüşme düzeltmesi (ham sonuçlara dokunmaz)
   const asx = arenaStats(arP, 10), sx = asx.rows.find(x => x.id === "simons"); if (!(sx.nEff === Math.floor(sx.n / 10) && sx.statusEff === "yetersiz örnek" && sx.status === "anlamlı olarak kötü")) errs.push("arena örtüşme düzeltmesi hatalı: " + JSON.stringify([sx.n, sx.nEff, sx.status, sx.statusEff]));
   stat.sealcard = "AL5 pos " + al5(cardPos).mean.toFixed(2) + "/" + al5(cardPos).p + " neg " + al5(cardNeg).mean.toFixed(2) + "/" + al5(cardNeg).p + " null " + al5(cardNull).mean.toFixed(2) + "/" + al5(cardNull).p;

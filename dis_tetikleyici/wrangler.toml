@@ -1,0 +1,10 @@
+name = "tradingofis-tetikleyici"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Saatler UTC. Borsa İstanbul 10:00-18:00 TR = 07:00-15:00 UTC.
+[triggers]
+crons = [
+  "*/10 6-15 * * 1-5",  # hafta içi seans çevresi: 10 dakikada bir
+  "12 * * * *",         # her saat (seans dışı, kapanış sonrası kayıtlar ve hafta sonu)
+]

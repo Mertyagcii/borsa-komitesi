@@ -1715,7 +1715,7 @@ function kokpitSealRaw(s, r) {
   if (r.score <= -2 || d.sat >= 50) return {label: "UZAK DUR", cls: "avoid", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
   return {label: "NÖTR", cls: "neutral", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
 }
-function kokpitSeal(s, r, opt) { const sl = kokpitSealRaw(s, r); return opt && opt.raw ? sl : sealGateApply(sl); }
+function kokpitSeal(s, r, opt) { const sl = kokpitSealRaw(s, r), t = mtfTier(s); sl.tierId = t ? t.id : null; sl.lead = sl.tierId === "uyumlu" || sl.tierId === "hlider"; return opt && opt.raw ? sl : sealGateApply(sl); }
 
 /* =====================================================================================
    MÜHÜR KARNESİ (canlı, ileriye dönük doğrulama): signals.js her seans kapanışında TÜM likit hisselerin ham mührünü seal_log.json'a yazar
@@ -1723,15 +1723,21 @@ function kokpitSeal(s, r, opt) { const sl = kokpitSealRaw(s, r); return opt && o
    · Kıyas: aynı gün kaydedilen ~300 likit hissenin eşit ağırlıklı ortalaması (fazla getiri = hisse − bu ortalama; yani piyasa yönünden arındırılmış).
    · Şans testi: aynı gün, aynı sayıda RASTGELE hisse seçilseydi ortalama fazla getiri ne olurdu? (permütasyon; iki yönlü %5 → p < 0,025). Böylece "piyasa düştü ama biz az düştük" ya da şans eseri başarı ayrılır.
    · Örtüşme: bir hisse h gün boyunca art arda pencerelerde yer alır; bağımsız örnek ≈ n / h. En az 30 bağımsız gözlem VE 3 çakışmayan pencere (gün ≥ 3h) olmadan hüküm verilmez ("yetersiz veri").
-   · Otomatik düzeltme: AL/GÜÇLÜ AL mühürleri 10 günde "ters kanıt" (piyasanın anlamlı biçimde gerisinde) verirse Kokpit bunları NÖTR'e düşürür (R.sealGate = 0 ile kapatılır). Kanıt olmadan mühür değiştirilmez (az örnekle ayar yapmak aşırı uyumdur).
+   · Otomatik düzeltme (R.sealGate = 0 ile kapatılır; kanıt olmadan mühür değiştirilmez: az örnekle ayar yapmak aşırı uyumdur):
+       (1) AL/GÜÇLÜ AL mühürleri 10 günde "ters kanıt" (piyasanın anlamlı biçimde gerisinde) verirse Kokpit bunları NÖTR'e düşürür.
+       (2) Haftalık skorun "lider" kurulumu (uyumlu + haftalık lider) AYNI yöntemle ölçülür; yalnızca o grup "pozitif kanıt" verirken AL mührü (tüm AL+GÜÇLÜ AL grubu) vermiyorsa,
+           haftalık lider OLMAYAN AL'lar NÖTR'e düşer. İlk canlı ölçümde (12 gün, tek ayı rejimi) haftalık skor ayrım yaptı, komite skoru yapmadı; bu kural o gözlemi
+           yeterli kanıt oluşunca (≥ 30 bağımsız gözlem, 3 çakışmayan pencere) otomatik uygular, şimdi elle uygulamaz.
    · Kelly kalibrasyonu: modelin "hedefe stop'tan önce ulaşma" olasılığı, günlük kapanışlarla gerçekleşen sonuçla karşılaştırılır (tam gözlenmiş pencereler; gün içi dokunuşlar görünmez). ≥ 30 bağımsız sonuçta ortalama sapma Kelly olasılığına eklenir. */
 const SEAL_VER = 1, SEAL_NAMES = ["KİLİTLİ", "RİSKLİ", "GÜÇLÜ AL", "AL", "UZAK DUR", "NÖTR"], SEAL_BUY = "AL+GÜÇLÜ AL";
-const SEAL_DIR = {"KİLİTLİ": -1, "RİSKLİ": -1, "GÜÇLÜ AL": 1, "AL": 1, "AL+GÜÇLÜ AL": 1, "UZAK DUR": -1, "NÖTR": 0};
+const SEAL_TIERS = ["uyumlu", "hlider", "notr", "zayif", "toparlanan"]; // çok zamanlı skor kurulumları (mtfTier.id)
+const SEAL_DIR = {"KİLİTLİ": -1, "RİSKLİ": -1, "GÜÇLÜ AL": 1, "AL": 1, "AL+GÜÇLÜ AL": 1, "UZAK DUR": -1, "NÖTR": 0, "H:lider": 1, "H:uyumlu": 1, "H:hlider": 1, "H:zayif": -1, "H:notr": 0, "H:toparlanan": 0};
 let SEALCARD = null; // seal_card.json
 function sealRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function sealRecord(s, r) {
   const sl = kokpitSealRaw(s, r); let pm = null; try { const k = kellyPlan(s, 0); pm = k ? Math.round(k.pModel * 100) : null; } catch (e) { /* ATR yok */ }
-  return [s.name, s.close, SEAL_NAMES.indexOf(sl.label), r.score, sl.d.al, s.atrPct > 0 ? Math.round(s.atrPct * 10) / 10 : null, pm];
+  const t = mtfTier(s);
+  return [s.name, s.close, SEAL_NAMES.indexOf(sl.label), r.score, sl.d.al, s.atrPct > 0 ? Math.round(s.atrPct * 10) / 10 : null, pm, t ? t.id : null];
 }
 function sealCard(days, opt) {
   opt = opt || {}; const M = opt.draws || 400, H = [5, 10, 20], mD = Math.max(1, Math.round(R.mDays || 20));
@@ -1746,16 +1752,17 @@ function sealCard(days, opt) {
     const t = nIndep >= 3 && sd > 0 ? mean / (sd / Math.sqrt(nIndep)) : null; // ardışık günlerin IC'leri örtüştüğünden bağımsız pencere sayısıyla temkinli t
     return {mean, days: n, nIndep, t, verdict: nIndep < 5 || t == null ? "yetersiz veri" : Math.abs(t) >= 2 ? (mean > 0 ? "pozitif kanıt" : "ters kanıt") : "kanıt yok"}; };
   const cl = new Map(), closes = x => { let m = cl.get(x.d); if (!m) { m = new Map(x.r.map(a => [a[0], a[1]])); cl.set(x.d, m); } return m; };
-  const buckets = SEAL_NAMES.concat([SEAL_BUY]);
+  const buckets = SEAL_NAMES.concat([SEAL_BUY, "H:lider"], SEAL_TIERS.map(x => "H:" + x));
   H.forEach(h => {
     const acc = {}; buckets.forEach(b => acc[b] = {n: 0, sum: 0, pos: 0, neg: 0, days: []}); let outDays = 0, mk = 0;
     const ic = {sc: [], al: []};
     ds.forEach((x, i) => { const y = at(i, h); if (!y) return; const cy = closes(y);
-      const rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[2], (cy.get(a[0]) / a[1] - 1) * 100, a[3], a[4]]); if (rows.length < 50) return;
+      const rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[2], (cy.get(a[0]) / a[1] - 1) * 100, a[3], a[4], a[7]]); if (rows.length < 50) return;
       const m = rows.reduce((t, q) => t + q[1], 0) / rows.length, exs = rows.map(q => q[1] - m), by = {}; outDays++; mk += m;
       { const rr = rk(rows.map(q => q[1])); ic.sc.push(corr(rk(rows.map(q => q[2])), rr)); ic.al.push(corr(rk(rows.map(q => q[3])), rr)); } // sıralama gücü: skor ↔ ileri getiri (Spearman)
       rows.forEach((q, i) => { const nm = SEAL_NAMES[q[0]]; if (!nm) return; (by[nm] = by[nm] || []).push(exs[i]); if (nm === "AL" || nm === "GÜÇLÜ AL") (by[SEAL_BUY] = by[SEAL_BUY] || []).push(exs[i]); });
-      Object.entries(by).forEach(([nm, arr]) => { const a = acc[nm]; a.n += arr.length; arr.forEach(v => { a.sum += v; if (v > 0) a.pos++; else if (v < 0) a.neg++; }); a.days.push({k: arr.length, all: exs}); });
+      rows.forEach((q, i) => { if (!q[4]) return; const tn = "H:" + q[4]; (by[tn] = by[tn] || []).push(exs[i]); if (q[4] === "uyumlu" || q[4] === "hlider") (by["H:lider"] = by["H:lider"] || []).push(exs[i]); }); // haftalık skor kurulumu: mühürden bağımsız, aynı yöntem
+      Object.entries(by).forEach(([nm, arr]) => { const a = acc[nm]; if (!a) return; a.n += arr.length; arr.forEach(v => { a.sum += v; if (v > 0) a.pos++; else if (v < 0) a.neg++; }); a.days.push({k: arr.length, all: exs}); });
     });
     const rowsOut = {};
     buckets.forEach((b, bi) => { const a = acc[b]; if (!a.n) return; const n = a.n, mean = a.sum / n, dir = SEAL_DIR[b], good = dir < 0 ? a.neg : a.pos, nEff = Math.floor(n / h), ci = nEff ? wilson(Math.round(good / n * nEff), nEff) : null;
@@ -1789,6 +1796,11 @@ function sealGateApply(sl, card) {
   const rows = card && card.h && card.h[10] && card.h[10].rows ? card.h[10].rows : null; sl.ev = rows ? rows[sl.label] || null : null;
   if ((R.sealGate ?? 1) && (sl.label === "AL" || sl.label === "GÜÇLÜ AL") && rows && rows[SEAL_BUY] && rows[SEAL_BUY].verdict === "ters kanıt") {
     const e = rows[SEAL_BUY]; sl.gated = true; sl.why = [`Canlı karne: AL/GÜÇLÜ AL mühürleri 10 iş gününde piyasanın anlamlı biçimde gerisinde kaldı (ort. ${fmt(e.mean, 2)} puan, p = ${fmt(e.p, 3)}, ${e.nEff} bağımsız gözlem); kanıt düzelene kadar NÖTR gösterilir`].concat(sl.why);
+    sl.label = "NÖTR"; sl.cls = "neutral";
+  }
+  const hl = rows && rows["H:lider"], buy = rows && rows[SEAL_BUY];
+  if ((R.sealGate ?? 1) && sl.label === "AL" && sl.lead === false && hl && hl.verdict === "pozitif kanıt" && !(buy && buy.verdict === "pozitif kanıt")) {
+    sl.gated = true; sl.why = [`Canlı karne: yalnızca haftalık lider kurulumu pozitif kanıt veriyor (10 gün, ort. +${fmt(hl.mean, 2)} puan, p = ${fmt(hl.p, 3)}); AL mührü bu kanıtı vermiyor ve bu hisse haftalık lider değil: NÖTR gösterilir`].concat(sl.why);
     sl.label = "NÖTR"; sl.cls = "neutral";
   }
   return sl;
