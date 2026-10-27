@@ -1300,7 +1300,10 @@ function arenaStats(picks, h) {
   });
   const out = Object.values(rows).map(r => { const n = r.up.n + r.dn.n, hit = r.up.hit + r.dn.hit, ci = wilson(hit, n);
     const status = n < 30 ? "yetersiz örnek" : ci[0] > 0.5 ? "anlamlı üstünlük" : ci[1] < 0.5 ? "anlamlı olarak kötü" : "şanstan ayırt edilemiyor";
-    return {...r, n, hit, rate: n ? hit / n : null, ci, status, avgUp: r.up.n ? r.up.sum / r.up.n : null, upRate: r.up.n ? r.up.hit / r.up.n : null, dnRate: r.dn.n ? r.dn.hit / r.dn.n : null}; });
+    // örtüşme düzeltmesi: aynı hisse h gün boyunca art arda pencerelerde yer alır; bağımsız örnek ≈ n / h (daha dürüst, daha temkinli)
+    const nEff = Math.floor(n / h), ciEff = nEff ? wilson(Math.round(hit / n * nEff), nEff) : null;
+    const statusEff = nEff < 30 ? "yetersiz örnek" : ciEff[0] > 0.5 ? "anlamlı üstünlük" : ciEff[1] < 0.5 ? "anlamlı olarak kötü" : "şanstan ayırt edilemiyor";
+    return {...r, n, hit, rate: n ? hit / n : null, ci, status, nEff, ciEff, statusEff, avgUp: r.up.n ? r.up.sum / r.up.n : null, upRate: r.up.n ? r.up.hit / r.up.n : null, dnRate: r.dn.n ? r.dn.hit / r.dn.n : null}; });
   out.sort((a, b) => (b.ci ? b.ci[0] : -1) - (a.ci ? a.ci[0] : -1) || b.n - a.n);
   return {h, rows: out, days: days.size, total, measured: out.reduce((a, r) => a + r.n, 0)};
 }
@@ -1626,16 +1629,18 @@ function kellyPlan(s, capital, pOverride) {
   const S = Math.max(3, Math.min(15, 2 * s.atrPct)), T = 2 * S, sm = simons(s), mexp = mtfExpect(s);
   const mus = [sm.exp != null ? sm.exp / 10 : null, mexp != null ? mexp / 20 : null].filter(x => x != null).map(x => x / 100), mu = mus.length ? mus.reduce((a, b) => a + b, 0) / mus.length : 0;
   const fp = mcFirstPassage(s, T, S, mu); if (!fp) return null;
-  const decided = fp.pT + fp.pS, pModel = decided > 0 ? fp.pT / decided : 0, pWin = pOverride != null ? Math.max(0.01, Math.min(0.99, pOverride)) : pModel, b = T / S, kelly = pWin - (1 - pWin) / b, half = kelly / 2, fRisk = 1 / S; // %1 risk: f × S% = %1
+  // canlı kalibrasyon (seal_card.json): model olasılığı geçmişte gerçekleşenden saptıysa (≥ 30 bağımsız sonuç) ortalama sapma kadar düzeltilir
+  const decided = fp.pT + fp.pS, pModel = decided > 0 ? fp.pT / decided : 0, cb = SEALCARD && SEALCARD.calib && SEALCARD.calib.ok ? SEALCARD.calib : null, pCal = cb ? Math.max(0.01, Math.min(0.99, pModel + cb.bias)) : null;
+  const pWin = pOverride != null ? Math.max(0.01, Math.min(0.99, pOverride)) : pCal != null ? pCal : pModel, b = T / S, kelly = pWin - (1 - pWin) / b, half = kelly / 2, fRisk = 1 / S; // %1 risk: f × S% = %1
   const f = Math.max(0, Math.min(half, fRisk, 0.2)), k = Math.max(2.2, Math.min(3.5, 2 + s.atrPct / 3)), stop0 = tickRound(s.close * (1 - S / 100), "down");
   const ladder = [1, 2, 3, 5].map(r => { const peak = tickRound(s.close * (1 + r * S / 100), "up"); return {r, peak, stop: tickRound(trailingStop({entry: s.close, stop0, peak, atr: s.atr, k, S}), "down")}; });
   const tp = [{r: 1, frac: 1 / 3}, {r: 2, frac: 1 / 3}].map(x => ({...x, px: tickRound(s.close * (1 + x.r * S / 100), "up")})); // kar al: +1R'de üçte biri (stop başa baş), +2R'de üçte biri, kalan izleyen stopla
   const amount = capital > 0 ? f * capital : null, riskTl = amount ? amount * S / 100 : null;
   const tbl = KELLY_P_TABLE.map(p => ({p, ...kellyFrac(p, b), f: Math.max(0, Math.min(kellyFrac(p, b).half, fRisk, 0.2))}));
   const emp = 0.53, over = pOverride != null && pOverride > 0.6;
-  return {S, T, mu, pT: fp.pT, pS: fp.pS, pN: fp.pN, pWin, pModel, pUser: pOverride != null ? pWin : null, b, kelly, half, fRisk, f, k, stop0, target: tickRound(s.close * (1 + T / 100), "up"), ladder, tp, tbl, amount, riskTl, shares: amount ? Math.floor(amount / s.close) : null, edge: kelly > 0 && (pOverride != null || mu > 0), days: fp.days,
+  return {S, T, mu, pT: fp.pT, pS: fp.pS, pN: fp.pN, pWin, pModel, pCal, calib: cb, pUser: pOverride != null ? pWin : null, b, kelly, half, fRisk, f, k, stop0, target: tickRound(s.close * (1 + T / 100), "up"), ladder, tp, tbl, amount, riskTl, shares: amount ? Math.floor(amount / s.close) : null, edge: kelly > 0 && (pOverride != null || mu > 0), days: fp.days,
     warn: over ? `Girdiğiniz olasılık (%${fmt(pWin * 100, 0)}) geçmişte ölçülen BIST isabetinin (≈ %${fmt(emp * 100, 0)}) çok üstünde; bu güvenilirliği destekleyen bir test yok, pozisyonu abartabilir.` : null,
-    text: kelly > 0 ? `Kelly: ${pOverride != null ? "girdiğiniz" : "model"} başarı olasılığı %${fmt(pWin * 100, 0)} (hedefe stop'tan önce ulaşma${pOverride != null ? "" : ", " + fp.days + " gün"}), ödül/risk ${fmt(b, 1)}; tam Kelly %${fmt(kelly * 100, 1)}, yarım Kelly %${fmt(half * 100, 1)}; %1 risk sınırı %${fmt(fRisk * 100, 1)} → önerilen pozisyon sermayenin %${fmt(f * 100, 1)}'i.` : `Kelly ≤ 0: başarı olasılığı %${fmt(pWin * 100, 0)} (${fmt(b, 1)} ödül/risk için gereken ≈ %${fmt(100 / (1 + b), 0)}); istatistiksel kenar yok, pozisyon önerilmez.`};
+    text: kelly > 0 ? `Kelly: ${pOverride != null ? "girdiğiniz" : pCal != null ? "canlı kalibrasyonlu model" : "model"} başarı olasılığı %${fmt(pWin * 100, 0)} (hedefe stop'tan önce ulaşma${pOverride != null ? "" : ", " + fp.days + " gün"}${pCal != null && pOverride == null ? `; ham model %${fmt(pModel * 100, 0)}, ${cb.nEff} bağımsız canlı sonuca göre ${cb.bias >= 0 ? "+" : ""}${fmt(cb.bias * 100, 1)} puan düzeltildi` : ""}), ödül/risk ${fmt(b, 1)}; tam Kelly %${fmt(kelly * 100, 1)}, yarım Kelly %${fmt(half * 100, 1)}; %1 risk sınırı %${fmt(fRisk * 100, 1)} → önerilen pozisyon sermayenin %${fmt(f * 100, 1)}'i.` : `Kelly ≤ 0: başarı olasılığı %${fmt(pWin * 100, 0)} (${fmt(b, 1)} ödül/risk için gereken ≈ %${fmt(100 / (1 + b), 0)}); istatistiksel kenar yok, pozisyon önerilmez.`};
 }
 
 /* =====================================================================================
@@ -1700,7 +1705,7 @@ function setPaper(st) { return PAPER_W = paperWeights(st); }
    KİLİTLİ (Hata Avcısı: rakamlar ham veriyle çelişiyor) > RİSKLİ (Şeytanın Avukatı vetosu ya da kara kuğu stres testi/uzman itirazı) > GÜÇLÜ AL (tüm filtreleri geçen
    yüksek güvenilirlikli sinyal) > AL (masa skoru ≥ 2 ve ağırlıklı kararda ≥ %40 Al) > UZAK DUR (masa skoru ≤ −2 ya da ≥ %50 Sat) > NÖTR.
    "AL" bir tavsiye değil, ajanların oy özetidir; tahmin kazanç garantisi vermez (BIST'te ölçülen en iyi isabet ≈ %53). */
-function kokpitSeal(s, r) {
+function kokpitSealRaw(s, r) {
   const f = factCheck(s, r), d = debate(s, r), hc = highConfidence(s, r), why = [];
   if (f.locked) return {label: "KİLİTLİ", cls: "lock", why: ["Hata Avcısı: rakamlar ham veriyle çelişiyor, düzeltme bekleniyor"].concat(f.issues.map(i => i.msg)), d, hc, f};
   if (r.veto) { r.l.seytan.severe.forEach(x => why.push("Şeytanın Avukatı: " + x)); return {label: "RİSKLİ", cls: "risk", why, d, hc, f}; }
@@ -1709,4 +1714,75 @@ function kokpitSeal(s, r) {
   if (r.score >= 2 && d.al >= 40) return {label: "AL", cls: "buy", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
   if (r.score <= -2 || d.sat >= 50) return {label: "UZAK DUR", cls: "avoid", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
   return {label: "NÖTR", cls: "neutral", why: [`Masa skoru ${r.score}, ağırlıklı karar ${d.text}`], d, hc, f};
+}
+function kokpitSeal(s, r, opt) { const sl = kokpitSealRaw(s, r); return opt && opt.raw ? sl : sealGateApply(sl); }
+
+/* =====================================================================================
+   MÜHÜR KARNESİ (canlı, ileriye dönük doğrulama): signals.js her seans kapanışında TÜM likit hisselerin ham mührünü seal_log.json'a yazar
+   ([ad, kapanış, mühür no, masa skoru, Boğa %, ATR %, model başarı olasılığı %]); sealCard() bunları 5/10/20 iş gün sonraki gerçek getiriyle ölçer. Dürüstlük kuralları:
+   · Kıyas: aynı gün kaydedilen ~300 likit hissenin eşit ağırlıklı ortalaması (fazla getiri = hisse − bu ortalama; yani piyasa yönünden arındırılmış).
+   · Şans testi: aynı gün, aynı sayıda RASTGELE hisse seçilseydi ortalama fazla getiri ne olurdu? (permütasyon; iki yönlü %5 → p < 0,025). Böylece "piyasa düştü ama biz az düştük" ya da şans eseri başarı ayrılır.
+   · Örtüşme: bir hisse h gün boyunca art arda pencerelerde yer alır; bağımsız örnek ≈ n / h. En az 30 bağımsız gözlem VE 3 çakışmayan pencere (gün ≥ 3h) olmadan hüküm verilmez ("yetersiz veri").
+   · Otomatik düzeltme: AL/GÜÇLÜ AL mühürleri 10 günde "ters kanıt" (piyasanın anlamlı biçimde gerisinde) verirse Kokpit bunları NÖTR'e düşürür (R.sealGate = 0 ile kapatılır). Kanıt olmadan mühür değiştirilmez (az örnekle ayar yapmak aşırı uyumdur).
+   · Kelly kalibrasyonu: modelin "hedefe stop'tan önce ulaşma" olasılığı, günlük kapanışlarla gerçekleşen sonuçla karşılaştırılır (tam gözlenmiş pencereler; gün içi dokunuşlar görünmez). ≥ 30 bağımsız sonuçta ortalama sapma Kelly olasılığına eklenir. */
+const SEAL_VER = 1, SEAL_NAMES = ["KİLİTLİ", "RİSKLİ", "GÜÇLÜ AL", "AL", "UZAK DUR", "NÖTR"], SEAL_BUY = "AL+GÜÇLÜ AL";
+const SEAL_DIR = {"KİLİTLİ": -1, "RİSKLİ": -1, "GÜÇLÜ AL": 1, "AL": 1, "AL+GÜÇLÜ AL": 1, "UZAK DUR": -1, "NÖTR": 0};
+let SEALCARD = null; // seal_card.json
+function sealRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function sealRecord(s, r) {
+  const sl = kokpitSealRaw(s, r); let pm = null; try { const k = kellyPlan(s, 0); pm = k ? Math.round(k.pModel * 100) : null; } catch (e) { /* ATR yok */ }
+  return [s.name, s.close, SEAL_NAMES.indexOf(sl.label), r.score, sl.d.al, s.atrPct > 0 ? Math.round(s.atrPct * 10) / 10 : null, pm];
+}
+function sealCard(days, opt) {
+  opt = opt || {}; const M = opt.draws || 400, H = [5, 10, 20], mD = Math.max(1, Math.round(R.mDays || 20));
+  const ds = (days || []).filter(x => x && x.d && x.r && x.v === SEAL_VER).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const card = {ver: SEAL_VER, ndays: ds.length, first: ds.length ? ds[0].d : null, last: ds.length ? ds[ds.length - 1].d : null, nrec: ds.reduce((a, x) => a + x.r.length, 0), h: {}, calib: null};
+  if (ds.length < 2) return card;
+  const bn = {}; { let n = 0; const d = new Date(ds[0].d + "T12:00:00Z"), e = new Date(ds[ds.length - 1].d + "T12:00:00Z"); for (; d <= e; d.setUTCDate(d.getUTCDate() + 1)) { const w = d.getUTCDay(); if (w !== 0 && w !== 6) bn[d.toISOString().slice(0, 10)] = n++; } }
+  const byBn = new Map(); ds.forEach(x => { if (bn[x.d] != null) byBn.set(bn[x.d], x); });
+  const cl = new Map(), closes = x => { let m = cl.get(x.d); if (!m) { m = new Map(x.r.map(a => [a[0], a[1]])); cl.set(x.d, m); } return m; };
+  const buckets = SEAL_NAMES.concat([SEAL_BUY]);
+  H.forEach(h => {
+    const acc = {}; buckets.forEach(b => acc[b] = {n: 0, sum: 0, pos: 0, neg: 0, days: []}); let outDays = 0, mk = 0;
+    ds.forEach(x => { const y = byBn.get(bn[x.d] + h); if (!y || bn[x.d] == null) return; const cy = closes(y);
+      const rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[2], (cy.get(a[0]) / a[1] - 1) * 100]); if (rows.length < 50) return;
+      const m = rows.reduce((t, q) => t + q[1], 0) / rows.length, exs = rows.map(q => q[1] - m), by = {}; outDays++; mk += m;
+      rows.forEach((q, i) => { const nm = SEAL_NAMES[q[0]]; if (!nm) return; (by[nm] = by[nm] || []).push(exs[i]); if (nm === "AL" || nm === "GÜÇLÜ AL") (by[SEAL_BUY] = by[SEAL_BUY] || []).push(exs[i]); });
+      Object.entries(by).forEach(([nm, arr]) => { const a = acc[nm]; a.n += arr.length; arr.forEach(v => { a.sum += v; if (v > 0) a.pos++; else if (v < 0) a.neg++; }); a.days.push({k: arr.length, all: exs}); });
+    });
+    const rowsOut = {};
+    buckets.forEach((b, bi) => { const a = acc[b]; if (!a.n) return; const n = a.n, mean = a.sum / n, dir = SEAL_DIR[b], good = dir < 0 ? a.neg : a.pos, nEff = Math.floor(n / h), ci = nEff ? wilson(Math.round(good / n * nEff), nEff) : null;
+      let p = null, verdict = "yetersiz veri";
+      if (nEff >= 30 && outDays >= 3 * h) {
+        const rng = sealRng(h * 1000 + bi * 17 + 1); let ge = 0, le = 0;
+        for (let t = 0; t < M; t++) { let tot = 0; for (const dy of a.days) { const al = dy.all; for (let q = 0; q < dy.k; q++) tot += al[Math.floor(rng() * al.length)]; } const mt = tot / n; if (mt >= mean) ge++; if (mt <= mean) le++; }
+        p = Math.min(1, 2 * Math.min((ge + 1) / (M + 1), (le + 1) / (M + 1))); // iki yönlü
+        verdict = dir === 0 ? "izleme" : p < 0.05 ? ((dir > 0 ? mean > 0 : mean < 0) ? "pozitif kanıt" : "ters kanıt") : "kanıt yok";
+      }
+      rowsOut[b] = {n, nEff, days: a.days.length, mean, rate: good / n, ci, p, verdict, dir};
+    });
+    card.h[h] = {outDays, mkt: outDays ? mk / outDays : null, rows: rowsOut};
+  });
+  // Kelly olasılığı kalibrasyonu: tam gözlenmiş pencereler, günlük kapanışlarla hedef(2R)/stop(R) ilk geçişi
+  const lastBn = bn[ds[ds.length - 1].d], bins = [[0, 40], [40, 50], [50, 60], [60, 101]].map(([lo, hi]) => ({lo, hi, n: 0, win: 0, pred: 0}));
+  let dec = 0, win = 0, pSum = 0, brier = 0;
+  ds.forEach(x => { const b0 = bn[x.d]; if (b0 == null || lastBn < b0 + mD) return;
+    x.r.forEach(a => { if (a[5] == null || a[6] == null || !(a[1] > 0)) return; const S = Math.max(3, Math.min(15, 2 * a[5])), T = 2 * S; let res = 0;
+      for (let k = 1; k <= mD && !res; k++) { const y = byBn.get(b0 + k); if (!y) continue; const c = closes(y).get(a[0]); if (!(c > 0)) continue; const ret = (c / a[1] - 1) * 100; if (ret >= T) res = 1; else if (ret <= -S) res = -1; }
+      if (!res) return; const w = res > 0 ? 1 : 0, p = a[6] / 100; dec++; win += w; pSum += p; brier += (p - w) ** 2;
+      const bk = bins.find(q => a[6] >= q.lo && a[6] < q.hi); bk.n++; bk.win += w; bk.pred += p; });
+  });
+  if (dec) { const pReal = win / dec, base = pReal * (1 - pReal), nEff = Math.floor(dec / mD);
+    card.calib = {n: dec, nEff, mD, pPred: pSum / dec, pReal, bias: pReal - pSum / dec, brier: brier / dec, skill: base > 0 ? 1 - (brier / dec) / base : null, ok: nEff >= 30,
+      bins: bins.filter(q => q.n).map(q => ({lo: q.lo, hi: q.hi, n: q.n, pred: q.pred / q.n, real: q.win / q.n}))}; }
+  return card;
+}
+function sealGateApply(sl, card) {
+  card = card === undefined ? SEALCARD : card; sl.rawLabel = sl.label;
+  const rows = card && card.h && card.h[10] && card.h[10].rows ? card.h[10].rows : null; sl.ev = rows ? rows[sl.label] || null : null;
+  if ((R.sealGate ?? 1) && (sl.label === "AL" || sl.label === "GÜÇLÜ AL") && rows && rows[SEAL_BUY] && rows[SEAL_BUY].verdict === "ters kanıt") {
+    const e = rows[SEAL_BUY]; sl.gated = true; sl.why = [`Canlı karne: AL/GÜÇLÜ AL mühürleri 10 iş gününde piyasanın anlamlı biçimde gerisinde kaldı (ort. ${fmt(e.mean, 2)} puan, p = ${fmt(e.p, 3)}, ${e.nEff} bağımsız gözlem); kanıt düzelene kadar NÖTR gösterilir`].concat(sl.why);
+    sl.label = "NÖTR"; sl.cls = "neutral";
+  }
+  return sl;
 }

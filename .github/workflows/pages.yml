@@ -73,7 +73,7 @@ jobs:
         run: node archive.js
       - name: picks/snapshots/portfolios degistiyse kaydet
         run: |
-          FILES=""; for f in picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json scan_log.json kurul2_research.json macro_research.json viop.json viop_research.json stress.json newsmood.json newsmood_log.json geo.json news_log.json alarm_log.json alarm_state.json Arsiv fundamentals; do [ -e "$f" ] && FILES="$FILES $f"; done
+          FILES=""; for f in picks.json snapshots.json portfolios.json research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json mtf_log.json seal_log.json seal_card.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json scan_log.json kurul2_research.json macro_research.json viop.json viop_research.json stress.json newsmood.json newsmood_log.json geo.json news_log.json alarm_log.json alarm_state.json Arsiv fundamentals; do [ -e "$f" ] && FILES="$FILES $f"; done
           if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"

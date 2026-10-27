@@ -26,17 +26,19 @@ function istanbul() {
 }
 const now = istanbul(), date = opt("date", now.date);
 const slog = read("scan_log.json", {days: []}), mlog = read("mtf_log.json", {days: []}), store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
+const sealLog = read("seal_log.json", {days: []}), SEAL_KEEP = 130;
 const afterClose = !["Sat", "Sun"].includes(now.wd) && now.min >= 18 * 60 + 45;
 
 function publish() {
   fs.mkdirSync(SITE, {recursive: true});
+  for (const f of ["seal_card.json", "yorumcu_notlari.json"]) { const x = read(f, null); if (x) fs.writeFileSync(path.join(SITE, f), JSON.stringify(x)); } // mühür karnesi; kullanıcının repoya koyduğu yorumcu notları (her cihazda görünür)
   fs.writeFileSync(path.join(SITE, "picks.json"), JSON.stringify(store));
   fs.writeFileSync(path.join(SITE, "news_log.json"), JSON.stringify(nlog));
   fs.writeFileSync(path.join(SITE, "snapshots.json"), JSON.stringify(snaps));
   fs.writeFileSync(path.join(SITE, "mtf_log.json"), JSON.stringify(mlog));
   fs.writeFileSync(path.join(SITE, "scan_log.json"), JSON.stringify(slog));
 }
-if (!FORCE && (!afterClose || store.picks.some(p => p.d === date))) {
+if (!FORCE && (!afterClose || (store.picks.some(p => p.d === date) && sealLog.days.some(x => x.d === date)))) {
   console.log(!afterClose ? "Seans kapanışı değil; kayıt atlandı." : `${date} zaten kaydedildi.`);
   if (fs.existsSync("picks.json")) publish();
   process.exit(0);
@@ -68,6 +70,8 @@ Object.entries(NEWS).forEach(([n, v]) => { const s = UNI.find(x => x.name === n)
   liquid: UNI.filter(s => s.close > 0 && s.volume).map(s => [s.name, s.close, s.tl]).sort((a, b) => b[2] - a[2]).slice(0, 150).map(([n, c]) => [n, c]),
   fund: liquid300.map(s => ${JSON.stringify(FUND_COLS)}.map(c => { const v = s[c]; return typeof v === "number" ? Math.round(v * 1e4) / 1e4 : v ?? null; })),
   events,
+  seals: UNI.filter(s => s.ok && s.tl >= 10 && s.close > 0).sort((a, b) => b.tl - a.tl).slice(0, 300).map(s => { try { return sealRecord(s, committee(s)); } catch (e) { return null; } }).filter(x => x && x[2] >= 0),
+  sealEligible: Math.min(300, UNI.filter(s => s.ok && s.tl >= 10 && s.close > 0).length),
   mtf: UNI.filter(s => s.ok && s.mtf && s.mtf.w != null && s.close > 0).map(s => [s.name, s.mtf.d == null ? null : Math.round(s.mtf.d), Math.round(s.mtf.w), s.mtf.m == null ? null : Math.round(s.mtf.m), s.close, tierId(s.mtf.d, s.mtf.w, s.mtf.m), Math.round(s.tl), s.atrPct == null ? null : +s.atrPct.toFixed(1), s.nextEarn ? Math.round((s.nextEarn * 1000 - NOW) / 864e5) : null, s.sector || null]),
   mtfEligible: UNI.filter(s => s.ok && s.tl >= 5).length,
   scans: Object.fromEntries(["haftalik", "gunluk", "aylik", "bebek", "halkaarz"].map(id => [id, runScan(id, scanDefaults(id)).list.slice(0, 60).map(s => [s.name, s.close])])),
@@ -140,6 +144,17 @@ if (!fdates.length || bdays(fdates[fdates.length - 1], date) >= 5) {
   fundNote = ` | temel veri kaydı: ${out.fund.length} hisse`;
 }
 
+/* mühür karnesi: ham mühürler (düzeltme uygulanmadan) kaydedilir ki kanıt, kendi düzeltmesiyle gizlenmesin */
+let sealNote = "";
+sealLog.days = sealLog.days.filter(x => x.d !== date);
+if (out.seals.length >= 0.8 * out.sealEligible && out.seals.length >= 100) sealLog.days.push({d: date, v: 1, r: out.seals}); else sealNote = ` | mühür kaydı atlandı: ${out.seals.length}/${out.sealEligible} hisse (veri eksik)`;
+sealLog.days = sealLog.days.slice(-SEAL_KEEP); sealLog.updated = date;
+ctx.__sl = sealLog.days;
+const card = vm.runInContext("sealCard(__sl)", ctx); card.generated = date;
+fs.writeFileSync("seal_log.json", JSON.stringify(sealLog));
+fs.writeFileSync("seal_card.json", JSON.stringify(card));
+if (!sealNote) sealNote = ` | mühür kaydı: ${out.seals.length} hisse, karne ${card.ndays} gün`;
+
 fs.writeFileSync("picks.json", JSON.stringify(store));
 fs.writeFileSync("snapshots.json", JSON.stringify(snaps));
 fs.writeFileSync("news_log.json", JSON.stringify(nlog));
@@ -153,4 +168,4 @@ if (out.hc.length) alertLines.push(`YÜKSEK GÜVENİLİRLİKLİ SİNYAL (masa �
 if (strong.length) alertLines.push(`güçlü aday (ek teyit eksik) → ${strong.join(", ")}`);
 if (newLeaders.length) alertLines.push(`yeni lider kurulum (haftalık skor) → ${newLeaders.join(", ")}`);
 if (alertLines.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: ` + alertLines.join(" | ") + " (yatırım tavsiyesi değildir)");
-console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}`);
+console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}${sealNote}`);

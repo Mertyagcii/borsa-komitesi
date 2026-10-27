@@ -1573,7 +1573,9 @@ function kapKurumHtml(s) {
 
 /* ---------- Yorumcu notları (kullanıcı girdisi) ---------- */
 const CM_SRC = ["X (Twitter)", "TradingView fikri", "Aracı kurum / birim", "Telegram / forum", "Tanıdık / diğer"];
-const cmList = () => store.get("commentators", []);
+let CM_SERVER = []; // repoya konan yorumcu_notlari.json (her cihazda görünür); yerel notlarla birleşir
+const cmLocal = () => store.get("commentators", []);
+const cmList = () => { const l = cmLocal(), ids = new Set(l.map(x => x.id)); return l.concat(CM_SERVER.filter(x => !ids.has(x.id))); };
 let cmH = store.get("cmH", 10);
 async function renderCommentators() {
   const el = $("cmView"), list = cmList(), today = new Date().toISOString().slice(0, 10), who = [...new Set(list.map(x => x.who))];
@@ -1590,6 +1592,7 @@ async function renderCommentators() {
       <label>Tarih<input id="cmDate" type="date" value="${today}" max="${today}"></label>
       <label>Hedef fiyat<input id="cmTgt" type="number" step="0.01" style="width:90px"></label></div>
       <label style="display:block;margin-top:6px">Yorum / not (isteğe bağlı)<textarea id="cmTxt" rows="2" style="width:100%" placeholder="Yorumun özeti ya da bağlantısı"></textarea></label>
+      ${CM_SERVER.length ? `<div class="note">☁ Depodaki <b>yorumcu_notlari.json</b> dosyasından ${CM_SERVER.length} not otomatik yüklendi (her cihazda görünür). Kendi notlarınızı kalıcı yapmak için "Dışa aktar" ile indirip dosyayı depoya koyun.</div>` : ""}
       <div style="margin-top:6px"><button class="pbtn" data-cmadd="1">Ekle</button> <button data-cmexp="1">Dışa aktar (JSON)</button> <label class="btn">İçe aktar <input id="cmImp" type="file" accept=".json" style="display:none"></label></div></div>
     <h3 style="margin:12px 0 4px">Yorumcu karnesi</h3>
     <div class="tabs">${[5, 10, 20].map(h => `<button class="tab ${cmH === h ? "on" : ""}" data-cmh="${h}">${h} iş günü</button>`).join("")}</div>
@@ -1600,18 +1603,18 @@ async function renderCommentators() {
 }
 document.addEventListener("click", e => {
   if (view !== "yorumcu") return;
-  const del = e.target.closest("[data-cmdel]"); if (del) { store.set("commentators", cmList().filter(x => x.id !== del.dataset.cmdel)); renderCommentators(); return; }
+  const del = e.target.closest("[data-cmdel]"); if (del) { store.set("commentators", cmLocal().filter(x => x.id !== del.dataset.cmdel)); renderCommentators(); return; }
   const h = e.target.closest("[data-cmh]"); if (h) { cmH = +h.dataset.cmh; store.set("cmH", cmH); renderCommentators(); return; }
   if (e.target.closest("[data-cmexp]")) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(cmList(), null, 1)], {type: "application/json"})); a.download = "yorumcu_notlari.json"; a.click(); return; }
   if (e.target.closest("[data-cmadd]")) {
     const who = $("cmWho").value.trim(), n = $("cmN").value.trim().toUpperCase(), dir = $("cmDir").value, date = $("cmDate").value || new Date().toISOString().slice(0, 10), text = $("cmTxt").value.trim(), tgt = +$("cmTgt").value || null, s = UNIVERSE.find(x => x.name === n);
     if (!who) { toast("Yorumcu adı gerekli"); return; } if (!s) { toast("Geçerli bir hisse kodu girin"); return; }
-    const list = cmList(); list.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), who, src: $("cmSrc").value, n, dir, date, px: s.close, target: tgt, text}); store.set("commentators", list.slice(-500)); toast("Not eklendi"); renderCommentators();
+    const list = cmLocal(); list.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), who, src: $("cmSrc").value, n, dir, date, px: s.close, target: tgt, text}); store.set("commentators", list.slice(-500)); toast("Not eklendi"); renderCommentators();
   }
 });
 document.addEventListener("change", e => {
   if (e.target.id !== "cmImp" || !e.target.files[0]) return; const rd = new FileReader();
-  rd.onload = () => { try { const a = JSON.parse(String(rd.result)); if (!Array.isArray(a)) throw 0; const cur = cmList(), ids = new Set(cur.map(x => x.id)); a.filter(x => x && x.who && x.n && x.date && x.id && !ids.has(x.id)).forEach(x => cur.push({id: String(x.id), who: String(x.who), src: String(x.src || ""), n: String(x.n).toUpperCase(), dir: ["al", "sat", "izle"].includes(x.dir) ? x.dir : "izle", date: String(x.date), px: +x.px || null, target: +x.target || null, text: String(x.text || "")})); store.set("commentators", cur.slice(-500)); toast("İçe aktarıldı"); renderCommentators(); } catch (err) { toast("Geçersiz dosya"); } };
+  rd.onload = () => { try { const a = JSON.parse(String(rd.result)); if (!Array.isArray(a)) throw 0; const cur = cmLocal(), ids = new Set(cur.map(x => x.id)); a.filter(x => x && x.who && x.n && x.date && x.id && !ids.has(x.id)).forEach(x => cur.push({id: String(x.id), who: String(x.who), src: String(x.src || ""), n: String(x.n).toUpperCase(), dir: ["al", "sat", "izle"].includes(x.dir) ? x.dir : "izle", date: String(x.date), px: +x.px || null, target: +x.target || null, text: String(x.text || "")})); store.set("commentators", cur.slice(-500)); toast("İçe aktarıldı"); renderCommentators(); } catch (err) { toast("Geçersiz dosya"); } };
   rd.readAsText(e.target.files[0], "utf-8");
 });
 function commentHtml(s) {
@@ -1663,11 +1666,29 @@ function kpDecision(s, r) {
     : `<div class="kpbig mute">Pozisyon yok</div><div class="kps">Kelly ≤ 0: istatistiksel kenar yok (olasılık %${fmt(k.pWin * 100, 0)}, gereken ≈ %${fmt(100 / (1 + k.b), 0)})</div>`;
   const lv = k ? `<div class="kpbig">${fmt(k.stop0)} <span class="mute">/</span> ${fmt(k.target)}</div><div class="kps">stop −%${fmt(k.S, 1)} (2×ATR) · hedef +%${fmt(k.T, 1)} (2R) · +1R sonrası ${fmt(k.k, 1)}×ATR izleyen stop</div>` : '<div class="kpbig mute">–</div>';
   return `<div class="kphead"><div><div class="kpname">${esc(s.name)} <span class="kb">${esc(trSector(s.sector))}</span> ${c ? cheapBadge(s) : ""}</div><div class="kps">${esc(s.description || "")}</div><div class="kpprice">${fmt(s.close)} TL <span class="${chg > 0 ? "up" : chg < 0 ? "down" : ""}">${chg > 0 ? "+" : ""}${fmt(chg)}%</span> <span class="kps">· hacim ~${fmt(avgTl(s), 0)} mn TL/gün · RS ${fmt(s.rs, 0)}</span></div></div>
-    <div class="kpsealbox"><span class="kpseal ${sl.cls}">${esc(sl.label)}</span><div class="kps" style="max-width:300px;text-align:right">${sl.why.slice(0, 2).map(esc).join(" · ")}</div></div></div>
+    <div class="kpsealbox"><span class="kpseal ${sl.cls}">${esc(sl.label)}</span><div class="kps" style="max-width:300px;text-align:right">${sl.why.slice(0, 2).map(esc).join(" · ")}</div>${kpEv(sl)}</div></div>
     <div class="kpgrid"><div class="kpcard"><div class="kpl">Ağırlıklı karar skoru</div><div class="kpbig"><span class="up">%${d.al}</span> Boğa · <span class="down">%${d.sat}</span> Ayı</div><div class="dbt"><i class="a" style="width:${d.al}%"></i><i class="t" style="width:${d.tut}%"></i><i class="s" style="width:${d.sat}%"></i></div><div class="kps">%${d.tut} nötr · ${esc(d.label)}</div></div>
     <div class="kpcard"><div class="kpl">Kelly kriteri · kasa önerisi</div>${kelly}</div>
     <div class="kpcard"><div class="kpl">Dinamik stop ve hedef (ATR)</div>${lv}</div></div>`;
 }
+/* Güven Karnesi: mühürlerin canlı, ileriye dönük doğrulaması (seal_card.json; hesap core.js sealCard) */
+let kpTrustH = store.get("kpTrustH", 10);
+const KT_COL = {"pozitif kanıt": "up", "ters kanıt": "down"};
+const kpEv = sl => { const e = sl.ev; return e ? `<div class="kps" style="max-width:300px;text-align:right">Canlı karne (10 iş günü): ${e.mean > 0 ? "+" : ""}${fmt(e.mean, 2)} puan fazla getiri · ${e.nEff} bağımsız gözlem · <b class="${KT_COL[e.verdict] || ""}">${esc(e.verdict)}</b></div>` : '<div class="kps" style="max-width:300px;text-align:right">Canlı karne: bu mühür henüz ölçülmedi</div>'; };
+function kpTrust() {
+  const c = SEALCARD, head = '<div class="kpl">📊 Güven karnesi: mühürler gerçekte tuttu mu?</div>', pct = v => v == null ? "–" : "%" + fmt(v * 100, 0);
+  if (!c || !c.ndays) return `<div class="kpcard" style="margin-top:12px">${head}<div class="kps">Kayıt henüz başlamadı. Her seans kapanışında tüm likit hisselerin mührü kaydedilir ve 5/10/20 iş gün sonraki gerçek getiriyle ölçülür. Anlamlı hüküm için en az 3 çakışmayan pencere ve 30 bağımsız gözlem gerekir; o zamana kadar mühürler <b>ölçülmemiş</b> sayılmalıdır.</div></div>`;
+  const hh = c.h[kpTrustH], rows = hh ? hh.rows : {}, order = ["GÜÇLÜ AL", "AL", SEAL_BUY, "NÖTR", "UZAK DUR", "RİSKLİ", "KİLİTLİ"], cb = c.calib;
+  const tr = order.filter(k => rows[k]).map(k => { const r = rows[k]; return `<tr><td style="text-align:left"><b>${esc(k === SEAL_BUY ? "AL + GÜÇLÜ AL (birlikte)" : k)}</b></td><td>${r.n}</td><td>${r.nEff}</td><td class="${r.mean > 0 ? "up" : r.mean < 0 ? "down" : ""}">${r.mean > 0 ? "+" : ""}${fmt(r.mean, 2)}</td><td>${pct(r.rate)}${r.ci ? ` <span class="mute">(${pct(r.ci[0])}–${pct(r.ci[1])})</span>` : ""}</td><td>${r.p == null ? "–" : fmt(r.p, 3)}</td><td class="${KT_COL[r.verdict] || "mute"}">${esc(r.verdict)}</td></tr>`; }).join("");
+  const gate = rows[SEAL_BUY] && rows[SEAL_BUY].verdict === "ters kanıt" && kpTrustH === 10 ? '<div class="note down"><b>Otomatik düzeltme açık:</b> AL/GÜÇLÜ AL mühürleri 10 günde anlamlı biçimde piyasanın gerisinde kaldığı için Kokpit bunları NÖTR gösteriyor.</div>' : "";
+  return `<div class="kpcard" style="margin-top:12px">${head}<div class="kps">${c.ndays} seans kaydı (${esc(c.first)} → ${esc(c.last)}) · ${c.nrec.toLocaleString("tr-TR")} hisse-gün · kıyas: aynı gün ~300 likit hissenin eşit ağırlıklı ortalaması</div>
+    <div class="tabs" style="margin:8px 0">${[5, 10, 20].map(h => `<button class="tab ${kpTrustH === h ? "on" : ""}" data-kth="${h}">${h} iş günü</button>`).join("")}</div>
+    ${tr ? `<div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Mühür</th><th>Gözlem</th><th>Bağımsız</th><th>Ort. fazla getiri (puan)</th><th>İsabet (%95 aralık)</th><th>Şans testi p</th><th>Hüküm</th></tr></thead><tbody>${tr}</tbody></table></div>` : `<div class="kps">Bu ufukta (${kpTrustH} iş günü) henüz sonuçlanan gözlem yok.</div>`}
+    ${gate}
+    <div class="note">${cb ? `<b>Kelly kalibrasyonu:</b> modelin "hedefe stop'tan önce ulaşma" olasılığı ortalama %${fmt(cb.pPred * 100, 0)}, gerçekleşen %${fmt(cb.pReal * 100, 0)} (${cb.n} sonuç, ${cb.nEff} bağımsız${cb.skill != null ? `, Brier becerisi ${fmt(cb.skill, 2)}` : ""}). ${cb.ok ? `Kelly olasılığı bu sapma (${cb.bias >= 0 ? "+" : ""}${fmt(cb.bias * 100, 1)} puan) kadar düzeltiliyor.` : "Düzeltme için en az 30 bağımsız sonuç gerekir; henüz ham model kullanılıyor."}` : "<b>Kelly kalibrasyonu:</b> henüz tam gözlenmiş pencere yok."}</div>
+    <p class="note">Nasıl okunur: <b>fazla getiri</b> = hisse getirisi − aynı günün eşit ağırlıklı piyasa ortalaması. <b>Şans testi</b>: aynı gün aynı sayıda rastgele hisse seçilseydi bu sonuç çıkar mıydı (p &lt; 0,05 anlamlı). <b>Bağımsız</b> = gözlem / ufuk (aynı hisse art arda pencerelerde tekrarlanır). Hüküm için en az 30 bağımsız gözlem ve 3 çakışmayan pencere gerekir; yoksa "yetersiz veri". UZAK DUR / RİSKLİ / KİLİTLİ için "pozitif kanıt", bu hisselerin piyasanın gerisinde kalması demektir. Geçmişe dönük doldurma yoktur: bilanço verisi o günkü haliyle bilinmediğinden mühürler yalnızca ileriye doğru kaydedilir.</p></div>`;
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-kth]"); if (!b || view !== "kokpit") return; e.preventDefault(); e.stopPropagation(); kpTrustH = +b.dataset.kth; store.set("kpTrustH", kpTrustH); renderKokpit(); }, true);
 function kpHome() {
   const cand = current.slice(0, 25).map(s => { try { return [s, committee(s)]; } catch (e) { return null; } }).filter(Boolean);
   const hc = cand.filter(([s, r]) => highConfidence(s, r).ok), risk = cand.filter(([s, r]) => r.veto || r.veto2).slice(0, 6), qd = qualityDipList(UNIVERSE).slice(0, 5);
@@ -1676,6 +1697,7 @@ function kpHome() {
     <div class="kpgrid2"><div class="kpcard"><div class="kpl">✅ Yüksek güvenilirlikli sinyaller</div><div>${hc.length ? hc.map(([s]) => chip(s)).join("") : '<span class="kps">Şu an tüm filtreleri geçen sinyal yok (nadir olması beklenir).</span>'}</div></div>
     <div class="kpcard"><div class="kpl">⚠ Risk / veto altındakiler (aday listesinden)</div><div>${risk.length ? risk.map(([s, r]) => chip(s, r.veto ? "veto" : "uzman itirazı")).join("") : '<span class="kps">Yok.</span>'}</div></div>
     <div class="kpcard"><div class="kpl">🔍 Kaliteli ama düşüşte (izleme)</div><div>${qd.length ? qd.map(x => chip(x.s, "kalite " + fmt(x.qual, 0))).join("") : '<span class="kps">Yok.</span>'}</div></div></div>
+    ${kpTrust()}
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
 }
 function renderKokpit() {
@@ -1715,7 +1737,7 @@ function kellyHtml(s) {
   const k = kellyPlan(s, kellyCap, kellyP == null ? undefined : kellyP / 100); if (!k) return "";
   return `<details class="meet" open><summary>🎯 Pozisyon büyüklüğü (Kelly), dinamik izleyen stop ve kar al · <b class="${k.edge ? "up" : "mute"}">${k.edge ? "kenar var" : "kenar yok: pozisyon önerilmez"}</b></summary>
     <div class="note" style="display:flex;gap:14px;flex-wrap:wrap;align-items:end"><label>Kasa (TL) <input id="kellyCap" type="number" min="1000" step="1000" value="${kellyCap}" style="width:110px"></label>
-      <label>Sinyal güvenilirliği % <input id="kellyP" type="number" min="1" max="99" step="1" value="${kellyP == null ? "" : kellyP}" placeholder="model: ${fmt(k.pModel * 100, 0)}" style="width:80px"></label><span class="mute">boş bırakırsanız model olasılığı (Monte Carlo) kullanılır</span></div>
+      <label>Sinyal güvenilirliği % <input id="kellyP" type="number" min="1" max="99" step="1" value="${kellyP == null ? "" : kellyP}" placeholder="model: ${fmt((k.pCal != null ? k.pCal : k.pModel) * 100, 0)}" style="width:80px"></label><span class="mute">boş bırakırsanız ${k.pCal != null ? "canlı kalibrasyonlu model" : "model"} olasılığı (Monte Carlo) kullanılır</span></div>
     <div>${esc(k.text)}</div>${k.warn ? `<div class="note down">${esc(k.warn)}</div>` : ""}
     ${k.edge ? `<div class="note">Önerilen: <b>${fmt(k.amount, 0)} TL</b> (≈ ${k.shares} adet; stop çalışırsa kasanın <b>%${fmt(k.riskTl / kellyCap * 100, 2)}</b>'i, ${fmt(k.riskTl, 0)} TL kaybedilir). Başlangıç stop <b>${fmt(k.stop0)} TL</b> (−%${fmt(k.S, 1)} = 2×ATR), hedef <b>${fmt(k.target)} TL</b> (+%${fmt(k.T, 1)}, 2R). Fiyatlar BIST fiyat adımına (kademe) yuvarlanmıştır.</div>
     <table class="peert"><tr><th>Kar al</th><th>Seviye</th><th>Satış</th><th>Sonra</th></tr>${k.tp.map((x, i) => `<tr><td>+${x.r}R</td><td><b>${fmt(x.px)} TL</b> (+%${fmt((x.px / s.close - 1) * 100, 1)})</td><td>pozisyonun ${i === 0 ? "1/3'ü" : "1/3'ü"}</td><td>${i === 0 ? "stop girişe çekilir" : "kalan 1/3 izleyen stopla taşınır"}</td></tr>`).join("")}</table>
@@ -1898,7 +1920,8 @@ async function renderArena() {
     ${!A.rows.length ? "<p class='mute'>Bu filtrede kayıt yok.</p>" : `<div class="tw"><table class="arena"><thead><tr><th></th><th>Ajan</th><th>Ölçülen oy (n)</th><th>İsabet</th><th>%95 aralık</th><th>Olumlu oy isabeti</th><th>Olumsuz oy isabeti</th><th>Olumlu oylarda ort. fazla getiri</th><th>Bekleyen</th><th>Durum</th></tr></thead><tbody>
     ${A.rows.map(r => { const ok = r.n >= 30; const k = ok ? rank++ : -1; return `<tr><td>${ok ? medal(k) || k + 1 : "·"}</td><td><b>${esc(r.name)}</b></td><td>${r.n} <span class="mute">(${r.up.n}↑ ${r.dn.n}↓)</span></td>
       <td>${r.n ? `<b>${pct(r.rate)}</b> <span class="rbar"><i style="width:${r.rate * 100}%"></i><b></b></span>` : "–"}</td><td>${r.ci ? pct(r.ci[0]) + "–" + pct(r.ci[1]) : "–"}</td><td>${r.up.n ? pct(r.upRate) + " (" + r.up.n + ")" : "–"}</td><td>${r.dn.n ? pct(r.dnRate) + " (" + r.dn.n + ")" : "–"}</td>
-      <td class="${r.avgUp > 0 ? "up" : r.avgUp < 0 ? "down" : ""}">${r.avgUp == null ? "–" : (r.avgUp > 0 ? "+" : "") + fmt(r.avgUp, 2) + " puan"}</td><td class="mute">${r.pending}</td><td class="${r.status === "anlamlı üstünlük" ? "up" : r.status === "anlamlı olarak kötü" ? "down" : "mute"}">${esc(r.status)}</td></tr>`; }).join("")}</tbody></table></div>
+      <td class="${r.avgUp > 0 ? "up" : r.avgUp < 0 ? "down" : ""}">${r.avgUp == null ? "–" : (r.avgUp > 0 ? "+" : "") + fmt(r.avgUp, 2) + " puan"}</td><td class="mute">${r.pending}</td><td class="${r.statusEff === "anlamlı üstünlük" ? "up" : r.statusEff === "anlamlı olarak kötü" ? "down" : "mute"}" title="Ham n ${r.n}; örtüşme düzeltmeli bağımsız örnek ${r.nEff}">${esc(r.statusEff)}${r.status !== r.statusEff ? ` <span class="mute">(ham: ${esc(r.status)})</span>` : ""}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note"><b>Durum sütunu örtüşme düzeltmelidir:</b> aynı hisse ${arenaH} gün boyunca art arda pencerelerde yer aldığından bağımsız örnek yaklaşık n / ${arenaH}'dir; hüküm bu sayıyla verilir (ham sonuç parantezde).</p>
     <p class="note">Ölçülen toplam oy: ${A.measured}. "Bekleyen": oy verildi ama ${arenaH} iş günü henüz geçmedi. "Yetersiz örnek": n &lt; 30; madalya yalnızca n ≥ 30 olanlara verilir. Yeni uzmanların (Makro, Akıllı Para, Volatilite, Psikoloji) oyları kaydedilmeye başladı (bugünden önceki kayıtlarda yok); sonuçları birkaç hafta sonra görünür. Ekran satırları, efsane ekranlarının günlük listelerini ölçer. Eğitim amaçlıdır.</p>`}`;
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-arenah]"); if (b) { arenaH = +b.dataset.arenah; store.set("arenaH", arenaH); renderArena(); return; } const g = e.target.closest("[data-arenareg]"); if (g) { arenaReg = g.dataset.arenareg; store.set("arenaReg", arenaReg); renderArena(); } });
@@ -3780,6 +3803,8 @@ async function loadAux() {
   if (!GDT) job.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
   if (!GON) job.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
   job.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
+  job.push(hj("seal_card.json").then(m => { if (m && m.h) { SEALCARD = m; if (view === "kokpit") renderKokpit(); } }));
+  job.push(hj("yorumcu_notlari.json").then(m => { if (Array.isArray(m)) CM_SERVER = m.filter(x => x && x.id && x.n && x.who); }));
   job.push(hj("picks.json").then(p => { if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks, p.regime); } }));
   job.push(hj("viop.json").then(m => { if (m && m.stocks) VIOP = m; }));
   if (!STRESS) job.push(hj("stress.json").then(m => { if (m && m.stocks) STRESS = m; }));
