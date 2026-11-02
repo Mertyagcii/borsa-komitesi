@@ -42,5 +42,7 @@ chk("zincir adımı en sonda (deploy'dan sonra)", pages.index("python zincir.py"
 chk("zincir.yml pages.yml'yi tetikler, secret/anahtar kullanmaz", "gh workflow run pages.yml" in zin and "secrets." not in zin and "GITHUB_TOKEN" not in zin.replace("GITHUB_TOKEN ile", ""))
 chk("zincir.yml tek zincir (concurrency iptal) ve sayısal giriş doğrulaması", "cancel-in-progress: true" in zin and "*[!0-9]*" in zin)
 chk("pages.yml sabah başlatma cron'ları var", "42 3,4,5,6 * * 1-5" in pages)
+res = (ROOT / ".github/workflows/research.yml").read_text(encoding="utf-8")
+chk("pages.yml ve research.yml çalışma başında en güncel main'i çeker (kuyruktaki çalışma bayat SHA ile başlayıp çakışmasın)", "ref: main" in pages and "ref: main" in res)
 print("SONUC", "TAMAM" if ok else "HATA VAR")
 sys.exit(0 if ok else 1)

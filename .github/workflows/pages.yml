@@ -26,7 +26,11 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # ref: main → çalışma BAŞLARKEN main'in en güncel ucu indirilir. Aksi halde kuyrukta bekleyen çalışma (concurrency) tetiklendiği andaki bayat commit'i indirir,
+      # önceki çalışma veri dosyalarını push edince "git pull --rebase" tek satırlık JSON'larda çakışır (2 Kasım'da yaşandı).
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
