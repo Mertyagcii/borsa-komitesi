@@ -5,6 +5,7 @@ try { localStorage.clear(); localStorage.setItem("tourDone", "true"); } catch (e
 setTimeout(async function () {
   var R = {}, ok = function (k, v) { R[k] = v; };
   try {
+    await AUX_LATE; /* geç yüklenen yardımcı dosyalar (mtf_log, scan_log, ...) ilk çizimden sonra iner; testler hazır olmasını bekler */
     var pool = UNIVERSE.filter(function (s) { return s.tl >= 50 && s.close > 0; }), s0 = pool[0], s1 = pool[1];
     /* ---- Özel filtreler ---- */
     show("zaman"); zNewFilter(0); var a = zFilters(); ok("filtre_olustu", a.length === 1 && a[0].conds.length === 2);
@@ -140,6 +141,22 @@ setTimeout(async function () {
     ok("portfoyum_csv_ve_sepet", mh.indexOf("CSV içe aktar") >= 0 && mh.indexOf("Sepet çeşitliliği") >= 0 && mh.indexOf("myImportMsg") >= 0 && mh.indexOf("THYAO") >= 0); MY = my0;
     store.set("preds", []); kpSelect(kpS.name); document.querySelector('[data-dfadd="al"]').click();
     ok("wow_defter_kokpitten_ekleme", dfList().length === 1 && dfList()[0].n === kpS.name && dfList()[0].dir === "al" && dfList()[0].h === 10); store.set("preds", []);
+    /* ---- Erişilebilirlik ---- */
+    var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);
+    polishA11y(); ok("a11y_etiket_ve_klavye", !!tin.getAttribute("aria-label") && tsp.getAttribute("tabindex") === "0" && tsp.getAttribute("role") === "button");
+    var clickedN = 0; tsp.click = function () { clickedN++; }; /* Kokpit yakalama dinleyicisi [data-x] tıklamasını hedefe ulaşmadan işler; bu yüzden click() çağrısının yapıldığı doğrudan doğrulanır */ tsp.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true})); tsp.dispatchEvent(new KeyboardEvent("keydown", {key: " ", bubbles: true})); ok("a11y_enter_bosluk_ile_tiklama", clickedN === 2);
+    show("kokpit"); ok("a11y_aria_current", document.querySelector('.nav a[data-view="kokpit"]').getAttribute("aria-current") === "page" && document.querySelector('.nav a[data-view="dashboard"]').getAttribute("aria-current") === "false");
+    ok("a11y_iskelet", document.querySelector("a.skip") != null && $("main").getAttribute("role") === "main" && document.querySelector("nav.nav").getAttribute("aria-label") === "Sayfalar");
+    toast("deneme"); ok("a11y_toast_canli_bolge", $("toast").getAttribute("aria-live") === "polite" && $("toast").getAttribute("role") === "status");
+    show("tarayici"); await new Promise(function (r) { setTimeout(r, 900); }); polishA11y(); ok("a11y_tarayici_alanlari_etiketli", Array.prototype.every.call(document.querySelectorAll("#scrView input:not([type=hidden]),#scrView select"), function (e) { return !!(e.getAttribute("aria-label") || e.title || e.closest("label")); }));
+    tin.remove(); tsp.remove();
+    /* ---- Hız: hafif yoklama ve geç yükleme ---- */
+    ok("hiz_gec_yukleme_geldi", MLOG != null && SLOG != null && TECHSEAL != null && CALRES != null);
+    var calls = [], f0 = window.fetch; window.fetch = function (u) { calls.push(String(u)); return f0.apply(this, arguments); };
+    await loadData(false); var onlyMeta = calls.some(function (c) { return c.indexOf("data_meta.json") === 0; }) && !calls.some(function (c) { return c.indexOf("data.json") === 0; });
+    calls.length = 0; var ts0 = DATA.ts; DATA.ts = 1; await loadData(false); var full = calls.some(function (c) { return c.indexOf("data.json") === 0; });
+    calls.length = 0; await loadData(true); var forced = calls.some(function (c) { return c.indexOf("data.json") === 0; }) && !calls.some(function (c) { return c.indexOf("data_meta") >= 0; });
+    window.fetch = f0; ok("hiz_hafif_yoklama_veri_ayni", onlyMeta); ok("hiz_veri_degisince_tam_indirme", full && DATA.ts === ts0); ok("hiz_elle_yenile_tam_indirme", forced);
     show("dashboard"); ok("kokpit_disinda_kenar_cubuk", !document.body.classList.contains("kp")); kpSym = null; store.set("kpSym", null);
     /* ---- Stres testi, Kelly, tahta derinligi, golge arena ---- */
     var stN = UNIVERSE.filter(function (s) { return s.ok && STRESS && STRESS.stocks[s.name]; })[0]; if (stN) { openDetail(stN.name); var dk = $("detail").innerHTML; ok("detay_stres_testi", dk.indexOf("Kara ku") >= 0 && dk.indexOf("BIST 100") >= 0 && /(GE.T[\u0130I]|GE.EMED)/.test(dk)); ok("detay_kelly_blogu", dk.indexOf("kellyCap") >= 0 && dk.indexOf("Kelly") >= 0); closeDetail(); } else ok("stres_verisi_yok_atlandi", true);

@@ -17,10 +17,12 @@ for extra in ("core.js", "picks.json", "research.json", "mtf_research.json", "mt
     if (HERE / extra).exists():
         shutil.copy(HERE / extra, SITE / extra)
 snap = fetch_snapshot()
-(SITE / "data.json").write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+(SITE / "data.json").write_text(json.dumps(snap, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+# data_meta.json: birkaç bayt. Sayfa dakikada bir BUNA bakar; veri değişmediyse ~515 KB'lık data.json'u yeniden indirmez (açık sekme saatte ~30 MB çekiyordu).
+(SITE / "data_meta.json").write_text(json.dumps({"ts": snap.get("ts"), "generated": snap.get("generated")}, separators=(",", ":")), encoding="utf-8")
 
 news = {"ts": int(time.time()), "news": fetch_news(liquid_names(snap["stocks"]), time.time())}
-(SITE / "news.json").write_text(json.dumps(news, ensure_ascii=False), encoding="utf-8")
+(SITE / "news.json").write_text(json.dumps(news, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 try:  # Tarayıcı sayfası için geniş tablo (tüm göstergeler); hata verirse site yine yayınlanır
     from fetcher import fetch_wide

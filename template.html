@@ -198,6 +198,12 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
 .factok{font-size:12px;color:var(--mute);margin:4px 0}
+/* ---- Erişilebilirlik: görünür klavye odağı, hareket azaltma, içeriğe geç bağlantısı ---- */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.skip{position:absolute;left:-9999px;top:8px;z-index:3000;background:var(--panel);color:var(--text);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;text-decoration:none}
+.skip:focus{left:8px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
 /* ---- Wow katmanı: komut paleti, karar yolu, güven rozeti, şeffaflık ---- */
 .pal{position:fixed;inset:0;z-index:2000;background:rgba(5,8,12,.62);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:12vh 14px 0}
 .pal.open{display:flex}
@@ -332,11 +338,12 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
 </style>
 </head>
 <body>
+<a class="skip" href="#main">İçeriğe geç</a>
 <div class="shell">
   <aside class="side">
     <div class="brand"><span class="logo"><svg viewBox="0 0 24 24" width="26" height="26"><g fill="#fff"><ellipse cx="11" cy="12" rx="7.6" ry="4.1"/></g><g fill="#fff" fill-opacity=".92"><rect x="5.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="3" width="4.6" height="2.7" rx="1.35"/><rect x="5.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="12.3" y="18.3" width="4.6" height="2.7" rx="1.35"/><rect x="19.6" y="9.6" width="2.7" height="4.8" rx="1.35"/></g></svg></span><div><b>Borsa Komitesi</b><div class="sub" style="line-height:1.1">BIST Trading Ofisi</div></div></div>
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
-    <nav class="nav" id="nav">
+    <nav class="nav" id="nav" aria-label="Sayfalar">
       <a data-view="kokpit"><i data-ico="award"></i>Kokpit (sade görünüm)</a>
       <a data-view="seffaflik"><i data-ico="shield"></i>Şeffaflık Panosu</a>
       <a data-view="defter"><i data-ico="clipboard"></i>Tahmin Defterim</a>
@@ -384,7 +391,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     </div>
   </aside>
 
-  <section class="content">
+  <section class="content" id="main" role="main" tabindex="-1">
     <div class="topbar">
       <label class="search"><i data-ico="search"></i><input id="gsearch" list="tickers" placeholder="Hisse ara (örn. THYAO)" autocomplete="off"></label>
       <datalist id="tickers"></datalist>
@@ -901,7 +908,7 @@ function renderBacktest() {
 }
 /* ---------- Haber türleri, yardımcılar ---------- */
 function toast(msg) {
-  let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }
+  let el = $("toast"); if (!el) { el = document.createElement("div"); el.id = "toast"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
   el.textContent = msg; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2200);
 }
 const tagHtml = title => tagsOf(title).map(([n, , c]) => `<span class="ntag ${c}">${n}</span>`).join("");
@@ -2004,6 +2011,20 @@ document.addEventListener("click", e => {
     dfAdd({n, dir: $("dfDir").value, h: +$("dfH").value, conf: cf && cf >= 50 && cf <= 99 ? Math.round(cf) : null, date: todayTR(), note: $("dfNote").value.trim().slice(0, 120)}); toast("Tahmin eklendi"); renderDefter(); return; }
   const k = e.target.closest("[data-kp]"); if (k) { e.preventDefault(); kpSelect(k.dataset.kp); }
 });
+
+/* ===== Erişilebilirlik cilası: etiketsiz alanlar, klavyeyle tıklanabilir etiketler, geçerli sayfa bilgisi ===== */
+const A11Y_CLICK = "[data-x],[data-kp],[data-an],[data-chart],[data-go],[data-view],[data-sector],[data-lab],[data-spreset],[data-fav]";
+function polishA11y() {
+  document.querySelectorAll("input:not([type=hidden]):not([type=file]),select,textarea").forEach(e => {
+    if (e.getAttribute("aria-label") || e.getAttribute("aria-labelledby") || e.getAttribute("title") || e.closest("label") || (e.id && document.querySelector(`label[for="${e.id}"]`))) return;
+    let t = e.getAttribute("placeholder") || ""; if (!t) { const p = e.previousElementSibling; t = p ? (p.textContent || "") : ""; } if (!t) { const row = e.closest(".fb,td,li,div"); t = row ? ((row.querySelector("button,span,b") || row).textContent || "") : ""; }
+    t = String(t).replace(/\s+/g, " ").trim().slice(0, 48); e.setAttribute("aria-label", t || (e.type === "number" ? "Sayısal değer" : e.tagName === "SELECT" ? "Seçim" : "Metin girişi"));
+  });
+  document.querySelectorAll(A11Y_CLICK).forEach(e => { if (/^(TR|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(e.tagName) || (e.tagName === "A" && e.hasAttribute("href")) || e.hasAttribute("tabindex")) return; e.setAttribute("tabindex", "0"); e.setAttribute("role", "button"); });
+  document.querySelectorAll(".nav a[data-view]").forEach(a => { a.setAttribute("role", "link"); a.setAttribute("aria-current", a.classList.contains("active") ? "page" : "false"); });
+}
+document.addEventListener("keydown", e => { const t = e.target; if ((e.key === "Enter" || e.key === " ") && t && t.matches && t.matches(A11Y_CLICK) && !/^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(t.tagName) && !(t.tagName === "A" && t.hasAttribute("href"))) { e.preventDefault(); t.click(); } });
+let a11yT = 0; new MutationObserver(() => { clearTimeout(a11yT); a11yT = setTimeout(polishA11y, 150); }).observe(document.body, {childList: true, subtree: true}); setTimeout(polishA11y, 0);
 
 /* ---------- Kara kuğu stres testi, Kelly + izleyen stop, tahta derinliği, gölge arena ---------- */
 function stressHtml(s) {
@@ -4053,7 +4074,7 @@ function show(v) {
   document.querySelectorAll(".nav a").forEach(a => a.classList.toggle("active", a.dataset.view === activeKey));
   render();
   if (location.hash.slice(1) !== activeKey) history.replaceState(null, "", "#" + activeKey);
-  window.scrollTo(0, 0);
+  window.scrollTo(0, 0); try { polishA11y(); } catch (e) { /* cila isteğe bağlı */ }
 }
 document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => { closeDetail(); show(a.dataset.view); }));
 document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
@@ -4108,39 +4129,43 @@ function applyData(d) {
 }
 async function getJson(url, mode) { try { const r = await fetch(url, {cache: mode || "no-store"}); return r.ok ? await r.json() : null; } catch (e) { return null; } }
 /* Yardımcı dosyalar PARALEL iner (önceden sırayla ~20 istek = ilk çizim saniyelerce beklerdi). Saatlik damgalı dosyalar tarayıcı önbelleğini kullanır. */
+let AUX_LATE = Promise.resolve();
+/* KRİTİK dosyalar (komite/Kokpit hesabı için gerekenler) ilk çizimi bekletir; GEÇ dosyalar (yalnız belirli sayfa/kartların kullandıkları) ilk çizimden SONRA arka planda iner
+   ve gelince görünüm bir kez yenilenir. Ölçülen: ilk açılışta 33 istek ≈ 900 KB; tek tek her dosya bekletilirdi. */
 async function loadAux() {
-  const H = Math.floor(Date.now() / 36e5), hj = f => getJson(f + "?t=" + H, "default"), job = [];
+  const H = Math.floor(Date.now() / 36e5), hj = f => getJson(f + "?t=" + H, "default"), job = [], late = [];
   job.push(getJson("news.json?t=" + Date.now()).then(n => { if (n && n.news) NEWS = n.news; }));
-  job.push(loadNewsLog());
   if (!RESEARCH) job.push(hj("research.json").then(rs => { if (rs && rs.signals) { RESEARCH = rs; screenCache = null; } }));
   if (!MTFR) job.push(hj("mtf_composite.json").then(m => { if (m && m.tests) MTFR = m; }));
-  if (!MTFS) job.push(hj("mtf_research.json").then(m => { if (m && m.tests) MTFS = m; }));
-  if (!MTFW) job.push(hj("mtf_walkforward.json").then(m => { if (m && m.core) MTFW = m; }));
-  job.push(hj("mtf_log.json").then(m => { if (m && m.days) MLOG = m; }));
-  if (!GDT) job.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
-  if (!GON) job.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
-  job.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
-  job.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
-  if (!TECHSEAL) job.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
-  job.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));
-  job.push(hj("analyst_card.json").then(m => { if (m && m.h) ANALYST_CARD = m; }));
-  job.push(hj("calendar_log.json").then(m => { if (m && m.days) CALLOG = m; }));
-  if (!CALRES) job.push(hj("calendar_research.json").then(m => { if (m && m.tests) CALRES = m; }));
-  job.push(hj("seal_card.json").then(m => { if (m && m.h) { SEALCARD = m; if (view === "kokpit") renderKokpit(); } }));
-  job.push(hj("yorumcu_notlari.json").then(m => { if (Array.isArray(m)) CM_SERVER = m.filter(x => x && x.id && x.n && x.who); }));
   job.push(hj("picks.json").then(p => { if (p && p.picks) { PICKS = p; picksAt = Date.now(); buildMemory(p.picks, p.regime); } }));
   job.push(hj("viop.json").then(m => { if (m && m.stocks) VIOP = m; }));
   if (!STRESS) job.push(hj("stress.json").then(m => { if (m && m.stocks) STRESS = m; }));
   job.push(getJson("portfolios.json?t=" + H, "default").then(p => { if (p && p.p) { PORT = p; portAt = Date.now(); setPaper(p); } }));
-  if (!VIOP_R) job.push(hj("viop_research.json").then(m => { if (m && m.factors) VIOP_R = m; }));
   job.push(hj("newsmood.json").then(m => { if (m && m.stocks) NMOOD = m; }));
   job.push(hj("geo.json").then(m => { if (m && m.now) GEO = m; }));
   if (!KUR2) job.push(hj("kurul2_research.json").then(m => { if (m && m.signals) KUR2 = m; }));
   if (!MACRO_R) job.push(hj("macro_research.json").then(m => { if (m && m.conds) MACRO_R = m; }));
-  if (!IPOR) job.push(hj("ipo_research.json").then(m => { if (m && m.cond) IPOR = m; }));
-  if (!LIM) job.push(hj("limit_research.json").then(m => { if (m && m.tavan) LIM = m; }));
   if (!HIST || Date.now() - HIST.loadedAt > 6 * 3600e3) job.push(hj("history.json").then(h => { if (h && h.stocks) { HIST = h; HIST.loadedAt = Date.now(); mcCache = {}; } }));
+  late.push(loadNewsLog());
+  if (!MTFS) late.push(hj("mtf_research.json").then(m => { if (m && m.tests) MTFS = m; }));
+  if (!MTFW) late.push(hj("mtf_walkforward.json").then(m => { if (m && m.core) MTFW = m; }));
+  late.push(hj("mtf_log.json").then(m => { if (m && m.days) MLOG = m; }));
+  if (!GDT) late.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
+  if (!GON) late.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
+  late.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
+  late.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
+  if (!TECHSEAL) late.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
+  late.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));
+  late.push(hj("analyst_card.json").then(m => { if (m && m.h) ANALYST_CARD = m; }));
+  late.push(hj("calendar_log.json").then(m => { if (m && m.days) CALLOG = m; }));
+  if (!CALRES) late.push(hj("calendar_research.json").then(m => { if (m && m.tests) CALRES = m; }));
+  late.push(hj("seal_card.json").then(m => { if (m && m.h) SEALCARD = m; }));
+  late.push(hj("yorumcu_notlari.json").then(m => { if (Array.isArray(m)) CM_SERVER = m.filter(x => x && x.id && x.n && x.who); }));
+  if (!VIOP_R) late.push(hj("viop_research.json").then(m => { if (m && m.factors) VIOP_R = m; }));
+  if (!IPOR) late.push(hj("ipo_research.json").then(m => { if (m && m.cond) IPOR = m; }));
+  if (!LIM) late.push(hj("limit_research.json").then(m => { if (m && m.tavan) LIM = m; }));
   await Promise.all(job);
+  AUX_LATE = Promise.all(late).then(() => { if (UNIVERSE.length) { screenCache = null; try { refreshView(); } catch (e) { /* görünüm sonra yenilenir */ } } });
 }
 const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 async function loadData(refresh) {
@@ -4151,6 +4176,10 @@ async function loadData(refresh) {
   const btn = $("refresh");
   if (refresh) { btn.disabled = true; btn.style.opacity = .5; }
   try {
+    if (!refresh && !LOCAL && DATA.ts && HIST) { // hafif yoklama: veri değişmediyse ~515 KB'lık data.json'u yeniden indirme
+      const m = await getJson("data_meta.json?t=" + Date.now(), "no-store");
+      if (m && m.ts != null && m.ts === DATA.ts) { STATUS_BASE = `Veri: ${DATA.generated} · 15 dk'da bir yenilenir`; $("status").textContent = STATUS_BASE; paintHealth(); return; }
+    }
     const early = !HIST ? loadAux().catch(() => {}) : null; // ilk açılışta veri ve yardımcı dosyalar aynı anda iner
     const res = LOCAL ? await fetch("/api/" + (refresh ? "refresh" : "data"), refresh ? {method: "POST"} : {})
                       : await fetch("data.json?t=" + Date.now(), {cache: "no-store"});
