@@ -26,12 +26,12 @@ function istanbul() {
 }
 const now = istanbul(), date = opt("date", now.date);
 const slog = read("scan_log.json", {days: []}), mlog = read("mtf_log.json", {days: []}), store = read("picks.json", {picks: [], updated: null}), snaps = read("snapshots.json", {}), nlog = read("news_log.json", {events: []});
-const sealLog = read("seal_log.json", {days: []}), SEAL_KEEP = 130;
+const sealLog = read("seal_log.json", {days: []}), SEAL_KEEP = 130, calLog = read("calendar_log.json", {days: []}), analystLog = read("analyst_log.json", {days: []});
 const afterClose = !["Sat", "Sun"].includes(now.wd) && now.min >= 18 * 60 + 45;
 
 function publish() {
   fs.mkdirSync(SITE, {recursive: true});
-  for (const f of ["seal_card.json", "yorumcu_notlari.json"]) { const x = read(f, null); if (x) fs.writeFileSync(path.join(SITE, f), JSON.stringify(x)); } // mühür karnesi; kullanıcının repoya koyduğu yorumcu notları (her cihazda görünür)
+  for (const f of ["seal_card.json", "yorumcu_notlari.json", "analyst_now.json", "analyst_card.json", "calendar_log.json", "calendar_research.json"]) { const x = read(f, null); if (x) fs.writeFileSync(path.join(SITE, f), JSON.stringify(x)); } // mühür karnesi; kullanıcının repoya koyduğu yorumcu notları (her cihazda görünür)
   fs.writeFileSync(path.join(SITE, "picks.json"), JSON.stringify(store));
   fs.writeFileSync(path.join(SITE, "news_log.json"), JSON.stringify(nlog));
   fs.writeFileSync(path.join(SITE, "snapshots.json"), JSON.stringify(snaps));
@@ -146,6 +146,13 @@ mlog.updated = date;
 const liquidSet = new Set(out.liquid.slice(0, 100).map(x => x[0])), prevT = prevDay ? Object.fromEntries(prevDay.r.map(x => [x[0], x[5]])) : {};
 const isLead = t => t === "uyumlu" || t === "hlider";
 const newLeaders = out.mtf.filter(x => isLead(x[5]) && !isLead(prevT[x[0]]) && liquidSet.has(x[0]) && prevDay).map(x => x[0]).slice(0, 12);
+/* takvim kaydı (Yale Hirsch kadro üyesi): günlük eşit ağırlıklı piyasa getirisi; haftanın günü etkisinin CANLI doğrulaması (core.js calendarLive) */
+{
+  const pd = Object.keys(snaps).filter(k => k < date).sort().pop(), ps = pd ? snaps[pd] : null;
+  if (ps) { const xs = Object.keys(todaySnap).filter(k => ps[k] > 0 && todaySnap[k] > 0).map(k => todaySnap[k] / ps[k] - 1);
+    if (xs.length >= 50) { calLog.days = calLog.days.filter(x => x.d !== date); calLog.days.push({d: date, r: r2(xs.reduce((a, b) => a + b, 0) / xs.length * 100)}); } }
+  calLog.days = calLog.days.slice(-600); calLog.updated = date;
+}
 snaps[date] = todaySnap;
 const keep = Object.keys(snaps).sort().slice(-45);
 for (const k of Object.keys(snaps)) if (!keep.includes(k)) delete snaps[k];
@@ -170,6 +177,25 @@ fs.writeFileSync("seal_log.json", JSON.stringify(sealLog));
 fs.writeFileSync("seal_card.json", JSON.stringify(card));
 if (!sealNote) sealNote = ` | mühür kaydı: ${out.seals.length} hisse, karne ${card.ndays} gün`;
 
+/* analist / serbest dolaşım kaydı (PIT; Peter Lynch kadro üyesi): TradingView geniş tablosundan (CI'da build_site.py üretir). Sonuçlar icCard ile ölçülür; oy yok. */
+const AN_COLS = ["recommendation_mark", "recommendation_buy", "recommendation_sell", "price_target_1y_delta", "float_shares_percent_current"];
+let anNote = "";
+{
+  const wide = read(path.join(SITE, "screener.json"), null);
+  if (wide && wide.f && wide.names) {
+    const wi = Object.fromEntries(wide.names.map((n, i) => [n, i])), rows = [];
+    for (const a of out.seals) { const i = wi[a[0]]; if (i == null) continue;
+      const v = AN_COLS.map(c => { const x = wide.f[c] ? wide.f[c][i] : null; return typeof x === "number" && isFinite(x) ? Math.round(x * 100) / 100 : null; });
+      if (v.some(x => x != null)) rows.push([a[0], a[1], ...v]); }
+    if (rows.length >= 50) { analystLog.days = analystLog.days.filter(x => x.d !== date); analystLog.days.push({d: date, v: 1, r: rows}); analystLog.days = analystLog.days.slice(-90); analystLog.updated = date;
+      fs.writeFileSync("analyst_now.json", JSON.stringify({d: date, cols: AN_COLS, rows})); anNote = ` | analist/serbest dolaşım kaydı: ${rows.length} hisse`; }
+    else anNote = ` | analist kaydı atlandı (${rows.length} satır)`;
+  }
+  ctx.__al = analystLog.days; const acard = vm.runInContext(`icCard(__al, ${JSON.stringify(AN_COLS)})`, ctx); acard.generated = date;
+  fs.writeFileSync("analyst_log.json", JSON.stringify(analystLog)); fs.writeFileSync("analyst_card.json", JSON.stringify(acard));
+}
+fs.writeFileSync("calendar_log.json", JSON.stringify(calLog));
+
 fs.writeFileSync("picks.json", JSON.stringify(store));
 fs.writeFileSync("snapshots.json", JSON.stringify(snaps));
 fs.writeFileSync("news_log.json", JSON.stringify(nlog));
@@ -183,4 +209,4 @@ if (out.hc.length) alertLines.push(`YÜKSEK GÜVENİLİRLİKLİ SİNYAL (masa �
 if (strong.length) alertLines.push(`güçlü aday (ek teyit eksik) → ${strong.join(", ")}`);
 if (newLeaders.length) alertLines.push(`yeni lider kurulum (haftalık skor) → ${newLeaders.join(", ")}`);
 if (alertLines.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: ` + alertLines.join(" | ") + " (yatırım tavsiyesi değildir)");
-console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}${sealNote}`);
+console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}${sealNote}${anNote}`);

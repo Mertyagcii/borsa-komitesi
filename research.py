@@ -12,6 +12,7 @@ import json
 import pickle
 import time
 from datetime import datetime
+from math import erfc, sqrt
 from pathlib import Path
 
 import numpy as np
@@ -255,6 +256,31 @@ def pit_eval() -> dict:
     return out
 
 
+def bh_audit(sigs, facs, q=0.05) -> dict:
+    """Çoklu test düzeltmesi (Baş İstatistikçi): tüm sinyal ve faktör testleri tek ailedir. Benjamini-Hochberg (%q yanlış keşif) sonrası ayakta kalmayan
+    'kanıt var' / 'ters kanıt' hükmü 'belirsiz'e düşer (ham hüküm verdict_raw'da kalır). Bonferroni ayrıca bilgi için işaretlenir."""
+    tests = [s for s in list(sigs) + list(facs) if s.get("h10") and s["h10"].get("t") is not None]
+    m = len(tests)
+    if not m:
+        return {"tests": 0}
+    p = [erfc(abs(s["h10"]["t"]) / sqrt(2)) for s in tests]  # iki yönlü normal yaklaşımı (örneklem büyük)
+    order = sorted(range(m), key=lambda i: p[i])
+    kmax = -1
+    for k, i in enumerate(order):
+        if p[i] <= q * (k + 1) / m:
+            kmax = k
+    keep = {order[k] for k in range(kmax + 1)}
+    for i, s in enumerate(tests):
+        s["p"] = round(p[i], 5)
+        s["fdr"] = i in keep
+        s["bonf"] = p[i] < q / m
+        if not s["fdr"] and s["verdict"] in ("kanıt var", "ters kanıt"):
+            s["verdict_raw"] = s["verdict"]
+            s["verdict"] = "belirsiz"
+    return {"tests": m, "expected_false": round(m * q, 1), "naive": [s["id"] for s in tests if abs(s["h10"]["t"]) >= 2], "bh": [s["id"] for i, s in enumerate(tests) if i in keep],
+            "bonf": [s["id"] for s in tests if s["bonf"]], "downgraded": [s["id"] for s in tests if s.get("verdict_raw")]}
+
+
 def run(force=False, limit=None, log=print) -> dict:
     data = load(force, limit, log)
     f, index = frames(data)
@@ -294,13 +320,15 @@ def run(force=False, limit=None, log=print) -> dict:
         return "belirsiz"
     for s in sigs:
         s["verdict"] = verdict(s.get("h10"))
+    for s in facs:
+        h = s.get("h10")
+        s["verdict"] = "yetersiz" if not h else "kanıt var" if h["t"] >= 2 and h["spread"] > 0 else "ters kanıt" if h["t"] <= -2 and h["spread"] < 0 else "belirsiz"
+    audit = bh_audit(sigs, facs)  # çoklu test düzeltmesi: hüküm düzeltmeden SONRA kesinleşir
+    for s in sigs:
         r = s.get("recent")
         # tam örneklemde kanıt var ama son 1 yılda avantaj kaybolmuşsa: yaşlanıyor
         s["aging"] = bool(s["verdict"] == "kanıt var" and (not r or r["excess"] <= 0 or r["t"] < 1.0))
         s["active"] = bool(s["verdict"] == "kanıt var" and not s["aging"]) or (s["verdict"] == "belirsiz" and (s.get("h10") or {}).get("excess", 0) > 0)
-    for s in facs:
-        h = s.get("h10")
-        s["verdict"] = "yetersiz" if not h else "kanıt var" if h["t"] >= 2 and h["spread"] > 0 else "ters kanıt" if h["t"] <= -2 and h["spread"] < 0 else "belirsiz"
     # bileşik göreli güç (RS) skoru: 52h yakınlık + 6-1 ay + 1 ay getiri, dilim (decile) bazında 10g fazla getiri
     rk = lambda df: df.rank(axis=1, pct=True)
     comp = (rk(x["dist52"]) + rk(x["mom6_1"]) + rk(x["mom1"])) / 3
@@ -331,7 +359,7 @@ def run(force=False, limit=None, log=print) -> dict:
         "from": str(idx0.date()), "to": str(idx1.date()), "days": int(len(f["close"])),
         "base10": round(float(ew.mean() * 100), 2),
         "regime_share": {k: int((regime == k).sum()) for k in ("bull", "mixed", "bear")} if regime is not None else None,
-        "signals": sigs, "factors": facs, "rs_deciles": rs_dec,
+        "signals": sigs, "factors": facs, "audit": audit, "rs_deciles": rs_dec,
         "rs_top_trend": {"excess": round(float(top_tr.mean() * 100), 2), "std": round(float(top_tr.std() * 100), 2), "win": round(float((top_tr > 0).mean() * 100), 0), "n": int(len(top_tr))} if len(top_tr) else None,
         "sigma10": round(float(ex10.stack().dropna().std() * 100), 2),
     }

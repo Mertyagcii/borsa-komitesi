@@ -76,7 +76,7 @@ fcReset();
 const liqs = UNI.filter(x => x.ok && x.tl >= 10), lockedReal = liqs.filter(s => factCheck(s, committee(s), {nocache: true}).locked);
 stat.fcLocked = lockedReal.length + "/" + liqs.length;
 if (lockedReal.length > Math.max(2, liqs.length * 0.03)) errs.push("Hata Avcısı gerçek veride çok fazla kilit (yanlış alarm?): " + lockedReal.map(s => s.name).join(","));
-const fcS = liqs.find(s => { const f = factCheck(s, committee(s), {nocache: true}); return !f.stale && !f.locked && f.checked >= 4; });
+const fcS = liqs.find(s => { if (!(s.close >= 20)) return false; /* ucuz hissede günlük değişim toleransı (fiyat adımı/fiyat) büyür, +6 puanlık sahte değişim sınır içinde kalabilir: test hissesi ≥ 20 TL */ const f = factCheck(s, committee(s), {nocache: true}); return !f.stale && !f.locked && f.checked >= 4; });
 if (!fcS) errs.push("Hata Avcısı için ham verisi olan hisse bulunamadı");
 else {
   const rr = committee(fcS), orig = {rsi: fcS.rsi, sma50: fcS.sma50, change: fcS.change, close: fcS.close};
@@ -430,6 +430,62 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   // arena: örtüşme düzeltmesi (ham sonuçlara dokunmaz)
   const asx = arenaStats(arP, 10), sx = asx.rows.find(x => x.id === "simons"); if (!(sx.nEff === Math.floor(sx.n / 10) && sx.statusEff === "yetersiz örnek" && sx.status === "anlamlı olarak kötü")) errs.push("arena örtüşme düzeltmesi hatalı: " + JSON.stringify([sx.n, sx.nEff, sx.status, sx.statusEff]));
   stat.sealcard = "AL5 pos " + al5(cardPos).mean.toFixed(2) + "/" + al5(cardPos).p + " neg " + al5(cardNeg).mean.toFixed(2) + "/" + al5(cardNeg).p + " null " + al5(cardNull).mean.toFixed(2) + "/" + al5(cardNull).p;
+}
+// --- Gözlemci kadro: çoklu test, risk karnesi, PIT sıralama gücü, sepet, rejim, takvim ---
+{
+  // Benjamini-Hochberg ve normal p
+  const b1 = bhSurvive([0.001, 0.04, 0.5, 0.8]), b2 = bhSurvive([0.001, 0.01, 0.02, 0.9]), b3 = bhSurvive([]);
+  if (!(b1.size === 1 && b1.has(0) && b2.size === 3 && !b2.has(3) && b3.size === 0)) errs.push("BH çoklu test düzeltmesi hatalı: " + [...b1] + " | " + [...b2]);
+  if (!(Math.abs(normP2(1.96) - 0.05) < 0.002 && Math.abs(normP2(0) - 1) < 1e-6 && normP2(5) < 1e-5)) errs.push("normP2 hatalı: " + normP2(1.96));
+  // Baş İstatistikçi: araştırma denetimi
+  const rs0 = RESEARCH; RESEARCH = {signals: [{id: "a", h10: {t: 5}}, {id: "b", h10: {t: 2.1}}].concat(Array.from({length: 18}, (_, i) => ({id: "n" + i, h10: {t: 0.3}}))), factors: []};
+  const au = researchAudit(); RESEARCH = rs0;
+  if (!(au.tests === 20 && au.naive.length === 2 && au.bh.length === 1 && au.bh[0] === "a" && au.bonf.length === 1 && Math.abs(au.expectedFalse - 1) < 1e-9)) errs.push("researchAudit hatalı: " + JSON.stringify(au));
+  // Risk Hakemi: RİSKLİ (si=1) hisseleri daha oynak/derin düşüyorsa risk öngörüsü doğrulanmalı; aynıysa fark yok; daha sakinse ters
+  const rng2 = sealRng(4242), g2 = () => { let u = 0; for (let i = 0; i < 6; i++) u += rng2(); return (u - 3) * 1.41; };
+  const mkRisk = (vm, nd) => { const names = Array.from({length: 120}, (_, i) => "R" + i), px = Object.fromEntries(names.map(n => [n, 100])), days = []; let d = new Date("2026-01-05T12:00:00Z");
+    for (let k = 0; k < nd; k++) { while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1); const mkt = g2() * 0.6;
+      days.push({d: d.toISOString().slice(0, 10), v: SEAL_VER, r: names.map((n, i) => { const si = i < 40 ? 1 : 5; if (k > 0) px[n] *= 1 + (mkt + g2() * (si === 1 ? vm : 1)) / 100; return [n, Math.round(px[n] * 100) / 100, si, 0, 40, 2, 50, null]; })}); d.setUTCDate(d.getUTCDate() + 1); } return days; };
+  const rkA = sealCard(mkRisk(2.5, 70)).h[5].rows["RİSKLİ"], rkB = sealCard(mkRisk(1, 70)).h[5].rows["RİSKLİ"], rkC = sealCard(mkRisk(0.35, 70)).h[5].rows["RİSKLİ"];
+  if (!(rkA.risk && rkA.risk.mae < -0.5 && rkA.risk.stop > 5 && rkA.risk.verdict === "risk öngörüsü doğrulandı" && rkA.risk.fdr === true)) errs.push("risk karnesi: gerçekten daha riskli grup doğrulanmadı: " + JSON.stringify(rkA.risk));
+  if (!(rkB.risk && rkB.risk.verdict === "risk farkı yok")) errs.push("risk karnesi: farksız grup şans eseri anlamlı çıktı: " + JSON.stringify(rkB.risk));
+  if (!(rkC.risk && rkC.risk.mae > 0.3 && rkC.risk.verdict === "risk öngörüsü ters (daha az düşüş)")) errs.push("risk karnesi: daha sakin 'riskli' grup ters çıkmadı: " + JSON.stringify(rkC.risk));
+  if (!(sealCard(mkRisk(2.5, 9)).h[5].rows["RİSKLİ"].risk.verdict === "yetersiz veri")) errs.push("risk karnesi: kısa kayıtta hüküm verildi");
+  // PIT sıralama gücü (icCard): alan ileri getiriyi gerçekten öngörüyorsa pozitif, rastgeleyse kanıt yok
+  const mkPit = (nd) => { const names = Array.from({length: 100}, (_, i) => "P" + i), px = Object.fromEntries(names.map(n => [n, 100])), days = []; let d = new Date("2026-01-05T12:00:00Z");
+    for (let k = 0; k < nd; k++) { while ([0, 6].includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1); const mkt = g2() * 0.6;
+      days.push({d: d.toISOString().slice(0, 10), v: 1, r: names.map((n, i) => { if (k > 0) px[n] *= 1 + (mkt + g2() * 1.2 + ((i % 10) - 4.5) * 0.12) / 100; return [n, Math.round(px[n] * 100) / 100, i % 10, Math.round(rng2() * 100)]; })}); d.setUTCDate(d.getUTCDate() + 1); } return days; };
+  const ic1 = icCard(mkPit(70), ["sig", "noise"]).h[5];
+  if (!(ic1.sig && ic1.sig.mean > 0.1 && ic1.sig.verdict === "pozitif kanıt")) errs.push("icCard: gerçek öngörücü alan pozitif kanıt vermedi: " + JSON.stringify(ic1.sig));
+  if (!(ic1.noise && Math.abs(ic1.noise.mean) < 0.08 && (ic1.noise.verdict === "kanıt yok" || ic1.noise.verdict === "yetersiz veri"))) errs.push("icCard: rastgele alan anlamlı çıktı: " + JSON.stringify(ic1.noise));
+  if (!(icCard(mkPit(8), ["sig"]).h[5].sig === null || icCard(mkPit(8), ["sig"]).h[5].sig.verdict === "yetersiz veri")) errs.push("icCard: kısa kayıtta hüküm verildi");
+  // Portföy Mimarı: aynı sektörden sepet uyarı vermeli; çeşitli sepet vermemeli (veya daha az)
+  const bySec = {}; UNI.filter(x => x.ok && x.tl >= 10 && x.sector && retsOf(x.name)).forEach(x => (bySec[x.sector] = bySec[x.sector] || []).push(x));
+  const bigSec = Object.entries(bySec).sort((a, b) => b[1].length - a[1].length)[0], same = bigSec[1].slice(0, 6).map(x => x.name), mixed = Object.values(bySec).map(a => a[0].name).slice(0, 6);
+  const pa1 = portfolioArchitect(same), pa2 = portfolioArchitect(mixed);
+  if (!(pa1 && Math.abs(pa1.secs[0][1] - 1) < 1e-9 && pa1.flags.some(f => f.indexOf("aynı sektörde") > 0) && pa1.effN >= 1 && pa1.effN <= pa1.k + 1e-9)) errs.push("portföy mimarı: aynı sektör sepeti uyarılmadı: " + JSON.stringify(pa1 && [pa1.secs[0], pa1.flags]));
+  if (!(pa2 && pa2.secs[0][1] < 0.5 && pa2.hhi < pa1.hhi)) errs.push("portföy mimarı: çeşitli sepet yoğun görüldü");
+  if (!(portfolioArchitect(["YOKTUR1"]) === null && portfolioArchitect([same[0]]) === null)) errs.push("portföy mimarı: tek/geçersiz hissede null dönmedi");
+  const pw = portfolioArchitect(same, [10, 1, 1, 1, 1, 1]); if (!(pw && pw.effN < pa1.effN)) errs.push("portföy mimarı: ağırlık yoğunlaşması etkin çeşitliliği düşürmedi");
+  // Rejim Bekçisi
+  const rg0 = REGIME, rs1 = RESEARCH; REGIME = {trend: "bear", label: "Ayı"}; RESEARCH = {signals: [{id: "x", label: "X", verdict: "kanıt var", h10: {bear: 1.2, bear_n: 100}}, {id: "y", label: "Y", verdict: "kanıt var", h10: {bear: -0.4, bear_n: 80}}, {id: "z", label: "Z", verdict: "belirsiz", h10: {bear: 2, bear_n: 90}}], factors: []};
+  const rk1 = regimeKeeper(); REGIME = {trend: "mixed", label: "Geçiş"}; const rk2 = regimeKeeper(); REGIME = rg0; RESEARCH = rs1;
+  if (!(rk1.ok.length === 1 && rk1.ok[0].id === "x" && rk1.flip.length === 1 && rk1.flip[0].id === "y" && rk2.ok.length === 0 && rk2.text.indexOf("ayrı kanıt yok") > 0)) errs.push("rejim bekçisi hatalı: " + JSON.stringify([rk1, rk2]));
+  // Takvim: bağlam + canlı doğrulama
+  const cr0 = CALRES, cl0 = CALLOG;
+  CALRES = {base: 0.1, tests: [1, 2, 3, 4, 5].map(i => ({id: "wd" + i, label: "g" + i, mean: i === 3 ? -0.4 : 0.1, t: i === 3 ? -3.9 : 0.2, h1: i === 3 ? -0.6 : 0.1, h2: i === 3 ? -0.2 : 0.1, fdr: i === 3})).concat([{id: "mo11", label: "Ay 11", mean: 0.13, t: 0.2, h1: 0.2, h2: 0.03, fdr: false}])};
+  CALLOG = null; const c0 = calendarContext("2026-11-04T09:00:00Z");
+  CALLOG = {days: Array.from({length: 40}, (_, i) => { const dd = new Date("2026-01-07T12:00:00Z"); dd.setUTCDate(dd.getUTCDate() + 7 * i); return {d: dd.toISOString().slice(0, 10), r: -0.5}; }).concat(Array.from({length: 40}, (_, i) => { const dd = new Date("2026-01-08T12:00:00Z"); dd.setUTCDate(dd.getUTCDate() + 7 * i); return {d: dd.toISOString().slice(0, 10), r: 0.3 + (i % 3) * 0.1}; }))};
+  const c1 = calendarContext("2026-11-04T09:00:00Z"), c2 = calendarContext("2026-11-07T09:00:00Z"); CALRES = cr0; CALLOG = cl0;
+  if (!(c0 && c0.wd === 3 && c0.tw.id === "wd3" && c0.text.indexOf("Çarşamba") >= 0 && c0.text.indexOf("anlamlı") >= 0 && c0.text.indexOf("canlı doğrulama henüz başlamadı") >= 0)) errs.push("takvim bağlamı hatalı: " + (c0 && c0.text));
+  if (!(c1.live && c1.live.n === 40 && c1.live.mean < -0.4 && c1.text.indexOf("canlı doğrulama: 40 Çarşamba") >= 0)) errs.push("takvim canlı doğrulama hatalı: " + (c1 && c1.text));
+  if (!(c2.wd === 6 && c2.tw === null && c2.short === "Borsa kapalı gün")) errs.push("takvim hafta sonu hatalı");
+  if (calendarContext() !== null) errs.push("takvim verisi yokken null dönmedi");
+  // Gözlemci kadro: 6 kişi, hepsi metinli ve oy yok
+  { const os = UNI.find(x => x.ok && x.tl >= 10 && x.atrPct > 0), cad = observerCadre(os);
+    if (!(cad.length === 6 && ["istat", "risk", "takvim", "analist", "portfoy", "rejim"].every((id, i) => cad[i].id === id) && cad.every(c => c.text.length > 20 && c.text.indexOf("hesaplanamadı") < 0 && c.status.indexOf("oy hakkı yok") > 0))) errs.push("gözlemci kadro hatalı: " + JSON.stringify(cad.map(c => [c.id, c.text.slice(0, 60)])));
+    const an0 = ANALYST; ANALYST = {d: "x", cols: ["recommendation_mark", "recommendation_buy", "recommendation_sell", "price_target_1y_delta", "float_shares_percent_current"], rows: [[os.name, os.close, 1.4, 7, 0, 35, 20]]};
+    const cad2 = observerCadre(os); ANALYST = an0; if (!(cad2[3].text.indexOf("7 al / 0 sat") >= 0 && cad2[3].text.indexOf("düşük") >= 0)) errs.push("analist satırı hatalı: " + cad2[3].text); }
 }
 // --- Tahta derinliği ---
 const dpBase = (extra) => ({t: "10:30", bids: [{p: 100, q: 1000, o: 20}, {p: 99.9, q: 1200, o: 25}, {p: 99.8, q: 900, o: 18}, {p: 99.7, q: 1100, o: 22}, {p: 99.6, q: 1000, o: 20}].concat(extra && extra.bids || []), asks: [{p: 100.1, q: 900, o: 18}, {p: 100.2, q: 1100, o: 22}, {p: 100.3, q: 1000, o: 20}, {p: 100.4, q: 950, o: 19}, {p: 100.5, q: 1050, o: 21}].concat(extra && extra.asks || [])});
