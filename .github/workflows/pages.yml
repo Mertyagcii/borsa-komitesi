@@ -13,6 +13,7 @@ permissions:
   pages: write
   id-token: write
   actions: write    # zincir.yml'yi tetiklemek icin (kendi kendini suren veri dongusu)
+  issues: write     # kritik alarm / gunluk ozet bildirimi icin (tek "bildirimler" basligina yorum)
 
 concurrency:
   group: pages
@@ -90,6 +91,12 @@ jobs:
           TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
           ALARM_WEBHOOK_URL: ${{ secrets.ALARM_WEBHOOK_URL }}
         run: node notify.js alerts.txt
+      - name: Kritik alarm ve gunluk ozet -> GitHub bildirimi (anahtar gerekmez; depo sahibi anilir)
+        if: ${{ !cancelled() }}
+        continue-on-error: true   # bildirim sorunu veri yayinini ASLA engellemesin
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/bildir.sh
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

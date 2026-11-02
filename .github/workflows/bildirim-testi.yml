@@ -1,0 +1,24 @@
+name: Bildirim testi (elle)
+
+# Bildirim hattını uçtan uca dener: başlığı açar/bulur ve tek bir test yorumu yazar. Yalnızca elle çalıştırılır.
+on:
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Test bildirimi gonder
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Bu bir TEST bildirimidir: bildirim hattı çalışıyor. Gerçek alarmlar ve günlük özet aynı yoldan gelir." > alarms.txt
+          bash .github/scripts/bildir.sh

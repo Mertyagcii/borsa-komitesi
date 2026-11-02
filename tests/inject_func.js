@@ -133,6 +133,11 @@ setTimeout(async function () {
     var dsx = dfStats(dfList()); ok("wow_defter_istatistik", dsx.n === 1 && dsx.pending === 1 && dsx.nodata === 1 && dsx.brier != null && dsx.ci != null);
     show("defter"); await new Promise(function (r) { setTimeout(r, 500); }); var dfh = $("dfView").innerHTML;
     ok("wow_defter_sayfasi", dfh.indexOf("Tahmin Defterim") >= 0 && dfh.indexOf(nm) >= 0 && dfh.indexOf("bekliyor") >= 0 && dfh.indexOf("veri yok") >= 0 && (dfh.indexOf("haklı") >= 0 || dfh.indexOf("haksız") >= 0) && dfh.indexOf("Kalibrasyon (Brier)") >= 0);
+    var known = new Set(UNIVERSE.map(function (s) { return s.name; })), pc = portfolioCsv("\uFEFFHisse Kodu;Adet;Ortalama Maliyet\nTHYAO.E;100;250,50\nASELS;50;180,25\nTHYAO (Türk Hava Yolları);50;300\nXXXX;10;5\nNAKİT;1;20.000,00\nGARAN;0;10", known), th0 = pc.pos.filter(function (p) { return p.n === "THYAO"; })[0];
+    ok("csv_portfoy_ayristirma", pc.pos.length === 2 && th0 && th0.sh === 150 && Math.abs(th0.cost - (100 * 250.5 + 50 * 300) / 150) < 1e-9 && pc.skipped.length === 2 && pc.skipped[0].n === "XXXX" && pc.cash === 20000 && !pc.error);
+    ok("csv_portfoy_hatalar", portfolioCsv("a;b\n1;2", known).error != null && portfolioCsv("", known).error != null && portfolioCsv("Hisse,Lot,Maliyet\nTHYAO,10,100.5", known).pos[0].cost === 100.5 && portfolioCsv("Hisse;Adet\nTHYAO;5", known).error != null);
+    var my0 = MY; MY = {pos: pc.pos.concat([{n: "GARAN", sh: 400, cost: 200}]), cash: 5000}; show("portfoyum"); await new Promise(function (r) { setTimeout(r, 300); }); var mh = $("myView").innerHTML;
+    ok("portfoyum_csv_ve_sepet", mh.indexOf("CSV içe aktar") >= 0 && mh.indexOf("Sepet çeşitliliği") >= 0 && mh.indexOf("myImportMsg") >= 0 && mh.indexOf("THYAO") >= 0); MY = my0;
     store.set("preds", []); kpSelect(kpS.name); document.querySelector('[data-dfadd="al"]').click();
     ok("wow_defter_kokpitten_ekleme", dfList().length === 1 && dfList()[0].n === kpS.name && dfList()[0].dir === "al" && dfList()[0].h === 10); store.set("preds", []);
     show("dashboard"); ok("kokpit_disinda_kenar_cubuk", !document.body.classList.contains("kp")); kpSym = null; store.set("kpSym", null);

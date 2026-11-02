@@ -3270,6 +3270,23 @@ function adviceFor(s, r, p) {
   if (r.score >= 2) return [pnl > 0 ? "Masa olumlu ve pozisyon kazanıyor: tutun. Livermore'a göre ekleme ancak kazanırken ve pivot üstünde mümkün (kaybedene asla)." : "Masa olumlu: tutun; zarardaki pozisyona ekleme yapmayın.", "up"];
   return ["Masa nötr: planınıza (stop) sadık kalın; yeni bir neden oluşana dek ekleme yapmayın.", "mute"];
 }
+/* Aracı kurum dışa aktarımı (CSV): hisse, adet, maliyet sütunları; Türkçe ondalık virgül, noktalı virgül, BOM, ".E" eki, aynı hissenin tekrar eden satırları (ağırlıklı ortalama maliyet) ve NAKİT satırı desteklenir. */
+const MYCSV_SYN = {stock: ["hisse kodu", "hisse", "sembol", "menkul kiymet", "menkul", "enstruman", "kod", "ticker", "symbol", "stock"], qty: ["adet", "lot", "miktar", "bakiye", "quantity", "qty", "shares"], cost: ["ortalama maliyet", "ort maliyet", "ort. maliyet", "birim maliyet", "alis maliyeti", "ortalama alis", "ort alis", "alis fiyati", "average cost", "avg cost", "maliyet", "cost"]};
+function portfolioCsv(text, known) {
+  const rows = csvParse(String(text || "").replace(/^\uFEFF/, "")); if (rows.length < 2) return {error: "En az bir başlık ve bir veri satırı gerekir."};
+  const hdr = rows[0].map(akdNorm), idx = {};
+  Object.entries(MYCSV_SYN).forEach(([k, syns]) => { for (const s of syns) { const ns = akdNorm(s), i = hdr.findIndex(h => h === ns); if (i >= 0) { idx[k] = i; return; } } for (const s of syns) { const ns = akdNorm(s), i = hdr.findIndex((h, j) => h.includes(ns) && !Object.values(idx).includes(j)); if (i >= 0) { idx[k] = i; return; } } });
+  if (idx.stock == null || idx.qty == null || idx.cost == null) return {error: "Gerekli sütunlar: hisse (kod), adet (lot) ve maliyet (ortalama maliyet)."};
+  const pos = {}, skipped = []; let cash = null;
+  rows.slice(1).forEach((r, ln) => {
+    const raw = String(r[idx.stock] || "").trim(); if (!raw) return; const n = raw.split(/[\s(]/)[0].toUpperCase().replace(/\.E$/, ""), sh = akdNum(r[idx.qty]), c = akdNum(r[idx.cost]);
+    if (/^(nakit|cash|bakiye tl)$/.test(trFold(n))) { if (sh != null) cash = (cash || 0) + (c != null && c > 0 ? sh * c : sh); return; }
+    if (!known.has(n)) { skipped.push({row: ln + 2, n: raw, why: "bilinmeyen hisse kodu"}); return; }
+    if (!(sh > 0) || !(c > 0)) { skipped.push({row: ln + 2, n, why: "adet ya da maliyet geçersiz"}); return; }
+    const e = pos[n]; if (e) { e.cost = (e.cost * e.sh + c * sh) / (e.sh + sh); e.sh += sh; } else pos[n] = {n, sh, cost: c};
+  });
+  return {pos: Object.values(pos), skipped, cash};
+}
 function myAdd(n, sh, cost) {
   n = String(n || "").trim().toUpperCase();
   if (!UNIVERSE.some(s => s.name === n)) { toast("Hisse bulunamadı: " + n); return false; }
@@ -3286,6 +3303,12 @@ function renderMyPort() {
   const secs = Object.entries(sec).sort((a, b) => b[1] - a[1]), topSec = secs.length ? secs[0][1] / tot * 100 : 0, topPos = live.length ? Math.max(...live.map(x => x.val)) / tot * 100 : 0;
   const stopRisk = tot ? live.reduce((a, x) => a + x.val * ((x.r.l.seytan.stopPct || 8) / 100), 0) / tot * 100 : 0;
   const issues = []; let score = 100;
+  const arch = live.length >= 2 ? (() => { try { return portfolioArchitect(live.map(x => x.s.name), live.map(x => x.val)); } catch (e) { return null; } })() : null; // Ray Dalio: gerçek çeşitlilik
+  if (arch && arch.flags.length) { score -= Math.min(15, arch.flags.length * 5); arch.flags.forEach(f => issues.push("Sepet: " + f + ".")); }
+  live.forEach(x => { // Kelly payı ve maliyet bazlı stop
+    x.kp = (() => { try { return kellyPlan(x.s, tot); } catch (e) { return null; } })(); const w = x.val / tot * 100, kf = x.kp && x.kp.edge ? x.kp.f * 100 : 0;
+    if (x.kp && w > Math.max(5, kf * 2)) { score -= 3; issues.push(`${x.s.name}: pozisyon portföyün %${fmt(w, 0)}'i; Kelly önerisi ${kf ? "%" + fmt(kf, 1) : "pozisyon yok (istatistiksel kenar yok)"}: orantısız büyük olabilir.`); }
+    const stp = x.r.l.seytan.stopPct; if (stp && x.s.close <= x.p.cost * (1 - stp / 100)) { score -= 4; issues.push(`${x.s.name}: maliyetten −%${fmt(stp, 1)} stop seviyesini (${fmt(x.p.cost * (1 - stp / 100))} TL) kırdı; çıkış planınızı değerlendirin.`); } });
   if (topPos > 25) { const d = Math.min(25, topPos - 25); score -= d; issues.push(`Tek hissede yoğunlaşma: en büyük pozisyon portföyün %${fmt(topPos, 0)}'i.`); }
   if (topSec > 40 && secs.length) { const d = Math.min(20, topSec - 40); score -= d; issues.push(`Sektör yoğunlaşması: ${secs[0][0]} %${fmt(topSec, 0)}.`); }
   if (stopRisk > 6) { const d = Math.min(25, (stopRisk - 6) * 4); score -= d; issues.push(`Tüm stop'lar (2×ATR) çalışırsa kayıp ≈ portföyün %${fmt(stopRisk, 1)}'i: yüksek.`); }
@@ -3298,17 +3321,25 @@ function renderMyPort() {
       <label>Hisse<input id="myN" list="tickers" style="width:120px" autocomplete="off"></label><label>Adet<input id="mySh" type="number" min="0" step="1" style="width:100px"></label>
       <label>Maliyet (TL)<input id="myCost" type="number" min="0" step="any" style="width:110px"></label><button data-my-add="1" class="pbtn">Ekle</button>
       <label style="margin-left:12px">Nakit (TL)<input id="myCash" type="number" min="0" step="any" value="${MY.cash || 0}" style="width:130px"></label>
-      <button data-my-export="1">Dışa aktar</button><button data-my-import="1">İçe aktar</button><button data-my-clear="1">Temizle</button></div>
+      <button data-my-export="1">Dışa aktar</button><button data-my-import="1">İçe aktar</button><label class="btn" title="Aracı kurum dışa aktarımı: hisse, adet, maliyet sütunları">CSV içe aktar <input id="myCsv" type="file" accept=".csv,.txt,text/csv" style="display:none"></label><button data-my-clear="1">Temizle</button></div>
+    <div id="myImportMsg" class="note" style="display:none"></div>
     ${live.length ? `<div class="sumcard card" style="margin-bottom:14px"><div><h3>Portföy sağlığı</h3><div class="hscore ${score >= 75 ? "up" : score >= 50 ? "" : "down"}">${score}/100</div>
         <div class="mute" style="font-size:12.5px">Değer ${fmt(tot, 0)} TL · K/Z <span class="${sign(invested - costTot)}">${invested - costTot > 0 ? "+" : ""}${fmt(invested - costTot, 0)} TL (${fmt(costTot ? (invested / costTot - 1) * 100 : 0, 1)}%)</span></div></div>
       <div><h3>Dikkat edilecekler</h3><ul>${issues.length ? issues.map(i => `<li>${esc(i)}</li>`).join("") : "<li class='up'>Belirgin bir yoğunlaşma ya da risk uyarısı yok.</li>"}</ul></div>
       <div><h3>Sektör dağılımı</h3>${secs.map(([k, v]) => `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12.5px"><span style="width:120px">${esc(k)}</span><span class="secbar" style="flex:1"><i style="width:${v / tot * 100}%"></i></span>%${fmt(v / tot * 100, 0)}</div>`).join("")}</div></div>` : ""}
+    ${arch ? `<div class="note"><b>🧺 Sepet çeşitliliği (Ray Dalio):</b> ${esc(arch.text)} <span class="mute">Ağırlıklar portföydeki güncel değerlerinizdir.</span></div>` : ""}
     ${rows.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Hisse</th><th>Adet</th><th>Maliyet</th><th>Son</th><th>K/Z</th><th>Ağırlık</th><th>Komite</th><th>Stop (2×ATR)</th><th style="text-align:left">Masanın görüşü</th><th></th></tr></thead><tbody>
       ${rows.map(x => x.s ? `<tr><td style="text-align:left"><b class="pill" data-an="${esc(x.s.name)}" style="cursor:pointer">${esc(x.s.name)}</b></td><td>${fmt(x.p.sh, 0)}</td><td>${fmt(x.p.cost)}</td><td>${fmt(x.s.close)}</td><td>${pcell(x.pnl)}</td><td>%${fmt(x.val / tot * 100, 0)}</td><td>${badge(x.r.score)} ${chipsOf(x.r)}</td>
         <td>${x.r.l.seytan.stopPct ? fmt(x.s.close * (1 - x.r.l.seytan.stopPct / 100)) + ` (−%${fmt(x.r.l.seytan.stopPct, 1)})` : "–"}</td><td style="text-align:left;white-space:normal;max-width:380px" class="${x.adv[1]}">${esc(x.adv[0])}</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`
         : `<tr><td style="text-align:left">${esc(x.p.n)}</td><td colspan="8" class="mute">Veri bulunamadı</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz hisse eklemediniz. Yukarıdan ekleyin ya da Analiz Masası'nda “+ Portföyüme ekle”ye basın.</p>"}`;
 }
 document.addEventListener("input", e => { if (e.target.id === "myCash") { MY.cash = +e.target.value || 0; saveMy(); } });
+document.addEventListener("change", e => {
+  if (e.target.id !== "myCsv" || !e.target.files[0]) return; const rd = new FileReader();
+  rd.onload = () => { const r = portfolioCsv(String(rd.result), new Set(UNIVERSE.map(s => s.name))); if (r.error) { toast(r.error); return; } r.pos.forEach(p => myAdd(p.n, p.sh, p.cost)); if (r.cash) { MY.cash = (MY.cash || 0) + r.cash; saveMy(); } renderMyPort();
+    const m = $("myImportMsg"); if (m) { m.style.display = ""; m.innerHTML = `<b>CSV içe aktarıldı:</b> ${r.pos.length} hisse eklendi${r.cash ? `, nakit +${fmt(r.cash, 0)} TL` : ""}${r.skipped.length ? `; <b>${r.skipped.length} satır atlandı:</b> ` + r.skipped.slice(0, 8).map(x => `${esc(x.n)} (satır ${x.row}: ${x.why})`).join(", ") : ""}.`; } toast(`${r.pos.length} hisse içe aktarıldı`); };
+  rd.readAsText(e.target.files[0], "utf-8"); e.target.value = "";
+});
 
 /* ---------- Sektörler: RS sıralaması ve rotasyon ---------- */
 let SNAPS = null, snapsAt = 0;
