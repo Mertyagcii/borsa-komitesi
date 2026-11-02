@@ -42,9 +42,10 @@ jobs:
             python mtf_run.py --if-stale
           fi
           python calendar_research.py   # takvim etkileri (ohlcv.json'dan, saniyeler; BH düzeltmeli)
+          python tech_seal.py           # mührün teknik kısmının geriye dönük, ileri doğrulamalı testi (ohlcv.json'dan)
       - name: Arastirma ciktilarini kaydet
         run: |
-          FILES=""; for f in research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json kurul2_research.json macro_research.json viop_research.json stress.json calendar_research.json; do [ -e "$f" ] && FILES="$FILES $f"; done
+          FILES=""; for f in research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json kurul2_research.json macro_research.json viop_research.json stress.json calendar_research.json tech_seal.json; do [ -e "$f" ] && FILES="$FILES $f"; done
           if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"

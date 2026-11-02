@@ -1643,7 +1643,7 @@ function kpMarketHtml() {
 function kpAcc(id, title, sub, body) { return `<details class="kpacc" data-kpa="${id}" ${kpOpen.has(id) ? "open" : ""}><summary><span class="kpt">${title}</span><span class="kps">${sub}</span></summary><div class="kpbody">${body}</div></details>`; }
 function kpObservers(s) {
   let ob = []; try { ob = observerCadre(s); } catch (e) { return ""; }
-  return `<h4 style="margin:16px 0 4px">Gözlemci kadro <span class="kps">oy vermez · ölçer ve bilgi verir</span></h4><div class="kprows">${ob.map(o => `<details class="kpn"><summary><span class="kb">◌ gözlemci</span> <b>${esc(o.name)}</b> <span class="kps">${esc(o.role)} · ${esc(kpFirst(o.text))}</span></summary><div class="kpbody"><p>${esc(o.text)}</p><p class="note">${esc(OBS_RULE)}</p></div></details>`).join("")}</div><p class="note">Temsili kişiliklerdir (kural tabanlı, yapay zekâ modeli yok; gerçek kişileri temsil etmez).</p>`;
+  return `<h4 style="margin:16px 0 4px">Gözlemci kadro <span class="kps">oy vermez · ölçer ve bilgi verir</span></h4><div class="kprows">${ob.map(o => `<details class="kpn"><summary><span class="kb ${o.state === "oy hakkı kazandı" ? "up" : o.state === "yetki sorgulanıyor" ? "warn" : ""}">${o.state === "oy hakkı kazandı" ? "● oy hakkı kazandı" : o.state === "aday" ? "◔ aday" : o.state === "danışman" ? "◇ danışman" : o.state === "yetki sorgulanıyor" ? "⚠ yetki sorgulanıyor" : "◌ gözlemci"}</span> <b>${esc(o.name)}</b> <span class="kps">${esc(o.role)} · ${esc(kpFirst(o.text))}</span></summary><div class="kpbody"><p>${esc(o.text)}</p>${o.progress ? `<p class="note"><b>Terfi ilerlemesi:</b> ${fmt(o.progress.have, 0)} / ${o.progress.need} ${esc(o.progress.unit)} <span class="rbar" style="display:inline-block;width:120px;vertical-align:middle"><i style="width:${Math.min(100, o.progress.have / o.progress.need * 100)}%"></i><b></b></span> · ${esc(o.stateWhy || "")}</p>` : `<p class="note">${esc(o.stateWhy || "")}</p>`}<p class="note">${esc(OBS_RULE)}</p></div></details>`).join("")}</div><p class="note">Temsili kişiliklerdir (kural tabanlı, yapay zekâ modeli yok; gerçek kişileri temsil etmez).</p>`;
 }
 function kpLegends(s, r) {
   const P = [["buffett", "Warren Buffett", r.l.buffett], ["simons", "Jim Simons", r.l.simons], ["livermore", "Jesse Livermore", r.l.livermore], ["kellogg", "Jack Kellogg", r.l.kellogg], ["seytan", "Şeytanın Avukatı", r.l.seytan],
@@ -1698,6 +1698,27 @@ function kpTrust() {
     <p class="note">Nasıl okunur: <b>fazla getiri</b> = hisse getirisi − aynı günün eşit ağırlıklı piyasa ortalaması. <b>Şans testi</b>: aynı gün aynı sayıda rastgele hisse seçilseydi bu sonuç çıkar mıydı (p &lt; 0,05 anlamlı). <b>Bağımsız</b> = gözlem / ufuk (aynı hisse art arda pencerelerde tekrarlanır). Hüküm için en az 30 bağımsız gözlem ve 3 çakışmayan pencere gerekir; yoksa "yetersiz veri". Tüm hükümler Benjamini-Hochberg (%5) çoklu test düzeltmesinden de geçer (López de Prado · Baş İstatistikçi): düzeltme sonrası ayakta kalmayan "kanıt yok" sayılır. UZAK DUR / RİSKLİ / KİLİTLİ ve haftalık "zayıf" için "pozitif kanıt", bu hisselerin piyasanın gerisinde kalması demektir. "Haftalık skor" satırları, mühürden bağımsız olarak çok zamanlı skorun kurulumunu aynı yöntemle ölçer: yalnızca o grup kanıt verirken AL vermiyorsa, haftalık lider olmayan AL'lar otomatik NÖTR'e düşer. Geçmişe dönük doldurma yoktur: bilanço verisi o günkü haliyle bilinmediğinden mühürler yalnızca ileriye doğru kaydedilir.</p></div>`;
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-kth]"); if (!b || view !== "kokpit") return; e.preventDefault(); e.stopPropagation(); kpTrustH = +b.dataset.kth; store.set("kpTrustH", kpTrustH); renderKokpit(); }, true);
+function kpTech() {
+  const T = TECHSEAL, h = T && T.h && T.h[10]; if (!h) return "";
+  const f = (v, d) => v == null ? "–" : fmt(v, d), sg = v => v > 0 ? "+" : "", worse = h.sign.ic.mean != null && h.ic_rs_only.mean != null && h.sign.ic.mean <= h.ic_rs_only.mean * 1.1;
+  const comp = Object.entries(h.components).map(([k, c]) => `<tr><td style="text-align:left"><b>${esc(T.labels[k] || k)}</b></td><td>${sg(c.sel.mean)}${f(c.sel.mean, 2)} <span class="mute">(t ${f(c.sel.t, 1)})</span></td><td class="${c.oos.mean > 0 ? "up" : c.oos.mean < 0 ? "down" : ""}"><b>${sg(c.oos.mean)}${f(c.oos.mean, 2)}</b> <span class="mute">(t ${f(c.oos.t, 1)}, ${c.oos.days} gün)</span></td><td>${f(c.full.t, 1)}</td><td class="${c.oos.fdr ? "up" : "mute"}">${c.oos.fdr ? "ayakta" : "ayakta değil"}</td></tr>`).join("");
+  const bk = h.sign.buckets, bro = ["≤ −1", "0", "1", "2", "≥ 3"].filter(k => bk[k]).map(k => { const b = bk[k]; return `<tr><td>${k}</td><td>${b.n}</td><td class="${b.mean > 0 ? "up" : b.mean < 0 ? "down" : ""}">${sg(b.mean)}${f(b.mean, 2)}</td><td>%${f(b.hit, 0)}</td><td>${f(b.t, 1)}</td><td class="${b.fdr ? "up" : "mute"}">${b.fdr ? "anlamlı" : "anlamsız"}</td></tr>`; }).join("");
+  return `<details class="meet" style="margin-top:12px"><summary>🔬 Teknik mühür geriye dönük testi (3 yıl, ileri doğrulama) · <b>${worse ? "bileşik skor göreli gücü geçmiyor" : "bileşik skor göreli gücü geçiyor"}</b></summary>
+    <p class="note">${esc(T.note)} Dönem: ${esc(T.from)} → ${esc(T.to)}, bölünme: ${esc(T.split)}. Ölçüt: 10 iş günü sonraki fazla getiri (puan), gün kümelemeli.</p>
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Teknik bileşen</th><th>Seçim yarısı (ort., t)</th><th>Sınama yarısı, örneklem dışı (ort., t)</th><th>Tüm dönem t</th><th>Sınama hükmü</th></tr></thead><tbody>${comp}</tbody></table></div>
+    <div class="note"><b>Bileşik skor</b> (hepsi, yön = seçim yarısındaki işaret; yalnızca sınama yarısında ölçülür) · sıralama gücü IC: <b>${f(h.sign.ic.mean, 3)}</b> (t ${f(h.sign.ic.t, 1)}) · yalnız göreli güç IC: <b>${f(h.ic_rs_only.mean, 3)}</b> (t ${f(h.ic_rs_only.t, 1)})</div>
+    <div class="tw"><table class="peert"><thead><tr><th>Skor</th><th>Gözlem</th><th>Ort. fazla getiri</th><th>İsabet</th><th>t</th><th>Hüküm</th></tr></thead><tbody>${bro}</tbody></table></div>
+    <p class="note">Okuma: ${esc(techSealSummary() || "")} Dikkat: ilk yarıda (seçim) bu etkilerin çoğu görünmüyordu; etki dönemler arasında kararlı değil. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı); bilanço dışı bileşenler test edilebilir, bilanço verisinin geçmişi yoktur.</p></details>`;
+}
+function kpSealHist(s) {
+  const rows = SEALHIST && SEALHIST.stocks ? SEALHIST.stocks[s.name] : null, head = '<div class="kpcard" style="margin:0 0 16px"><div class="kpl">🗂 Bu hissede geçmiş mühürlerimiz ve sonuçları</div>';
+  if (!rows || !rows.length) return head + '<div class="kps">Bu hisse için mühür kaydı yok (kayıt her seans kapanışında ~300 likit hisse için tutulur).</div></div>';
+  const nm = SEALHIST.names, dir = i => ({"KİLİTLİ": -1, "RİSKLİ": -1, "GÜÇLÜ AL": 1, "AL": 1, "UZAK DUR": -1, "NÖTR": 0})[nm[i]] || 0, ok = (i, x) => x == null ? null : dir(i) > 0 ? x > 0 : dir(i) < 0 ? x < 0 : null;
+  let n10 = 0, w10 = 0; rows.forEach(r => { const o = ok(r[1], r[3]); if (o != null) { n10++; if (o) w10++; } });
+  const lines = rows.slice().reverse().slice(0, 10).map(r => { const o5 = ok(r[1], r[2]), o10 = ok(r[1], r[3]), cell = (x, o) => x == null ? '<span class="mute">bekliyor</span>' : `<span class="${x > 0 ? "up" : x < 0 ? "down" : ""}">${x > 0 ? "+" : ""}${fmt(x, 1)}</span> ${o == null ? "" : o ? "✔" : "✘"}`;
+    return `<tr><td>${esc(r[0])}</td><td><b>${esc(nm[r[1]] || "?")}</b></td><td>${cell(r[2], o5)}</td><td>${cell(r[3], o10)}</td></tr>`; }).join("");
+  return head + `<div class="kps">${n10 ? `Yönlü mühürlerin (AL / GÜÇLÜ AL / UZAK DUR / RİSKLİ / KİLİTLİ) sonuçlanan ${n10} tanesinin ${w10}'i 10 günde haklı çıktı (fazla getiri, aynı günün piyasa ortalamasına göre). Tek hisse örneği küçüktür; genel karne için Güven Karnesi'ne bakın.` : "Sonuçlar 5 iş gün sonra görünür (henüz sonuçlanan mühür yok)."}</div><div class="tw"><table class="peert"><thead><tr><th>Tarih</th><th>Mühür</th><th>5 gün fazla getiri</th><th>10 gün fazla getiri</th></tr></thead><tbody>${lines}</tbody></table></div></div>`;
+}
 function kpBasket() {
   let a = null; try { a = portfolioArchitect(current.slice(0, 8).map(s => s.name)); } catch (e) { return ""; } if (!a) return "";
   return `<div class="kpcard" style="margin-top:12px"><div class="kpl">🧺 Aday sepeti riski (Ray Dalio · Portföy Mimarı · ilk 8 güç lideri)</div><div class="kps">${esc(a.text)}</div><div class="kps" style="margin-top:6px">Sektörler: ${a.secs.slice(0, 4).map(([n, v]) => esc(trSector(n)) + " %" + Math.round(v * 100)).join(" · ")}${a.maxPair ? ` · en yakın çift: ${esc(a.maxPair[0])}–${esc(a.maxPair[1])} (ρ ${fmt(a.maxPair[2], 2)})` : ""}</div></div>`;
@@ -1710,7 +1731,7 @@ function kpHome() {
     <div class="kpgrid2"><div class="kpcard"><div class="kpl">✅ Yüksek güvenilirlikli sinyaller</div><div>${hc.length ? hc.map(([s]) => chip(s)).join("") : '<span class="kps">Şu an tüm filtreleri geçen sinyal yok (nadir olması beklenir).</span>'}</div></div>
     <div class="kpcard"><div class="kpl">⚠ Risk / veto altındakiler (aday listesinden)</div><div>${risk.length ? risk.map(([s, r]) => chip(s, r.veto ? "veto" : "uzman itirazı")).join("") : '<span class="kps">Yok.</span>'}</div></div>
     <div class="kpcard"><div class="kpl">🔍 Kaliteli ama düşüşte (izleme)</div><div>${qd.length ? qd.map(x => chip(x.s, "kalite " + fmt(x.qual, 0))).join("") : '<span class="kps">Yok.</span>'}</div></div></div>
-    ${kpBasket()}${kpTrust()}
+    ${kpBasket()}${kpTrust()}${kpTech()}
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
 }
 function renderKokpit() {
@@ -1719,7 +1740,7 @@ function renderKokpit() {
   const s = kpSym && UNIVERSE.find(x => x.name === kpSym); if ($("kpIn") && document.activeElement !== $("kpIn")) $("kpIn").value = s ? s.name : "";
   if (!s) { b.innerHTML = kpHome(); return; }
   const r = committee(s);
-  b.innerHTML = kpDecision(s, r) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
+  b.innerHTML = kpDecision(s, r) + kpSealHist(s) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür, ajanların oy özetidir; kazanç garantisi vermez. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar →</a> · <a href="#" data-kp="">Seçimi temizle</a></p>`;
 }
 function kpSelect(name) {
@@ -3244,14 +3265,12 @@ function regimeTable() {
 let NEWSLOG = null, nlAt = 0;
 async function loadNewsLog() { if (NEWSLOG && Date.now() - nlAt < 3600e3) return; const n = await getJson("news_log.json?t=" + Math.floor(Date.now() / 36e5)); if (n && n.events) { NEWSLOG = n; nlAt = Date.now(); } }
 function newsStudyHtml() {
-  const head = "<h2 style='margin-top:18px'>📰 Haber etkisi <span class='sub'>(etiketli haberden sonra hisse piyasa ortalamasına göre ne yaptı?)</span></h2>";
+  const head = "<h2 style='margin-top:18px'>📰 Haber etkisi <span class='sub'>(etiketli haberden sonra hisse, aynı likiditedeki haberi olmayan komşulara göre ne yaptı?)</span></h2>";
   if (!NEWSLOG || !NEWSLOG.events.length) return head + "<p class='mute'>Haber olayları birikiyor; sonuçlar 5 iş günü sonra görünür.</p>";
-  const exc = (e, h) => e.r && e.r[h] != null && e.b && e.b[h] != null ? e.r[h] - e.b[h] : null, by = {};
-  NEWSLOG.events.forEach(e => e.tags.forEach(tg => (by[tg] = by[tg] || []).push(e)));
-  const st = (arr, h) => { const xs = arr.map(e => exc(e, h)).filter(x => x != null); return {n: xs.length, m: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null, hit: xs.length ? xs.filter(x => x > 0).length / xs.length * 100 : null}; };
-  const cell = s => s.n ? `<span class="${sign(s.m)}">${s.m > 0 ? "+" : ""}${fmt(s.m, 1)}%</span> · isabet %${fmt(s.hit, 0)} <span class="mute">(n=${s.n})</span>${s.n < 20 ? '<span class="few">az örnek</span>' : ""}` : "<span class='mute'>bekliyor</span>";
-  return head + `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Haber türü</th><th>Olay</th><th>5 iş günü</th><th>10 iş günü</th></tr></thead><tbody>${NEWS_TAGS.map(([n]) => `<tr><td style="text-align:left">${n}</td><td>${(by[n] || []).length}</td><td>${cell(st(by[n] || [], 5))}</td><td>${cell(st(by[n] || [], 10))}</td></tr>`).join("")}</tbody></table></div>
-    <p class="note">Her etiketli haber (son 4 gün) bir kez kaydedilir; giriş fiyatı kayıt günü kapanışıdır. Kellogg'un "olumlu haber katalizörü" ölçütü bu sonuçlarla doğrulanmadan ağırlık kazanmaz.</p>`;
+  const S5 = eventStudy(NEWSLOG.events, 5), S10 = eventStudy(NEWSLOG.events, 10), g = (S, n) => S.find(r => r.tag === n), pm = v => (v > 0 ? "+" : "") + fmt(v, 1) + "%";
+  const cell = r => !r || !r.nEw ? "<span class='mute'>bekliyor</span>" : `<div>Piyasa ort.: <span class="${sign(r.ew.mean)}">${pm(r.ew.mean)}</span> · isabet %${fmt(r.ew.hit, 0)} <span class="mute">(n=${r.nEw})</span></div><div><b>Eşleşen kontrol:</b> ${r.mt ? `<span class="${sign(r.mt.mean)}">${pm(r.mt.mean)}</span> · isabet %${fmt(r.mt.hit, 0)} <span class="mute">(n=${r.nM}, ${r.days} gün)</span>` : "<span class='mute'>kontrol yok</span>"}</div><div><b class="${KT_COL[r.verdict] || "mute"}">${esc(r.verdict)}</b></div>`;
+  return head + `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Haber türü</th><th>Olay</th><th>5 iş günü</th><th>10 iş günü</th></tr></thead><tbody>${NEWS_TAGS.map(([n]) => `<tr><td style="text-align:left">${n}</td><td>${(g(S5, n) || {n: 0}).n}</td><td style="text-align:left">${cell(g(S5, n))}</td><td style="text-align:left">${cell(g(S10, n))}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note"><b>Neden iki kıyas?</b> Haberli hisseler büyük ve likit; ayı rejiminde büyükler zaten daha iyi gidebilir, bu "haberin etkisi" gibi görünür. Bu yüzden hüküm, <b>aynı likidite sırasındaki, o gün haberi olmayan 10 komşu</b> (eşleşen kontrol) ile verilir; gün kümelemeli ve çoklu test (BH %5) düzeltmelidir. En az 30 bağımsız gözlem ve 3 çakışmayan pencere yoksa "yetersiz veri". Her etiketli haber (son 4 gün) bir kez kaydedilir; giriş fiyatı kayıt günü kapanışıdır. Kellogg'un "olumlu haber katalizörü" ölçütü bu sonuçlarla doğrulanmadan ağırlık kazanmaz.</p>`;
 }
 
 /* ---------- Karne ---------- */
@@ -3816,6 +3835,8 @@ async function loadAux() {
   if (!GDT) job.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
   if (!GON) job.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
   job.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
+  job.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
+  if (!TECHSEAL) job.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
   job.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));
   job.push(hj("analyst_card.json").then(m => { if (m && m.h) ANALYST_CARD = m; }));
   job.push(hj("calendar_log.json").then(m => { if (m && m.days) CALLOG = m; }));

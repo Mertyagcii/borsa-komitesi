@@ -483,9 +483,82 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   if (calendarContext() !== null) errs.push("takvim verisi yokken null dönmedi");
   // Gözlemci kadro: 6 kişi, hepsi metinli ve oy yok
   { const os = UNI.find(x => x.ok && x.tl >= 10 && x.atrPct > 0), cad = observerCadre(os);
-    if (!(cad.length === 6 && ["istat", "risk", "takvim", "analist", "portfoy", "rejim"].every((id, i) => cad[i].id === id) && cad.every(c => c.text.length > 20 && c.text.indexOf("hesaplanamadı") < 0 && c.status.indexOf("oy hakkı yok") > 0))) errs.push("gözlemci kadro hatalı: " + JSON.stringify(cad.map(c => [c.id, c.text.slice(0, 60)])));
+    if (!(cad.length === 6 && ["istat", "risk", "takvim", "analist", "portfoy", "rejim"].every((id, i) => cad[i].id === id) && cad.every(c => c.text.length > 20 && c.text.indexOf("hesaplanamadı") < 0 && ["gözlemci", "aday", "oy hakkı kazandı", "danışman", "yetki sorgulanıyor"].some(s => c.status.indexOf(s) === 0)))) errs.push("gözlemci kadro hatalı: " + JSON.stringify(cad.map(c => [c.id, c.text.slice(0, 60)])));
     const an0 = ANALYST; ANALYST = {d: "x", cols: ["recommendation_mark", "recommendation_buy", "recommendation_sell", "price_target_1y_delta", "float_shares_percent_current"], rows: [[os.name, os.close, 1.4, 7, 0, 35, 20]]};
     const cad2 = observerCadre(os); ANALYST = an0; if (!(cad2[3].text.indexOf("7 al / 0 sat") >= 0 && cad2[3].text.indexOf("düşük") >= 0)) errs.push("analist satırı hatalı: " + cad2[3].text); }
+}
+// --- Olay çalışması: eşleştirilmiş kontrol ---
+{
+  const rg = sealRng(99), gz = () => { let u = 0; for (let i = 0; i < 6; i++) u += rg(); return (u - 3) * 1.41; }, evs = [];
+  // 40 gün x 4 olay: "Haber" etiketi gerçek +3 puan kontrolün üstünde; "Boyut" etiketi piyasanın +3 üstünde ama kontrolle AYNI (boyut etkisi); "Yok" etiketi hiç fark yok
+  for (let d = 0; d < 40; d++) { const day = "2026-02-" + String(1 + (d % 28)).padStart(2, "0") + "-" + d; for (let k = 0; k < 4; k++) { const mkt = gz() * 2, ctl = mkt + 3 + gz() * 0.3;
+    evs.push({d: day, n: "A" + k, tags: ["Haber"], r: {5: ctl + 3 + gz()}, b: {5: mkt}, m: {5: ctl}});
+    evs.push({d: day, n: "B" + k, tags: ["Boyut"], r: {5: ctl + gz()}, b: {5: mkt}, m: {5: ctl}});
+    evs.push({d: day, n: "C" + k, tags: ["Yok"], r: {5: mkt + gz()}, b: {5: mkt}, m: {5: mkt}}); } }
+  const es = eventStudy(evs, 5), gr = n => es.find(r => r.tag === n);
+  if (!(gr("Haber").mt.mean > 2.5 && gr("Haber").verdict === "pozitif kanıt" && gr("Haber").fdr === true)) errs.push("olay çalışması: gerçek haber etkisi pozitif kanıt vermedi: " + JSON.stringify(gr("Haber")));
+  if (!(gr("Boyut").ew.mean > 2.5 && Math.abs(gr("Boyut").mt.mean) < 0.5 && gr("Boyut").verdict === "kanıt yok")) errs.push("olay çalışması: boyut etkisi haber etkisi sanıldı: " + JSON.stringify(gr("Boyut")));
+  if (!(Math.abs(gr("Yok").mt.mean) < 0.5 && gr("Yok").verdict === "kanıt yok")) errs.push("olay çalışması: etkisiz haber anlamlı çıktı: " + JSON.stringify(gr("Yok")));
+  if (!(eventStudy(evs.slice(0, 6), 5).every(r => r.verdict === "yetersiz veri") && eventStudy([], 5).length === 0 && eventStudy(null, 10).length === 0)) errs.push("olay çalışması: az veride hüküm verdi");
+  const noM = evs.map(e => Object.assign({}, e, {m: undefined})), en = eventStudy(noM, 5).find(r => r.tag === "Haber"); if (!(en.mt === null && en.verdict === "yetersiz veri" && en.ew && en.nEw === 160)) errs.push("olay çalışması: kontrolsüz olayda hüküm verildi: " + JSON.stringify(en));
+}
+// --- Teknik mühür özeti ---
+{
+  const ts0 = TECHSEAL; TECHSEAL = null; const none = techSealSummary();
+  const mkc = (oos, fdr) => ({sel: {mean: 0.1, t: 0.3, days: 30, p: 0.5}, oos: Object.assign({mean: 1.2, t: 3, days: 39, p: 0.003}, oos), full: {t: 3}});
+  TECHSEAL = {from: "2023-08-21", to: "2026-10-27", labels: {rs_lider: "Göreli güç lideri", trend: "Trend", rsi30: "RSI<30"}, h: {10: {components: {rs_lider: mkc({fdr: true}), trend: mkc({fdr: true}), rsi30: mkc({fdr: false, mean: -3})}, sign: {ic: {mean: 0.05, n: 39, t: 3}}, ic_rs_only: {mean: 0.07, n: 39, t: 3.8}}}};
+  const s1 = techSealSummary(); TECHSEAL.h[10].sign.ic.mean = 0.12; const s2 = techSealSummary(); TECHSEAL.h[10] = null; const s3 = techSealSummary(); TECHSEAL = ts0;
+  if (!(none === null && s3 === null)) errs.push("techSealSummary: veri yokken null dönmedi");
+  if (!(s1.indexOf("Göreli güç lideri; Trend") > 0 && s1.indexOf("RSI<30;") < 0 && s1.indexOf("göreli gücü anlamlı biçimde geçmiyor") > 0)) errs.push("techSealSummary: ayakta kalanlar/karşılaştırma hatalı: " + s1);
+  if (!(s2.indexOf("göreli gücü anlamlı biçimde geçmiyor") < 0)) errs.push("techSealSummary: bileşik daha iyiyken 'geçmiyor' dedi");
+}
+// --- Terfi motoru, analist oyu, risk notu, geçmiş mühürler ---
+{
+  const ac0 = ANALYST_CARD, an0 = ANALYST, sc0 = SEALCARD, cr0 = CALRES, cl0 = CALLOG;
+  ANALYST_CARD = null; SEALCARD = null; CALRES = null; CALLOG = null; const s0 = observerStatus();
+  if (!(s0.analist.state === "gözlemci" && s0.risk.state === "gözlemci" && s0.takvim.state === "gözlemci" && s0.istat.state === "danışman" && s0.portfoy.state === "danışman" && s0.rejim.state === "danışman")) errs.push("terfi motoru: başlangıç durumları hatalı: " + JSON.stringify(Object.fromEntries(Object.entries(s0).map(([k, v]) => [k, v.state]))));
+  const mk = (mean, t, nIndep) => ({mean, t, nIndep, days: nIndep * 10, verdict: "x"}), cols = ["recommendation_mark", "recommendation_buy", "recommendation_sell", "price_target_1y_delta", "float_shares_percent_current"];
+  ANALYST_CARD = {ndays: 100, cols, h: {10: {recommendation_mark: mk(-0.08, -4.2, 10), recommendation_buy: mk(0.01, 0.4, 10), recommendation_sell: mk(0.0, 0.1, 10), price_target_1y_delta: mk(0.06, 3.6, 10), float_shares_percent_current: mk(0.2, 9, 10)}}};
+  const s1 = observerStatus().analist;
+  if (!(s1.state === "oy hakkı kazandı" && s1.cols.includes("recommendation_mark") && s1.cols.includes("price_target_1y_delta") && !s1.cols.includes("float_shares_percent_current"))) errs.push("terfi motoru: kanıtlı analist terfi etmedi ya da float sayıldı: " + JSON.stringify(s1));
+  ANALYST_CARD.h[10].recommendation_mark = mk(0.08, 4.2, 10); ANALYST_CARD.h[10].price_target_1y_delta = mk(-0.06, -3.6, 10);
+  if (!(observerStatus().analist.state === "aday")) errs.push("terfi motoru: ters yönlü kanıt terfi ettirdi ya da aday olmadı");
+  ANALYST_CARD.h[10].recommendation_mark = mk(-0.08, -4.2, 5); ANALYST_CARD.h[10].price_target_1y_delta = mk(0.06, 3.6, 5);
+  if (!(observerStatus().analist.state === "aday")) errs.push("terfi motoru: az pencerede (5 < 8) terfi etti ya da aday olmadı");
+  ANALYST_CARD.h[10].recommendation_mark = mk(-0.08, -2.4, 12); ANALYST_CARD.h[10].price_target_1y_delta = mk(0.01, 0.3, 12);
+  if (!(observerStatus().analist.state === "aday")) errs.push("terfi motoru: |t| < 3 iken terfi etti");
+  const os = UNI.find(x => x.ok && x.tl >= 10 && x.atrPct > 0), rr = committee(os), d0 = debate(os, rr).voters.length;
+  ANALYST_CARD.h[10].recommendation_mark = mk(-0.08, -4.2, 10); ANALYST_CARD.h[10].price_target_1y_delta = mk(0.06, 3.6, 10);
+  ANALYST = {d: "x", cols, rows: [[os.name, os.close, 1.3, 8, 0, 40, 30]]}; const lv = analystVote(os), d1 = debate(os, rr);
+  if (!(lv && lv.v === 1 && d1.voters.length === d0 + 1 && d1.voters.some(x => x.k === "lynch" && x.v === 1 && x.w === 1))) errs.push("analist oyu: terfi sonrası oy debate'e eklenmedi: " + JSON.stringify(lv));
+  ANALYST = {d: "x", cols, rows: [[os.name, os.close, 4.2, 0, 6, -10, 30]]}; const lv2 = analystVote(os); if (!(lv2 && lv2.v === -1)) errs.push("analist oyu: olumsuz veride olumsuz oy yok: " + JSON.stringify(lv2));
+  ANALYST = {d: "x", cols, rows: [["BASKA", 1, 1.3, 8, 0, 40, 30]]}; if (analystVote(os) !== null) errs.push("analist oyu: verisi olmayan hissede oy üretildi");
+  ANALYST_CARD = null; ANALYST = {d: "x", cols, rows: [[os.name, os.close, 1.3, 8, 0, 40, 30]]}; if (analystVote(os) !== null || debate(os, rr).voters.length !== d0) errs.push("analist oyu: terfi yokken oy üretildi ya da debate değişti");
+  ANALYST = an0; ANALYST_CARD = ac0;
+  const riskCard = (verdict, fdr, nEff) => ({h: {10: {rows: {"RİSKLİ": {risk: {mae: -0.9, maeP: 0.01, nEff: nEff || 40, verdict, fdr}}}}}});
+  SEALCARD = riskCard("risk öngörüsü doğrulandı", true); const t1 = observerStatus().risk;
+  SEALCARD = riskCard("risk öngörüsü ters (daha az düşüş)", true); const t2 = observerStatus().risk;
+  SEALCARD = riskCard("risk farkı yok", undefined); const t3 = observerStatus().risk;
+  SEALCARD = riskCard("yetersiz veri", undefined, 7); const t4 = observerStatus().risk;
+  if (!(t1.state === "oy hakkı kazandı" && t2.state === "yetki sorgulanıyor" && t3.state === "aday" && t4.state === "gözlemci" && t4.progress.have === 7)) errs.push("terfi motoru: Thorp durumları hatalı: " + [t1.state, t2.state, t3.state, t4.state]);
+  const mkSl2 = () => ({label: "RİSKLİ", cls: "risk", why: ["x"], d: {}, hc: {}, f: {}}), ga = sealGateApply(mkSl2(), riskCard("risk öngörüsü ters (daha az düşüş)", true)), gb = sealGateApply(mkSl2(), riskCard("risk öngörüsü doğrulandı", true)), gc = sealGateApply(mkSl2(), riskCard("risk öngörüsü ters (daha az düşüş)", false));
+  if (!(ga.label === "RİSKLİ" && ga.riskDoubt === true && ga.why.length === 2 && gb.label === "RİSKLİ" && gb.riskOk === true && gc.why.length === 1 && gc.riskDoubt !== true)) errs.push("risk hakemi: mühür notu/etiket hatalı: " + JSON.stringify([ga.label, ga.why.length, gb.riskOk, gc.why.length]));
+  SEALCARD = sc0;
+  CALRES = {base: 0.1, tests: [{id: "wd3", label: "Çarşamba", mean: -0.4, t: -3.9, h1: -0.6, h2: -0.2, fdr: true}, {id: "wd4", label: "Perşembe", mean: 0.5, t: 4, h1: 0.8, h2: 0.07, fdr: true}]};
+  const wedLog = (n, r, m) => ({days: Array.from({length: n}, (_, i) => { const dd = new Date("2026-01-07T12:00:00Z"); dd.setUTCDate(dd.getUTCDate() + 7 * i); return {d: dd.toISOString().slice(0, 10), r}; }).concat(Array.from({length: m == null ? 40 : m}, (_, i) => { const dd = new Date("2026-01-08T12:00:00Z"); dd.setUTCDate(dd.getUTCDate() + 7 * i); return {d: dd.toISOString().slice(0, 10), r: 0.2 + (i % 4) * 0.2}; }))});
+  CALLOG = wedLog(35, -0.6); const h1s = observerStatus().takvim; CALLOG = wedLog(12, -0.6, 12); const h2s = observerStatus().takvim; CALLOG = wedLog(35, 0.9); const h3s = observerStatus().takvim; CALLOG = null; const h4s = observerStatus().takvim;
+  if (!(h1s.state === "oy hakkı kazandı" && h2s.state === "aday" && h2s.progress.have >= 12 && h4s.state === "gözlemci")) errs.push("terfi motoru: takvim durumları hatalı: " + [h1s.state, h2s.state, h4s.state]);
+  if (h3s.state === "oy hakkı kazandı" && h3s.why.indexOf("Çarşamba") >= 0) errs.push("terfi motoru: ters yönlü Çarşamba terfi ettirildi");
+  CALRES = cr0; CALLOG = cl0;
+  { ANALYST_CARD = null; const cad = observerCadre(os); ANALYST_CARD = ac0; if (!(cad.find(c => c.id === "istat").state === "danışman" && cad.find(c => c.id === "analist").state === "gözlemci" && cad.every(c => c.status && c.state))) errs.push("gözlemci kadro: durum satırlara yansımadı"); }
+  const hdays = []; { let dd = new Date("2026-02-02T12:00:00Z"); for (let k = 0; k < 16; k++) { while ([0, 6].includes(dd.getUTCDay())) dd.setUTCDate(dd.getUTCDate() + 1);
+    hdays.push({d: dd.toISOString().slice(0, 10), v: SEAL_VER, r: Array.from({length: 80}, (_, i) => ["Q" + i, Math.round(100 * Math.pow(i < 40 ? 1.01 : 0.99, k) * 100) / 100, i < 40 ? 3 : 5, 0, 40, 2, 50, null])}); dd.setUTCDate(dd.getUTCDate() + 1); } }
+  const sh = sealHistory(hdays, 8);
+  if (!(sh.keep === 8 && Object.keys(sh.stocks).length === 80 && sh.stocks["Q0"].length === 8 && sh.stocks["Q0"][0].length === 4 && sh.generated === hdays[15].d && sh.names === SEAL_NAMES)) errs.push("sealHistory biçimi hatalı");
+  const all = sealHistory(hdays, 99).stocks, first = all["Q0"][0], lastq = all["Q0"][15], qd = all["Q50"][0];
+  if (!(first[1] === 3 && first[2] > 3 && first[3] > 6 && lastq[2] === null && lastq[3] === null)) errs.push("sealHistory: kazanan hissede sonuçlar hatalı: " + JSON.stringify([first, lastq]));
+  if (!(qd[1] === 5 && qd[2] < -3)) errs.push("sealHistory: kaybeden hissede fazla getiri negatif değil: " + JSON.stringify(qd));
+  if (!(Object.keys(sealHistory([], 5).stocks).length === 0 && sealHistory(null).generated === null)) errs.push("sealHistory: boş girdi hatalı");
 }
 // --- Tahta derinliği ---
 const dpBase = (extra) => ({t: "10:30", bids: [{p: 100, q: 1000, o: 20}, {p: 99.9, q: 1200, o: 25}, {p: 99.8, q: 900, o: 18}, {p: 99.7, q: 1100, o: 22}, {p: 99.6, q: 1000, o: 20}].concat(extra && extra.bids || []), asks: [{p: 100.1, q: 900, o: 18}, {p: 100.2, q: 1100, o: 22}, {p: 100.3, q: 1000, o: 20}, {p: 100.4, q: 950, o: 19}, {p: 100.5, q: 1050, o: 21}].concat(extra && extra.asks || [])});

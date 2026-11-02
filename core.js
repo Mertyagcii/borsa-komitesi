@@ -1209,6 +1209,7 @@ const dbCat = t => { const c = DB_CAT.find(([, re]) => re.test(t)); return c ? c
 function debate(s, r) {
   const L = r.l, K = r.k2;
   const W = memWeights(), voters = MEM_KEYS.map(k => ({k, v: L[k].v, w: W[k].w, checks: L[k].checks || []})).concat(PERSONAS2_KEYS.map(k => ({k, v: K[k].v, w: W[k].w, checks: K[k].checks || []})));
+  const lv = analystVote(s); if (lv) voters.push({k: "lynch", v: lv.v, w: 1, checks: []}); // kanıtla oy hakkı kazanan gözlemci (Peter Lynch); kazanana kadar oy yok
   const pick = (pool, n) => { const out = [], seenC = new Set(); for (const p of pool) if (!seenC.has(p.cat) && out.length < n) { out.push(p); seenC.add(p.cat); } for (const p of pool) if (out.length < n && !out.includes(p)) out.push(p); return out; };
   const mk = (x, c) => ({who: x.k, text: c.t.replace(/ \(.*?\)/g, ""), val: c.val || "", cat: dbCat(c.t)});
   const poolOf = (voterList, st) => voterList.flatMap(x => x.checks.filter(c => c.s === st).map(c => mk(x, c)));
@@ -1282,7 +1283,7 @@ function peerLines(s, r, pv) {
    Olumlu oy → hisse piyasayı yenerse isabet; olumsuz oy → piyasanın gerisinde kalırsa isabet. Sıralama %95 Wilson alt sınırına göredir (az örnekle şans eseri
    yükselenler öne geçmesin); n < 30 olanlar "yetersiz örnek" sayılır. Not: BIST'te tek bir tahminin tutma olasılığı %50-55 civarıdır; %80 gibi oranlar
    beklenmemeli, avantaj küçük ve çok işleme yayılınca birikir. Ardışık günlerin kayıtları örtüştüğünden gerçek bağımsız örnek sayısı n'den azdır. */
-const ARENA_NAMES = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", seytan: "Şeytanın Avukatı", makro: "Makro & Jeopolitik Uzmanı", akilli: "Akıllı Para Takipçisi", vol: "Opsiyon & Volatilite Uzmanı", psiko: "Piyasa Psikolojisi Analisti"};
+const ARENA_NAMES = {buffett: "Warren Buffett", simons: "Jim Simons", livermore: "Jesse Livermore", kellogg: "Jack Kellogg", seytan: "Şeytanın Avukatı", makro: "Makro & Jeopolitik Uzmanı", akilli: "Akıllı Para Takipçisi", vol: "Opsiyon & Volatilite Uzmanı", psiko: "Piyasa Psikolojisi Analisti", lynch: "Peter Lynch (Analist)"};
 function wilson(k, n) { if (!n) return null; const z = 1.96, p = k / n, d = 1 + z * z / n, c = p + z * z / (2 * n), m = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)); return [(c - m) / d, (c + m) / d]; }
 function arenaStats(picks, h) {
   const ex = p => p.r && p.b && p.r[h] != null && p.b[h] != null ? p.r[h] - p.b[h] : null, rows = {};
@@ -1812,6 +1813,11 @@ function sealGateApply(sl, card) {
     const e = rows[SEAL_BUY]; sl.gated = true; sl.why = [`Canlı karne: AL/GÜÇLÜ AL mühürleri 10 iş gününde piyasanın anlamlı biçimde gerisinde kaldı (ort. ${fmt(e.mean, 2)} puan, p = ${fmt(e.p, 3)}, ${e.nEff} bağımsız gözlem); kanıt düzelene kadar NÖTR gösterilir`].concat(sl.why);
     sl.label = "NÖTR"; sl.cls = "neutral";
   }
+  const rk = rows && rows["RİSKLİ"] && rows["RİSKLİ"].risk;
+  if (sl.label === "RİSKLİ" && rk && rk.fdr !== false) { // Ed Thorp / Risk Hakemi: veto riski gerçekten öngörüyor mu? Etiket değişmez (güvenlik ağı kanıtsız kaldırılmaz), yalnızca bilgi eklenir
+    if (rk.verdict === "risk öngörüsü ters (daha az düşüş)") { sl.riskDoubt = true; sl.why = [`Canlı risk karnesi: RİSKLİ mühürlü hisseler 10 günde piyasadan DAHA AZ düştü (${fmt(rk.mae, 2)} puan, p = ${fmt(rk.maeP, 3)}); bu etiketin riski öngördüğü doğrulanamadı, bilgi amaçlıdır`].concat(sl.why); }
+    else if (rk.verdict === "risk öngörüsü doğrulandı") { sl.riskOk = true; sl.why = [`Canlı risk karnesi: RİSKLİ mühürlü hisseler piyasadan gerçekten daha derin düştü (${fmt(rk.mae, 2)} puan, p = ${fmt(rk.maeP, 3)})`].concat(sl.why); }
+  }
   const hl = rows && rows["H:lider"], buy = rows && rows[SEAL_BUY];
   if ((R.sealGate ?? 1) && sl.label === "AL" && sl.lead === false && hl && hl.verdict === "pozitif kanıt" && !(buy && buy.verdict === "pozitif kanıt")) {
     sl.gated = true; sl.why = [`Canlı karne: yalnızca haftalık lider kurulumu pozitif kanıt veriyor (10 gün, ort. +${fmt(hl.mean, 2)} puan, p = ${fmt(hl.p, 3)}); AL mührü bu kanıtı vermiyor ve bu hisse haftalık lider değil: NÖTR gösterilir`].concat(sl.why);
@@ -1825,8 +1831,8 @@ function sealGateApply(sl, card) {
    Neden oy yok: oy hakkı kanıtla kazanılır. Bir sinyal ailesi canlı karnede (≥ 30 bağımsız gözlem, çoklu test düzeltmesi sonrası) "pozitif kanıt" verene kadar yalnızca ÖLÇÜLÜR ve bilgi verir.
    Kurmak için beklemeye gerek yok: kayıt şimdi başlar, kanıt saati işler.
      López de Prado (Baş İstatistikçi) · Ed Thorp (Risk Hakemi) · Yale Hirsch (Takvim) · Peter Lynch (Analist ve kurumsal olaylar) · Ray Dalio (Portföy Mimarı) · Howard Marks (Rejim Bekçisi) */
-let ANALYST = null, ANALYST_CARD = null, CALRES = null, CALLOG = null;
-const OBS_RULE = "Oy hakkı: ilgili sinyal ailesi canlı karnede ≥ 30 bağımsız gözlem ve çoklu test düzeltmesi sonrası 'pozitif kanıt' verirse kazanılır; o zamana kadar yalnızca ölçülür ve bilgi verir.";
+let ANALYST = null, ANALYST_CARD = null, CALRES = null, CALLOG = null, TECHSEAL = null, SEALHIST = null;
+const OBS_RULE = "Oy hakkı (otomatik): kova tabanlı ölçümlerde ≥ 30 bağımsız gözlem ve 3 çakışmayan pencere; sıralama gücü (IC) tabanlı ölçümlerde ≥ 8 bağımsız pencere ve |t| ≥ 3; her ikisinde çoklu test düzeltmesi (BH %5) sonrası beklenen yönde 'pozitif kanıt'. Kanıt gelene kadar yalnızca ölçülür ve bilgi verir. Tahmin iddiası taşımayan danışmanlar (denetçi/portföy/rejim) oy hakkı gerektirmez.";
 
 /* Benjamini-Hochberg: p-değerleri listesinden %q yanlış keşif oranıyla ayakta kalanların indeks kümesi */
 function bhSurvive(ps, q) {
@@ -1920,7 +1926,7 @@ function observerCadre(s) {
   const out = [], add = (id, name, role, f) => { let text; try { text = f(); } catch (e) { text = "Bu satır hesaplanamadı: " + (e && e.message); } out.push({id, name, role, text, status: "gözlemci · oy hakkı yok"}); };
   add("istat", "López de Prado", "Baş İstatistikçi", () => {
     const a = researchAudit(), card = SEALCARD && SEALCARD.h && SEALCARD.h[10] ? SEALCARD.h[10].rows : null, fail = card ? Object.entries(card).filter(([, r]) => r.p != null && r.fdr === false && r.p < 0.05).map(([b]) => b) : [];
-    return `${a ? `Araştırmada ${a.tests} test var; şansla ≈ ${a.expectedFalse.toFixed(1)} yanlış pozitif beklenir. |t| ≥ 2 geçen ${a.naive.length} bulgudan çoklu test düzeltmesi (BH %5) sonrası ${a.bh.length} tanesi ayakta kalıyor, sıkı düzeltmeyle (Bonferroni) ${a.bonf.length}: ${a.bonf.join(", ") || "yok"}.` : "Araştırma verisi yüklenmedi."} Canlı mühür karnesinde de aynı düzeltme uygulanır${fail.length ? `; şu an çoklu test sonrası kanıtını yitiren: ${fail.join(", ")}` : ""}. Yeni test eklendikçe eşik sıkılaşır.`; });
+    return `${a ? `Araştırmada ${a.tests} test var; şansla ≈ ${a.expectedFalse.toFixed(1)} yanlış pozitif beklenir. |t| ≥ 2 geçen ${a.naive.length} bulgudan çoklu test düzeltmesi (BH %5) sonrası ${a.bh.length} tanesi ayakta kalıyor, sıkı düzeltmeyle (Bonferroni) ${a.bonf.length}: ${a.bonf.join(", ") || "yok"}.` : "Araştırma verisi yüklenmedi."} Canlı mühür karnesinde de aynı düzeltme uygulanır${fail.length ? `; şu an çoklu test sonrası kanıtını yitiren: ${fail.join(", ")}` : ""}. Yeni test eklendikçe eşik sıkılaşır.${(() => { const s2 = techSealSummary(); return s2 ? " " + s2 : ""; })()}`; });
   add("risk", "Ed Thorp", "Risk Hakemi", () => {
     const rs = SEALCARD && SEALCARD.h && SEALCARD.h[10] ? SEALCARD.h[10].rows : null, rk = rs && rs["RİSKLİ"] && rs["RİSKLİ"].risk, mc = monteCarlo(s);
     const own = mc ? `Bu hissede ${mc.days} günde %${mc.stop} stop olasılığı %${fmt(mc.probStop, 0)}, CVaR %5: ${fmt(mc.cvar5, 1)}%.` : "";
@@ -1938,5 +1944,83 @@ function observerCadre(s) {
     if (!a1) return "Karşılaştıracak aday sepeti yok.";
     return `Bu hisse ilk ${base.length} güç lideriyle sepete eklenirse: ${a1.text}${a0 ? ` (eklemeden önce etkin çeşitlilik ≈ ${a0.effN.toFixed(1)}).` : ""}`; });
   add("rejim", "Howard Marks", "Rejim Bekçisi", () => { const r = regimeKeeper(); return r ? r.text : "Rejim ya da araştırma verisi yüklenmedi."; });
+  let sts = {}; try { sts = observerStatus(); } catch (e) { /* durum hesaplanamazsa satırlar yine görünür */ }
+  out.forEach(o => { const x = sts[o.id]; if (x) { o.state = x.state; o.progress = x.progress; o.stateWhy = x.why; o.status = x.state === "danışman" ? "danışman · tahmin iddiası yok" : x.state === "oy hakkı kazandı" ? "oy hakkı kazandı" : x.state === "yetki sorgulanıyor" ? "yetki sorgulanıyor" : x.state === "aday" ? "aday · oy hakkı yok" : "gözlemci · oy hakkı yok"; } });
   return out;
+}
+
+/* ---- Olay çalışması (haber karnesi): etiket başına, iki kıyasla: (a) o günün ~150 likit hissesinin eşit ağırlıklı ortalaması, (b) EŞLEŞTİRİLMİŞ KONTROL
+   (aynı likidite sırasındaki, o gün haberi olmayan 10 komşu; signals.js hesaplar: e.m). Hüküm (b)'ye göre, gün kümelemeli ve çoklu test düzeltmeli verilir:
+   haberli hisseler büyük/likit olduğundan (a) tek başına yanıltıcıdır (ayı rejiminde büyükler zaten daha iyi gider; haberin etkisi değil boyutun etkisi olabilir). ---- */
+function eventStudy(events, h) {
+  const by = {}; (events || []).forEach(e => (e.tags || []).forEach(tg => (by[tg] = by[tg] || []).push(e)));
+  const avg = a => a.reduce((s, v) => s + v, 0) / a.length, rows = [];
+  Object.entries(by).forEach(([tag, arr]) => {
+    const ev = arr.filter(e => e.r && e.r[h] != null && e.b && e.b[h] != null), mt = ev.filter(e => e.m && e.m[h] != null);
+    const exE = ev.map(e => e.r[h] - e.b[h]), exM = mt.map(e => e.r[h] - e.m[h]), g = {};
+    mt.forEach(e => (g[e.d] = g[e.d] || []).push(e.r[h] - e.m[h]));
+    const dm = Object.values(g).map(avg), stat = dm.length ? icSummary(dm, h) : null;
+    rows.push({tag, n: arr.length, nEw: ev.length, nM: mt.length, days: dm.length, ew: ev.length ? {mean: avg(exE), hit: exE.filter(x => x > 0).length / exE.length * 100} : null,
+      mt: mt.length ? {mean: avg(exM), hit: exM.filter(x => x > 0).length / exM.length * 100} : null, stat, p: stat && stat.t != null ? normP2(stat.t) : null});
+  });
+  const tt = rows.filter(r => r.p != null), keep = bhSurvive(tt.map(r => r.p)); tt.forEach((r, i) => { r.fdr = keep.has(i); });
+  rows.forEach(r => { r.verdict = !r.stat || r.stat.verdict === "yetersiz veri" ? "yetersiz veri" : r.fdr === false && r.stat.verdict !== "kanıt yok" ? "kanıt yok" : r.stat.verdict; });
+  return rows;
+}
+
+/* ---- Teknik mühür geriye dönük testi (tech_seal.py → tech_seal.json): özet cümlesi (López de Prado satırı için) ---- */
+function techSealSummary() {
+  const h = TECHSEAL && TECHSEAL.h && TECHSEAL.h[10]; if (!h || !h.components) return null;
+  const ok = Object.entries(h.components).filter(([, c]) => c.oos && c.oos.fdr).map(([k]) => (TECHSEAL.labels && TECHSEAL.labels[k]) || k), sg = h.sign && h.sign.ic, rs = h.ic_rs_only;
+  const worse = sg && rs && sg.mean != null && rs.mean != null && sg.mean <= rs.mean * 1.1;
+  return `Teknik bileşenlerin geriye dönük testi (${TECHSEAL.from} → ${TECHSEAL.to}; seçim ilk yarıda, sınama ikinci yarıda, gün kümelemeli, 10 gün): sınamada çoklu test sonrası ayakta kalanlar: ${ok.join("; ") || "yok"}. Sıralama gücü (IC): bileşik skor ${sg && sg.mean != null ? fmt(sg.mean, 3) : "–"}, yalnız göreli güç ${rs && rs.mean != null ? fmt(rs.mean, 3) : "–"}${worse ? ": bileşik skor göreli gücü anlamlı biçimde geçmiyor (daha çok sinyal üst üste gelmesi doğruluğu artırmıyor)" : ""}. Araştırmadaki olay bazlı t değerleri gün kümelemede düşer (aynı güne yığılan olaylar bağımsız değildir).`;
+}
+
+/* ---- TERFİ MOTORU: gözlemcilerin oy hakkı durumu (otomatik, kanıtla). Durumlar: gözlemci → aday → oy hakkı kazandı; danışman (tahmin iddiası yok);
+   yetki sorgulanıyor (ölçüm, uzmanın iddiasının TERSİNİ gösteriyor). Her durumda ilerleme (elde/gereken) gösterilir. ---- */
+const OBS_EXPECT = {recommendation_mark: -1, recommendation_buy: 1, recommendation_sell: -1, price_target_1y_delta: 1}; // beklenen IC işareti (puan 1 = güçlü al: düşük iyi)
+function observerStatus() {
+  const st = {};
+  ["istat", "portfoy", "rejim"].forEach(id => { st[id] = {state: "danışman", progress: null, why: "Tahmin iddiası taşımaz (denetim/risk/rejim bilgisi); oy hakkı gerekmez."}; });
+  { // Peter Lynch: analist alanları, sıralama gücü (IC), 10 gün
+    const h10 = ANALYST_CARD && ANALYST_CARD.h && ANALYST_CARD.h[10], cols = ANALYST_CARD && ANALYST_CARD.cols ? ANALYST_CARD.cols : [];
+    const test = cols.filter(c => OBS_EXPECT[c] && h10 && h10[c]).map(c => ({c, x: h10[c], sg: OBS_EXPECT[c]})), keep = bhSurvive(test.map(o => o.x.t == null ? 1 : normP2(o.x.t)));
+    const win = test.filter((o, i) => keep.has(i) && o.x.nIndep >= 8 && o.x.t != null && Math.abs(o.x.t) >= 3 && Math.sign(o.x.mean) === o.sg), best = test.reduce((m, o) => Math.max(m, o.x.nIndep || 0), 0);
+    st.analist = win.length ? {state: "oy hakkı kazandı", cols: win.map(o => o.c), progress: {have: best, need: 8, unit: "bağımsız pencere"}, why: `Beklenen yönde anlamlı sıralama gücü: ${win.map(o => o.c).join(", ")}.`}
+      : {state: best >= 3 ? "aday" : "gözlemci", cols: [], progress: {have: best, need: 8, unit: "bağımsız pencere"}, why: best ? `${best} bağımsız pencere biriktirdi; ≥ 8 pencere, |t| ≥ 3 ve çoklu test sonrası beklenen yönde olmalı.` : "Kayıt başladı, henüz sonuçlanan pencere yok."};
+  }
+  { // Ed Thorp: RİSKLİ mührünün riski öngörmesi (canlı risk karnesi, 10 gün)
+    const rk = SEALCARD && SEALCARD.h && SEALCARD.h[10] && SEALCARD.h[10].rows && SEALCARD.h[10].rows["RİSKLİ"] ? SEALCARD.h[10].rows["RİSKLİ"].risk : null;
+    if (!rk) st.risk = {state: "gözlemci", progress: {have: 0, need: 30, unit: "bağımsız gözlem"}, why: "Risk karnesi henüz sonuçlanmadı."};
+    else if (rk.verdict === "risk öngörüsü doğrulandı" && rk.fdr !== false) st.risk = {state: "oy hakkı kazandı", progress: {have: rk.nEff, need: 30, unit: "bağımsız gözlem"}, why: "RİSKLİ mührü riski gerçekten öngörüyor (daha derin düşüş, çoklu test sonrası)."};
+    else if (rk.verdict.indexOf("risk öngörüsü ters") === 0 && rk.fdr !== false) st.risk = {state: "yetki sorgulanıyor", progress: {have: rk.nEff, need: 30, unit: "bağımsız gözlem"}, why: "RİSKLİ mührü piyasadan daha az düştü: veto riski öngörmüyor (etiket güvenlik için korunur, bilgi notu eklenir)."};
+    else st.risk = {state: rk.verdict === "yetersiz veri" ? "gözlemci" : "aday", progress: {have: rk.nEff, need: 30, unit: "bağımsız gözlem"}, why: rk.verdict === "yetersiz veri" ? "Yeterli sonuç yok." : "Yeterli veriyle risk farkı bulunmadı."};
+  }
+  { // Yale Hirsch: haftanın günü etkisinin canlı doğrulaması (piyasa zamanlaması rozeti; hisse oyu yok)
+    let best = 0, win = null;
+    if (CALRES && CALRES.tests) [1, 2, 3, 4, 5].forEach(wd => { const tw = CALRES.tests.find(x => x.id === "wd" + wd), lv = calendarLive(wd); if (!tw || !tw.fdr || !lv) return; best = Math.max(best, lv.n || 0);
+      if (lv.n >= 30 && lv.t != null && Math.abs(lv.t) >= 2 && Math.sign(lv.mean - lv.base) === Math.sign(tw.mean - CALRES.base)) win = CAL_WD[wd]; });
+    st.takvim = win ? {state: "oy hakkı kazandı", progress: {have: best, need: 30, unit: "aynı günden gözlem"}, why: `${win} etkisi canlıda doğrulandı (piyasa zamanlaması rozeti; hisse oyu değil).`}
+      : {state: best >= 10 ? "aday" : "gözlemci", progress: {have: best, need: 30, unit: "aynı günden gözlem"}, why: "Örneklem içi etki canlıda ≥ 30 gözlem, |t| ≥ 2 ve aynı yönle doğrulanmalı."};
+  }
+  return st;
+}
+/* Terfi eden analistin oyu: yalnızca sıralama gücü kanıtlanmış alanlardan, hissenin kendi verisine göre; yoksa null */
+function analystVote(s) {
+  const stt = observerStatus().analist; if (!stt || stt.state !== "oy hakkı kazandı" || !ANALYST || !ANALYST.rows) return null;
+  const row = ANALYST.rows.find(r => r[0] === s.name); if (!row) return null; const ci = Object.fromEntries(ANALYST.cols.map((c, i) => [c, row[2 + i]])); let v = 0; const why = [];
+  if (stt.cols.includes("recommendation_mark") && ci.recommendation_mark != null) { const x = ci.recommendation_mark <= 1.8 ? 1 : ci.recommendation_mark >= 3 ? -1 : 0; v += x; why.push(`analist puanı ${fmt(ci.recommendation_mark, 2)}`); }
+  if (stt.cols.includes("price_target_1y_delta") && ci.price_target_1y_delta != null) { const x = ci.price_target_1y_delta >= 25 ? 1 : ci.price_target_1y_delta <= 0 ? -1 : 0; v += x; why.push(`hedef fiyat farkı ${fmt(ci.price_target_1y_delta, 0)}%`); }
+  if (!why.length) return null; v = Math.max(-1, Math.min(1, v)); return {v, text: `Peter Lynch (analist, kanıtla oy hakkı kazandı): ${why.join(", ")} → ${v > 0 ? "olumlu" : v < 0 ? "olumsuz" : "nötr"}.`};
+}
+
+/* ---- Hisse başına geçmiş mühürler ve sonuçları (Kokpit şeffaflık): seal_log → {ad: [[tarih, mühür no, 5g fazla getiri, 10g fazla getiri]]} (son `keep` kayıt) ---- */
+function sealHistory(days, keep) {
+  keep = keep || 20; const ds = (days || []).filter(x => x && x.d && x.r && x.v === SEAL_VER).sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0), out = {};
+  const exOf = (x, y) => { if (!y) return null; const cy = new Map(y.r.map(a => [a[0], a[1]])), rows = x.r.filter(a => a[1] > 0 && cy.get(a[0]) > 0).map(a => [a[0], (cy.get(a[0]) / a[1] - 1) * 100]); if (rows.length < 50) return null;
+    const m = rows.reduce((t, q) => t + q[1], 0) / rows.length; return new Map(rows.map(q => [q[0], Math.round((q[1] - m) * 100) / 100])); };
+  ds.forEach((x, i) => { const e5 = exOf(x, seqAt(ds, i, 5)), e10 = exOf(x, seqAt(ds, i, 10));
+    x.r.forEach(a => { (out[a[0]] = out[a[0]] || []).push([x.d, a[2], e5 && e5.has(a[0]) ? e5.get(a[0]) : null, e10 && e10.has(a[0]) ? e10.get(a[0]) : null]); }); });
+  Object.keys(out).forEach(k => { out[k] = out[k].slice(-keep); });
+  return {ver: SEAL_VER, keep, names: SEAL_NAMES, stocks: out, generated: ds.length ? ds[ds.length - 1].d : null};
 }

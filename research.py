@@ -165,7 +165,9 @@ def evaluate_signal(sig: pd.DataFrame, fwd: dict, regime: pd.Series | None, h: i
     d = vals.index.get_level_values(0)
     half = d <= d[len(d) // 2]
     t = vals.mean() / (vals.std() / np.sqrt(n)) if vals.std() > 0 else 0
-    out = {"n": int(n), "excess": round(float(vals.mean() * 100), 2), "win": round(float((vals > 0).mean() * 100), 1), "t": round(float(t), 2),
+    dm = vals.groupby(level=0).mean()  # gün kümelemeli: aynı güne yığılan olaylar bağımsız değildir (piyasa ortak hareketi); etkin gün sayısı ≈ gün / h (örtüşme)
+    t_day = float(dm.mean() / (dm.std() / np.sqrt(max(len(dm) / h, 1)))) if len(dm) > 3 and dm.std() > 0 else None
+    out = {"n": int(n), "excess": round(float(vals.mean() * 100), 2), "win": round(float((vals > 0).mean() * 100), 1), "t": round(float(t), 2), "tday": None if t_day is None else round(t_day, 2), "days": int(len(dm)),
            "h1": round(float(vals[half].mean() * 100), 2) if half.any() else None, "h2": round(float(vals[~half].mean() * 100), 2) if (~half).any() else None}
     if regime is not None:
         rg = regime.reindex(d).to_numpy()
@@ -313,7 +315,8 @@ def run(force=False, limit=None, log=print) -> dict:
         same = a is not None and b is not None and a * b > 0
         if h.get("t") is None:
             return "yetersiz"
-        if h["t"] >= 2 and same and a > 0:
+        td = h.get("tday")  # olumlu hüküm daha sıkı: gün kümelemeli t de ≥ 2 olmalı (yasak ise olay bazlı t ile sürer: kanıt yokken oy vermemek temkinli yöndür)
+        if h["t"] >= 2 and same and a > 0 and (td is None or td >= 2):
             return "kanıt var"
         if h["t"] <= -2 and same and a < 0:
             return "ters kanıt"

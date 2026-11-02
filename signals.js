@@ -31,7 +31,7 @@ const afterClose = !["Sat", "Sun"].includes(now.wd) && now.min >= 18 * 60 + 45;
 
 function publish() {
   fs.mkdirSync(SITE, {recursive: true});
-  for (const f of ["seal_card.json", "yorumcu_notlari.json", "analyst_now.json", "analyst_card.json", "calendar_log.json", "calendar_research.json"]) { const x = read(f, null); if (x) fs.writeFileSync(path.join(SITE, f), JSON.stringify(x)); } // mühür karnesi; kullanıcının repoya koyduğu yorumcu notları (her cihazda görünür)
+  for (const f of ["seal_card.json", "yorumcu_notlari.json", "analyst_now.json", "analyst_card.json", "calendar_log.json", "calendar_research.json", "tech_seal.json", "seal_hist.json"]) { const x = read(f, null); if (x) fs.writeFileSync(path.join(SITE, f), JSON.stringify(x)); } // mühür karnesi; kullanıcının repoya koyduğu yorumcu notları (her cihazda görünür)
   fs.writeFileSync(path.join(SITE, "picks.json"), JSON.stringify(store));
   fs.writeFileSync(path.join(SITE, "news_log.json"), JSON.stringify(nlog));
   fs.writeFileSync(path.join(SITE, "snapshots.json"), JSON.stringify(snaps));
@@ -119,6 +119,28 @@ function evalList(list, dateOf) {
 }
 const evaluated = evalList(store.picks, p => p.d) + evalList(nlog.events, p => p.d);
 
+/* eşleştirilmiş kontrol (haber olayları): haberli hisseler büyük ve likit olduğundan "piyasa ortalamasına göre" kıyas yanıltıcıdır (ayı rejiminde büyükler zaten daha iyi gider).
+   Kontrol = o gün likidite sırasında en yakın 10 komşu (o gün hiçbir etiketli haberi OLMAYANLAR); aynı h. işlem günündeki getirileri. Geçmiş olaylar da geriye dönük doldurulur. */
+const evNamesByDay = {}; nlog.events.forEach(e => (evNamesByDay[e.d] = evNamesByDay[e.d] || new Set()).add(e.n));
+const snapKeys = Object.keys(snaps).sort(); if (!snapKeys.includes(date)) snapKeys.push(date);
+function matchedPass(list) {
+  let n = 0;
+  for (const p of list) {
+    if (!p.r) continue; const s0 = snaps[p.d]; if (!s0) continue; const names = Object.keys(s0), i0 = names.indexOf(p.n); if (i0 < 0) continue; // likidite sırası: snapshot anahtar sırası (tl'ye göre azalan)
+    const after = snapKeys.filter(k => k > p.d);
+    for (const h of Object.keys(p.r)) {
+      if (p.r[h] == null || (p.m && p.m[h] !== undefined)) continue;
+      const dh = after[+h - 1], sh = dh ? (dh === date ? todaySnap : snaps[dh]) : null; if (!sh) continue;
+      const ctrl = [];
+      for (let off = 1; ctrl.length < 10 && off < names.length; off++) for (const j of [i0 - off, i0 + off]) { const nm = names[j];
+        if (nm && ctrl.length < 10 && !(evNamesByDay[p.d] && evNamesByDay[p.d].has(nm)) && sh[nm] > 0 && s0[nm] > 0) ctrl.push(sh[nm] / s0[nm] - 1); }
+      p.m = p.m || {}; p.m[h] = ctrl.length >= 5 ? r2(ctrl.reduce((a, b) => a + b, 0) / ctrl.length * 100) : null; n++;
+    }
+  }
+  return n;
+}
+const matchedN = matchedPass(nlog.events);
+
 /* ---- bugünün kayıtları ---- */
 store.picks = store.picks.filter(p => p.d !== date);
 const rec = [];
@@ -175,6 +197,7 @@ ctx.__sl = sealLog.days;
 const card = vm.runInContext("sealCard(__sl)", ctx); card.generated = date;
 fs.writeFileSync("seal_log.json", JSON.stringify(sealLog));
 fs.writeFileSync("seal_card.json", JSON.stringify(card));
+fs.writeFileSync("seal_hist.json", JSON.stringify(vm.runInContext("sealHistory(__sl, 20)", ctx))); // hisse başına geçmiş mühürler ve sonuçları (Kokpit)
 if (!sealNote) sealNote = ` | mühür kaydı: ${out.seals.length} hisse, karne ${card.ndays} gün`;
 
 /* analist / serbest dolaşım kaydı (PIT; Peter Lynch kadro üyesi): TradingView geniş tablosundan (CI'da build_site.py üretir). Sonuçlar icCard ile ölçülür; oy yok. */
@@ -209,4 +232,4 @@ if (out.hc.length) alertLines.push(`YÜKSEK GÜVENİLİRLİKLİ SİNYAL (masa �
 if (strong.length) alertLines.push(`güçlü aday (ek teyit eksik) → ${strong.join(", ")}`);
 if (newLeaders.length) alertLines.push(`yeni lider kurulum (haftalık skor) → ${newLeaders.join(", ")}`);
 if (alertLines.length) fs.writeFileSync("alerts.txt", `Borsa Komitesi ${date}: ` + alertLines.join(" | ") + " (yatırım tavsiyesi değildir)");
-console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}${sealNote}${anNote}`);
+console.log(`${date}: ${rec.length} kayıt, ${evaluated} sonuç değerlendirildi, ${newEv} yeni haber olayı, güçlü aday: ${strong.length}, yeni lider: ${newLeaders.length}, skor kaydı: ${out.mtf.length} hisse, rejim: ${out.regime && out.regime.label}${fundNote}${sealNote}${anNote}${matchedN ? ` | eşleşen kontrol: ${matchedN}` : ""}`);
