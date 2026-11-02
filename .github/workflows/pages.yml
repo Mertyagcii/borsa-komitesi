@@ -2,6 +2,7 @@ name: Veri guncelle ve yayinla
 
 on:
   schedule:
+    - cron: "42 3,4,5,6 * * 1-5"   # sabah başlatma (06:42-09:42 TR): zincir (zincir.yml) hangi çalışmayla başlarsa başlasın kendini sürdürür
     - cron: "4,19,34,49 * * * *"   # 15 dakikada bir; tam saat/çeyrek başları GitHub'da en yoğun anlardır, çalışmalar oralarda atlanıyor (ölçülen: 386 saatte 1544 yerine 97 çalışma)
   workflow_dispatch:          # elle de baslatilabilir
   push:
@@ -11,6 +12,7 @@ permissions:
   contents: write   # history.json'i depoya kaydetmek icin
   pages: write
   id-token: write
+  actions: write    # zincir.yml'yi tetiklemek icin (kendi kendini suren veri dongusu)
 
 concurrency:
   group: pages
@@ -90,3 +92,12 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+      # Zincir: GitHub'in schedule'i gercekte ~4 saatte bir calisiyor. Bu adim, piyasa saatlerinde bir sonraki calismayi (zincir.yml uzerinden, anahtar gerektirmeden) planlar.
+      - name: Zincir (sonraki calismayi kendisi planlar; disaridan tetikleyici gerekmez)
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          WAIT=$(python zincir.py)
+          echo "sonraki calisma icin bekleme: ${WAIT} sn (0 = zincir bu saatte durur)"
+          if [ "$WAIT" -gt 0 ]; then gh workflow run zincir.yml --repo "$GITHUB_REPOSITORY" --ref main -f bekle="$WAIT"; fi

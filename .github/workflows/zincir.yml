@@ -1,0 +1,33 @@
+name: Zincir (veri dongusunu kendi kendine surdurur)
+
+# pages.yml'nin son adimi bu is akisini tetikler; burada beklenir ve pages.yml yeniden tetiklenir. Anahtar/secret gerekmez (GITHUB_TOKEN ile workflow_dispatch serbesttir).
+# concurrency: ayni anda tek zincir yasar (yeni zincir eskisini iptal eder), boylece cift calisma birikmez.
+on:
+  workflow_dispatch:
+    inputs:
+      bekle:
+        description: "Sonraki veri calismasina kadar saniye"
+        default: "540"
+
+permissions:
+  actions: write
+
+concurrency:
+  group: zincir
+  cancel-in-progress: true
+
+jobs:
+  sonraki:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Bekle ve veri calismasini tetikle
+        env:
+          BEKLE: ${{ inputs.bekle }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$BEKLE" in ''|*[!0-9]*) BEKLE=540;; esac
+          [ "$BEKLE" -gt 1800 ] && BEKLE=1800
+          echo "bekleniyor: ${BEKLE} sn"
+          sleep "$BEKLE"
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
