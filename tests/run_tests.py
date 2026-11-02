@@ -21,7 +21,7 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ["kokpit", "dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
+PAGES = ["kokpit", "seffaflik", "defter", "dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
          "arsiv", "arena", "kalite", "yorumcu", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
 fails, passes = [], 0
 
@@ -131,9 +131,13 @@ def browser_tests(site):
     host = socket.gethostname()  # localhost yerine ana makine adı: uygulama "yerel sunucu" kipine geçmesin
     try:
         for pg in PAGES:
+            name = pg.split("=")[0]; name = "dashboard" if name == "h" else name
+            pat = r'id="v-' + name + r'"[^>]*>(.*?)<div class="view[ "]'
             dom = run_chrome(browser, f"http://{host}:{port}/t_sweep.html#{pg}")
-            err = attr(dom, "data-err"); name = pg.split("=")[0]; name = "dashboard" if name == "h" else name
-            m = re.search(r'id="v-' + name + r'"[^>]*>(.*?)<div class="view[ "]', dom, re.S)
+            if not dom or not re.search(pat, dom, re.S):  # tarayıcı zaman aşımı/çökme (kod hatası değil) için tek yeniden deneme
+                dom = run_chrome(browser, f"http://{host}:{port}/t_sweep.html#{pg}")
+            err = attr(dom, "data-err")
+            m = re.search(pat, dom, re.S)
             n = len(re.sub(r"<[^>]+>", "", m.group(1)).strip()) if m else -1
             check(f"sayfa {pg}", bool(dom) and not err and n != 0, f"hata={err} metin={n}")
         print("4) Tarayıcı: işlevsel testler")

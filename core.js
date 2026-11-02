@@ -1619,7 +1619,7 @@ function mcFirstPassage(s, T, S, mu, n = 10000) {
 }
 function trailingStop(o) { // {entry, stop0, peak, atr, k, S}: izleyen stop seviyesi
   const lvl = o.entry * (1 + o.S / 100);
-  return o.peak >= lvl ? Math.max(o.entry, o.stop0 || 0, o.peak - o.k * o.atr) : (o.stop0 || 0);
+  return o.peak >= lvl * (1 - 1e-7) ? Math.max(o.entry, o.stop0 || 0, o.peak - o.k * o.atr) : (o.stop0 || 0); // 1e-7: peak fiyat adımına yukarı yuvarlanır; ondalık kayması eşiğin hemen altında bırakıp başa baş korumasını atlatmasın
 }
 function tickRound(p, mode) { const tk = bistTick(p), q = p / tk; return Number(((mode === "up" ? Math.ceil(q - 1e-9) : mode === "down" ? Math.floor(q + 1e-9) : Math.round(q)) * tk).toFixed(2)); }
 function kellyFrac(p, b) { const k = p - (1 - p) / b; return {kelly: k, half: k / 2}; }
@@ -2024,3 +2024,57 @@ function sealHistory(days, keep) {
   Object.keys(out).forEach(k => { out[k] = out[k].slice(-keep); });
   return {ver: SEAL_VER, keep, names: SEAL_NAMES, stocks: out, generated: ds.length ? ds[ds.length - 1].d : null};
 }
+
+/* =====================================================================================
+   ŞEFFAFLIK KATMANI: karar yolu (mühür nasıl çıktı?), güven rozeti (mühür geçmişte ne kadar tuttu?), en büyük hatalarımız, güvenilirlik noktaları.
+   Güven rozeti bir OLASILIK DEĞİLDİR: canlı karne ve geriye dönük sınamanın ölçtüğü şeyi, örnek sayısıyla birlikte, düz dille söyler; ölçülmemişse "ölçülmedi" der. */
+
+/* Karar yolu: kokpitSealRaw ile AYNI kapı sırası; her kapının geçti/takıldı bilgisi ve gerekçesi. Test: etiket her hissede kokpitSealRaw ile aynıdır. */
+function sealPath(s, r) {
+  const f = factCheck(s, r), d = debate(s, r), hc = highConfidence(s, r), steps = []; let done = null;
+  const add = (id, title, pass, detail, ends) => steps.push({id, title, pass, detail, ends: !!ends});
+  if (f.locked) { add("kilit", "Hata Avcısı: rakamlar ham veriyle tutarlı mı?", false, "Çelişki var: " + f.issues.map(i => i.msg).join("; "), true); done = "KİLİTLİ"; }
+  else add("kilit", "Hata Avcısı: rakamlar ham veriyle tutarlı mı?", true, f.stale ? "Ham veri eski ya da yok: kıyaslanamadı, kilit yok" : `${f.checked} rakam kontrol edildi, çelişki yok`);
+  if (!done) { if (r.veto) { add("veto", "Şeytanın Avukatı: ağır bir itirazı (veto) var mı?", false, r.l.seytan.severe.join("; ") || "veto", true); done = "RİSKLİ"; } else add("veto", "Şeytanın Avukatı: ağır bir itirazı (veto) var mı?", true, "Ağır itiraz yok"); }
+  if (!done) { if (r.veto2) { add("veto2", "Yeni uzmanlar: onay engeli var mı?", false, (r.k2.makro.veto ? "Makro Risk Uzmanı onay vermiyor; " : "") + `net oy ${r.net2}`, true); done = "RİSKLİ"; } else add("veto2", "Yeni uzmanlar: onay engeli var mı?", true, "Engel yok"); }
+  if (!done) { if (hc.ok) { add("guclu", "GÜÇLÜ AL: tüm filtreler geçildi mi?", true, "Masa ≥ 3, veto yok, haftalık lider, stop riski düşük, rakamlar doğrulandı", true); done = "GÜÇLÜ AL"; } else add("guclu", "GÜÇLÜ AL: tüm filtreler geçildi mi?", false, "Takılan: " + hc.why.join(", ")); }
+  if (!done) { if (r.score >= 2 && d.al >= 40) { add("al", "AL: masa skoru ≥ 2 ve Boğa ≥ %40 mı?", true, `Masa skoru ${r.score}, Boğa %${d.al}`, true); done = "AL"; } else add("al", "AL: masa skoru ≥ 2 ve Boğa ≥ %40 mı?", false, `Masa skoru ${r.score}, Boğa %${d.al}`); }
+  if (!done) { if (r.score <= -2 || d.sat >= 50) { add("uzak", "UZAK DUR: masa skoru ≤ −2 ya da Ayı ≥ %50 mi?", true, `Masa skoru ${r.score}, Ayı %${d.sat}`, true); done = "UZAK DUR"; } else add("uzak", "UZAK DUR: masa skoru ≤ −2 ya da Ayı ≥ %50 mi?", false, `Masa skoru ${r.score}, Ayı %${d.sat}`); }
+  if (!done) { add("notr", "Hiçbir kapıya takılmadı", true, `Masa skoru ${r.score}, ağırlıklı karar ${d.text}`, true); done = "NÖTR"; }
+  return {label: done, steps};
+}
+
+/* Teknik bağlam: hissenin içinde bulunduğu teknik grupların 3 yıllık, ileri doğrulamalı (örneklem dışı) sınamadaki sonucu (tech_seal.json) */
+function techContext(s) {
+  const T = TECHSEAL, h = T && T.h && T.h[10]; if (!h || !h.components) return [];
+  const out = [], tier = mtfTier(s), c = h.components, trend = s.sma50 > 0 && s.sma200 > 0 && s.close > s.sma50 && s.sma50 > s.sma200, near52 = s.h52 > 0 && s.close / s.h52 - 1 >= -0.05;
+  const add = (k, who, dir) => { const x = c[k]; if (!x || !x.oos || x.oos.mean == null) return; const up = x.oos.mean > 0;
+    out.push({id: k, dir, ok: !!x.oos.fdr && (dir > 0 ? up : !up), text: `${who}: 3 yıllık sınamada (örneklem dışı, 10 iş günü) bu grup piyasanın ${up ? "+" : ""}${fmt(x.oos.mean, 2)} puan ${up ? "üstünde" : "altında"} kaldı (t ${fmt(x.oos.t, 1)}; ${x.oos.fdr ? "çoklu test sonrası anlamlı" : "anlamlı değil"})`}); };
+  if (tier && (tier.id === "uyumlu" || tier.id === "hlider")) add("rs_lider", "Göreli güç lideri", 1); else if (tier && tier.id === "zayif") add("rs_zayif", "Göreli güç zayıf", -1);
+  if (trend) add("trend", "Yükselen trendde", 1); if (trend && near52) add("yakin52", "52 hafta zirvesine yakın", 1);
+  return out;
+}
+
+/* Güven rozeti: canlı karne (sl.ev) baskın; yoksa geriye dönük teknik bağlam. Düzeyler: yüksek / orta / orta (geriye dönük) / düşük / ölçülmedi */
+function sealConfidence(sl, s) {
+  const raw = sl.rawLabel || sl.label, dir = SEAL_DIR[raw] || 0, ev = sl.ev, tc = techContext(s), basis = []; let level = "ölçülmedi";
+  if (ev && ev.verdict !== "yetersiz veri" && ev.verdict !== "izleme") {
+    basis.push(`Canlı karne (10 iş günü): ${raw} mührü piyasadan ${ev.mean > 0 ? "+" : ""}${fmt(ev.mean, 2)} puan, ${ev.nEff} bağımsız gözlem → ${ev.verdict}`);
+    level = ev.verdict === "pozitif kanıt" ? "yüksek" : ev.verdict === "ters kanıt" ? "düşük" : "orta";
+  } else basis.push(ev ? `Canlı karne: ${ev.nEff} bağımsız gözlem, henüz yetersiz` : "Canlı karne: bu mühür henüz ölçülmedi");
+  tc.forEach(x => basis.push(x.text));
+  if (level === "ölçülmedi" && dir !== 0) {
+    const sup = tc.filter(x => x.dir === dir && x.ok), contra = tc.filter(x => x.dir === -dir && x.ok);
+    if (contra.length) level = "düşük"; else if (sup.length) level = "orta (geriye dönük)";
+  }
+  return {level, basis, dir, text: level === "ölçülmedi" ? "Bu mührün geçmişte ne kadar tuttuğu henüz ölçülmedi." : `Güven: ${level}.`};
+}
+
+/* En büyük hatalarımız: yönlü mühürler (AL/GÜÇLÜ AL: piyasanın gerisinde kaldı; UZAK DUR/RİSKLİ/KİLİTLİ: piyasanın önüne geçti). 10 gün sonucu, yoksa 5 gün. */
+function worstMisses(hist, n) {
+  const out = []; let hit = 0, miss = 0; const nm = hist && hist.names ? hist.names : SEAL_NAMES;
+  Object.entries((hist && hist.stocks) || {}).forEach(([name, rows]) => rows.forEach(r => { const dir = SEAL_DIR[nm[r[1]]] || 0, ex = r[3] != null ? r[3] : r[2], h = r[3] != null ? 10 : 5; if (!dir || ex == null) return;
+    if ((dir > 0 && ex > 0) || (dir < 0 && ex < 0)) { hit++; return; } miss++; out.push({name, d: r[0], seal: nm[r[1]], h, ex, bad: Math.abs(ex)}); }));
+  out.sort((a, b) => b.bad - a.bad); return {top: out.slice(0, n || 5), hit, miss, n: hit + miss};
+}
+function reliabilityPts(card) { const b = card && card.calib && card.calib.bins ? card.calib.bins : []; return b.map(x => ({x: x.pred * 100, y: x.real * 100, n: x.n, lo: x.lo, hi: x.hi})); }

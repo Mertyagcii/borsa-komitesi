@@ -102,6 +102,39 @@ setTimeout(async function () {
     var gk = $("kpBody").innerHTML; ok("kokpit_gozlemci_kadro", gk.indexOf("Gözlemci kadro") >= 0 && ["López de Prado", "Ed Thorp", "Yale Hirsch", "Peter Lynch", "Ray Dalio", "Howard Marks"].every(function (n) { return gk.indexOf(n) >= 0; }) && gk.indexOf("oy vermez") >= 0); SEALCARD = sc0; kpSym = null; renderKokpit(); kpSelect(kpS.name);
     var kd = $("kpBody").querySelector("details.kpacc"); kd.open = true; kd.dispatchEvent(new Event("toggle")); ok("kokpit_acik_kart_hatirlanir", kpOpen.has(kd.dataset.kpa)); renderKokpit(); ok("kokpit_yenilemede_acik_kalir", $("kpBody").querySelector("details.kpacc").open === true);
     $("kpBody").querySelectorAll("details.kpacc")[0].open = false; kpOpen.clear(); kpSelect("YOKTUR123"); ok("kokpit_gecersiz_kod_temizler", kpSym === null);
+    /* ---- Wow katmanı: karar yolu, güven rozeti, kart, palet, şeffaflık, tahmin defteri ---- */
+    kpSelect(kpS.name); var wk = $("kpBody").innerHTML;
+    ok("wow_karar_yolu", wk.indexOf("Mühür nasıl çıktı?") >= 0 && wk.indexOf("Hata Avcısı") >= 0 && wk.indexOf("kpstep") >= 0);
+    ok("wow_guven_rozeti", wk.indexOf("Güven: ") >= 0 && wk.indexOf("dayanak") >= 0);
+    ok("wow_paylas_ve_tahmin_dugmeleri", wk.indexOf("data-cardpng") >= 0 && wk.indexOf('data-dfadd="al"') >= 0 && $("palBtn") != null);
+    var cv = buildCardCanvas(kpS), cx = cv.getContext("2d"), px = cx.getImageData(0, 100, 1080, 1).data, seen = {}; for (var pi = 0; pi < px.length; pi += 4) seen[px[pi] + "," + px[pi + 1] + "," + px[pi + 2]] = 1;
+    ok("wow_png_kart", cv.width === 1080 && cv.height === 1350 && Object.keys(seen).length > 40); /* başlık satırı: metin ve logo kenar yumuşatması çok renk üretir; düz gradyan satırı yalnızca birkaç renktir */
+    openPalette(""); ok("wow_palet_acilir", $("pal").classList.contains("open") && $("palListEl").children.length > 0);
+    var pr1 = palSearch("tahmin"), pr2 = palSearch(kpS.name.toLowerCase()), pr3 = palSearch("guclu"), pr4 = palSearch("zzzzqq");
+    ok("wow_palet_arama", pr1.some(function (x) { return x.k === "sayfa" && /Tahmin Defterim/.test(x.t); }) && pr1.some(function (x) { return /Tahmin Karnesi/.test(x.t); }) && pr2.length > 0 && pr2[0].k === "hisse" && pr2[0].t === kpS.name && pr3.some(function (x) { return x.k === "komut" && /GÜÇLÜ AL/.test(x.t); }) && pr4.length === 0);
+    ok("wow_palet_turkce_duyarsiz", palSearch("seffaflik").some(function (x) { return /Şeffaflık/.test(x.t); }) && palSearch("RİSKLİ").length > 0 && palSearch("ğüşiöç").length === 0);
+    palRun(pr3.filter(function (x) { return x.k === "komut"; })[0]); ok("wow_palet_liste_modu", palCtx != null && $("palCtxLbl").textContent.indexOf("GÜÇLÜ AL") >= 0);
+    closePalette(); ok("wow_palet_kapanir", !$("pal").classList.contains("open") && palCtx === null);
+    document.dispatchEvent(new KeyboardEvent("keydown", {key: "k", ctrlKey: true, bubbles: true})); ok("wow_palet_ctrl_k", $("pal").classList.contains("open")); closePalette();
+    palRun(palSearch(kpS.name)[0]); ok("wow_palet_hisse_secer", kpSym === kpS.name && view === "kokpit");
+    var sh1 = SEALHIST, sc1 = SEALCARD; SEALHIST = {names: SEAL_NAMES, stocks: {}}; SEALHIST.stocks[kpS.name] = [["2026-10-01", 3, 2.0, -9.5], ["2026-10-02", 4, null, 4.0]];
+    SEALCARD = {ver: 1, ndays: 40, first: "2026-10-12", last: "2026-12-04", nrec: 1, h: {10: {outDays: 30, riskDays: 30, mkt: 0, rows: {}}}, calib: {n: 900, nEff: 45, mD: 20, pPred: 0.5, pReal: 0.42, bias: -0.08, brier: 0.25, skill: -0.02, ok: true, bins: [{lo: 40, hi: 50, n: 60, pred: 0.45, real: 0.5}]}};
+    show("seffaflik"); await new Promise(function (r) { setTimeout(r, 450); }); var sf = $("sfView").innerHTML;
+    ok("wow_seffaflik_basliklar", sf.indexOf("Dürüstlük ilkelerimiz") >= 0 && sf.indexOf("Bugünün mühürleri") >= 0 && sf.indexOf("Doğruluk tablosu") >= 0 && sf.indexOf("En büyük hatalarımız") >= 0 && sf.indexOf("Güvenilirlik grafiği") >= 0 && sf.indexOf("Gözlemci kadro") >= 0 && sf.indexOf("Veri tazeliği") >= 0 && sf.indexOf("bilinen sınırları") >= 0);
+    ok("wow_seffaflik_mühürler_hesaplandi", $("sfToday").innerHTML.indexOf("kpseal") >= 0 && $("sfToday").innerHTML.indexOf("hesaplanıyor") < 0);
+    ok("wow_seffaflik_hatalar", sf.indexOf(kpS.name) >= 0 && sf.indexOf("9,5") >= 0 && sf.indexOf("puan") >= 0);
+    ok("wow_seffaflik_kalibrasyon_cizgisi", sf.indexOf("<circle") >= 0 && sf.indexOf("modelin olasılığı") >= 0);
+    SEALHIST = sh1; SEALCARD = sc1;
+    await loadCandles(); var cd = CANDLES.dates, nm = null; for (var q in HIST.stocks) { if (HIST.stocks[q].last === cd[cd.length - 1] && CANDLES.stocks[q]) { nm = q; break; } }
+    store.set("preds", []); var i0 = cd.length - 21;
+    var e1 = dfAdd({n: nm, dir: "al", h: 5, conf: 70, date: cd[i0], note: "t"}), e2 = dfAdd({n: nm, dir: "sat", h: 10, conf: null, date: cd[cd.length - 1]}), e3 = dfAdd({n: "YOKTUR1", dir: "al", h: 5, date: cd[i0]});
+    var r1 = dfEval(e1), r2 = dfEval(e2), r3 = dfEval(e3), ixs = HIST.index.closes, c0 = CANDLES.stocks[nm].c[i0], c1 = CANDLES.stocks[nm].c[i0 + 5], xo = ixs[ixs.length - 1 - (cd.length - 1 - i0)], x1 = ixs[ixs.length - 1 - (cd.length - 1 - (i0 + 5))], expEx = (c1 / c0 - x1 / xo) * 100;
+    ok("wow_defter_hizalama_ve_sonuc", r1.state === "sonuçlandı" && Math.abs(r1.ex - expEx) < 0.05 && (Math.abs(expEx) < 0.1 || r1.hit === (expEx > 0)) && r2.state === "bekliyor" && r2.left === 10 && r3.state === "veri yok");
+    var dsx = dfStats(dfList()); ok("wow_defter_istatistik", dsx.n === 1 && dsx.pending === 1 && dsx.nodata === 1 && dsx.brier != null && dsx.ci != null);
+    show("defter"); await new Promise(function (r) { setTimeout(r, 500); }); var dfh = $("dfView").innerHTML;
+    ok("wow_defter_sayfasi", dfh.indexOf("Tahmin Defterim") >= 0 && dfh.indexOf(nm) >= 0 && dfh.indexOf("bekliyor") >= 0 && dfh.indexOf("veri yok") >= 0 && (dfh.indexOf("haklı") >= 0 || dfh.indexOf("haksız") >= 0) && dfh.indexOf("Kalibrasyon (Brier)") >= 0);
+    store.set("preds", []); kpSelect(kpS.name); document.querySelector('[data-dfadd="al"]').click();
+    ok("wow_defter_kokpitten_ekleme", dfList().length === 1 && dfList()[0].n === kpS.name && dfList()[0].dir === "al" && dfList()[0].h === 10); store.set("preds", []);
     show("dashboard"); ok("kokpit_disinda_kenar_cubuk", !document.body.classList.contains("kp")); kpSym = null; store.set("kpSym", null);
     /* ---- Stres testi, Kelly, tahta derinligi, golge arena ---- */
     var stN = UNIVERSE.filter(function (s) { return s.ok && STRESS && STRESS.stocks[s.name]; })[0]; if (stN) { openDetail(stN.name); var dk = $("detail").innerHTML; ok("detay_stres_testi", dk.indexOf("Kara ku") >= 0 && dk.indexOf("BIST 100") >= 0 && /(GE.T[\u0130I]|GE.EMED)/.test(dk)); ok("detay_kelly_blogu", dk.indexOf("kellyCap") >= 0 && dk.indexOf("Kelly") >= 0); closeDetail(); } else ok("stres_verisi_yok_atlandi", true);

@@ -560,6 +560,40 @@ const lkS = current[0], lkR = lkS.rsi; lkS.rsi = lkR > 50 ? 5 : 95; fcReset(); c
   if (!(qd[1] === 5 && qd[2] < -3)) errs.push("sealHistory: kaybeden hissede fazla getiri negatif değil: " + JSON.stringify(qd));
   if (!(Object.keys(sealHistory([], 5).stocks).length === 0 && sealHistory(null).generated === null)) errs.push("sealHistory: boş girdi hatalı");
 }
+// --- Şeffaflık katmanı: karar yolu, güven rozeti, hatalar ---
+{
+  // karar yolu her hissede kokpitSealRaw ile aynı etiketi vermeli; tam bir bitiş adımı; sıra sabit
+  const ORD = ["kilit", "veto", "veto2", "guclu", "al", "uzak", "notr"]; let nPath = 0, badP = [];
+  for (const x of UNI.filter(y => y.ok && y.tl >= 10).slice(0, 150)) { const rr = committee(x), pp = sealPath(x, rr), raw = kokpitSealRaw(x, rr).label; nPath++;
+    if (pp.label !== raw) badP.push(x.name + ":" + pp.label + "≠" + raw);
+    else if (pp.steps.filter(z => z.ends).length !== 1 || !pp.steps[pp.steps.length - 1].ends || pp.steps.some((z, i) => z.id !== ORD[i])) badP.push(x.name + ": adım dizisi bozuk");
+    else if (pp.steps.slice(0, -1).some(z => z.pass !== (z.id === "guclu" || z.id === "al" || z.id === "uzak" ? false : true))) badP.push(x.name + ": bitişten önceki adımların durumu hatalı"); }
+  if (badP.length) errs.push("karar yolu mühürle uyuşmuyor: " + badP.slice(0, 4).join(" | "));
+  stat.sealPath = nPath;
+  // teknik bağlam ve güven rozeti
+  const ts0 = TECHSEAL, sc0 = SEALCARD;
+  const fake = (rl, zs) => ({h: {10: {components: {rs_lider: {oos: {mean: rl, t: 3.4, fdr: true}}, rs_zayif: {oos: {mean: zs, t: -2.8, fdr: true}}, trend: {oos: {mean: 0.9, t: 4.3, fdr: true}}, yakin52: {oos: {mean: 1.2, t: 2.9, fdr: false}}}}}, labels: {}});
+  TECHSEAL = null; const none = techContext(UNI[0]); TECHSEAL = fake(2.6, -2.0);
+  const leadS = UNI.find(x => x.ok && x.tl >= 5 && mtfTier(x) && (mtfTier(x).id === "uyumlu" || mtfTier(x).id === "hlider")), weakS = UNI.find(x => x.ok && x.tl >= 5 && mtfTier(x) && mtfTier(x).id === "zayif");
+  const tcL = leadS ? techContext(leadS) : [], tcW = weakS ? techContext(weakS) : [];
+  if (!(Array.isArray(none) && none.length === 0)) errs.push("techContext: veri yokken boş dönmedi");
+  if (leadS && !(tcL.some(x => x.id === "rs_lider" && x.dir === 1 && x.ok && x.text.indexOf("+2.60") >= 0 || x.text.indexOf("+2,60") >= 0))) errs.push("techContext: göreli güç lideri bağlamı yok: " + JSON.stringify(tcL.map(x => x.id)));
+  if (weakS && !(tcW.some(x => x.id === "rs_zayif" && x.dir === -1 && x.ok))) errs.push("techContext: göreli güç zayıf bağlamı yok");
+  if (leadS) {
+    const mkS = (label, ev) => ({label, rawLabel: label, ev});
+    const cPos = sealConfidence(mkS("AL", {verdict: "pozitif kanıt", mean: 1.1, nEff: 40}), leadS), cNeg = sealConfidence(mkS("AL", {verdict: "ters kanıt", mean: -1.1, nEff: 40}), leadS), cMid = sealConfidence(mkS("AL", {verdict: "kanıt yok", mean: 0.1, nEff: 40}), leadS);
+    const cSup = sealConfidence(mkS("AL", {verdict: "yetersiz veri", mean: 0, nEff: 3}), leadS), cCon = sealConfidence(mkS("UZAK DUR", null), leadS), cNon = sealConfidence(mkS("NÖTR", null), leadS);
+    TECHSEAL = null; const cNoT = sealConfidence(mkS("AL", null), leadS);
+    if (!(cPos.level === "yüksek" && cNeg.level === "düşük" && cMid.level === "orta" && cSup.level === "orta (geriye dönük)" && cCon.level === "düşük" && cNon.level === "ölçülmedi" && cNoT.level === "ölçülmedi" && cNoT.text.indexOf("ölçülmedi") >= 0)) errs.push("sealConfidence düzeyleri hatalı: " + [cPos.level, cNeg.level, cMid.level, cSup.level, cCon.level, cNon.level, cNoT.level]);
+    if (!(cPos.basis.length >= 2 && cPos.basis[0].indexOf("Canlı karne (10 iş günü)") === 0)) errs.push("sealConfidence gerekçesi hatalı");
+  }
+  TECHSEAL = ts0; SEALCARD = sc0;
+  // en büyük hatalar
+  const wm = worstMisses({names: SEAL_NAMES, stocks: {A: [["2026-10-01", 3, 2, -9.5], ["2026-10-02", 3, 1, 4.0]], B: [["2026-10-01", 4, null, 12.2], ["2026-10-02", 4, -3, null]], C: [["2026-10-01", 5, 20, 20], ["2026-10-02", 3, null, null]], D: [["2026-10-03", 1, -1, 1.5]]}}, 5);
+  if (!(wm.n === 5 && wm.hit === 2 && wm.miss === 3 && wm.top[0].name === "B" && wm.top[0].bad === 12.2 && wm.top[1].name === "A" && wm.top[1].ex === -9.5 && wm.top[1].h === 10 && wm.top[2].name === "D" && wm.top.length === 3)) errs.push("worstMisses hatalı: " + JSON.stringify(wm));
+  if (!(worstMisses(null).n === 0 && worstMisses({stocks: {}}, 3).top.length === 0)) errs.push("worstMisses boş girdi hatalı");
+  const rp = reliabilityPts({calib: {bins: [{lo: 40, hi: 50, n: 30, pred: 0.45, real: 0.5}]}}); if (!(rp.length === 1 && Math.abs(rp[0].x - 45) < 1e-9 && Math.abs(rp[0].y - 50) < 1e-9 && reliabilityPts(null).length === 0)) errs.push("reliabilityPts hatalı");
+}
 // --- Tahta derinliği ---
 const dpBase = (extra) => ({t: "10:30", bids: [{p: 100, q: 1000, o: 20}, {p: 99.9, q: 1200, o: 25}, {p: 99.8, q: 900, o: 18}, {p: 99.7, q: 1100, o: 22}, {p: 99.6, q: 1000, o: 20}].concat(extra && extra.bids || []), asks: [{p: 100.1, q: 900, o: 18}, {p: 100.2, q: 1100, o: 22}, {p: 100.3, q: 1000, o: 20}, {p: 100.4, q: 950, o: 19}, {p: 100.5, q: 1050, o: 21}].concat(extra && extra.asks || [])});
 const dA = depthAnalyze(dpBase(), {avgVol: 500000, close: 100}); if (!dA || dA.verdict !== "dengeli" || dA.walls.length || dA.spreadTicks !== 1) errs.push("sağlıklı tahta 'dengeli' çıkmadı: " + JSON.stringify(dA && [dA.verdict, dA.walls.length, dA.spreadTicks]));

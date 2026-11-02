@@ -198,6 +198,26 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
 .factok{font-size:12px;color:var(--mute);margin:4px 0}
+/* ---- Wow katmanı: komut paleti, karar yolu, güven rozeti, şeffaflık ---- */
+.pal{position:fixed;inset:0;z-index:2000;background:rgba(5,8,12,.62);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding:12vh 14px 0}
+.pal.open{display:flex}
+.palbox{width:min(640px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.55);overflow:hidden}
+.palbox input{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);outline:0;color:var(--text);font-size:18px;padding:16px 18px;box-sizing:border-box}
+.pallist{max-height:50vh;overflow:auto;padding:6px}
+.palitem{display:flex;gap:10px;align-items:center;padding:9px 12px;border-radius:10px;cursor:pointer}
+.palitem.on,.palitem:hover{background:var(--panel2)}
+.palitem .pk{font-size:11px;color:var(--mute);margin-left:auto;text-transform:uppercase;letter-spacing:.5px}
+.palhint{padding:8px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--mute)}
+.kppath{display:flex;flex-direction:column;gap:6px}
+.kpstep{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:12px;border:1px solid var(--line);background:var(--panel2)}
+.kpstep.ends{border-color:var(--accent);box-shadow:0 0 0 2px rgba(18,184,134,.15)}
+.kpstep .ic{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+.kpstep.pass .ic{background:rgba(18,184,134,.18);color:var(--up)}.kpstep.fail .ic{background:rgba(255,107,107,.18);color:var(--down)}.kpstep.skip{opacity:.6}
+.conf{display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:var(--panel2);color:var(--mute)}
+.conf.hi{color:var(--up);border-color:rgba(163,230,53,.4)}.conf.mid{color:var(--accent2)}.conf.lo{color:var(--down);border-color:rgba(255,107,107,.4)}
+.sfbadge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;border:1px solid var(--line)}
+.sfbadge.up{color:var(--up);border-color:rgba(163,230,53,.4)}.sfbadge.warn{color:var(--warn);border-color:rgba(240,180,60,.4)}.sfbadge.down{color:var(--down);border-color:rgba(255,107,107,.4)}.sfbadge.mute{color:var(--mute)}
+
 /* ---- Kokpit: sade, tek ekran, koyu tema ---- */
 body.kp .side,body.kp .topbar,body.kp #critBanner{display:none!important}
 body.kp .shell{grid-template-columns:minmax(0,1fr);background:transparent;border:0;border-radius:0;overflow:visible}
@@ -318,6 +338,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="store"><span>BIST · Tüm Hisseler</span><i data-ico="chev"></i></div>
     <nav class="nav" id="nav">
       <a data-view="kokpit"><i data-ico="award"></i>Kokpit (sade görünüm)</a>
+      <a data-view="seffaflik"><i data-ico="shield"></i>Şeffaflık Panosu</a>
+      <a data-view="defter"><i data-ico="clipboard"></i>Tahmin Defterim</a>
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="tarama"><i data-ico="filter"></i>Tarama Senaryoları</a>
@@ -381,7 +403,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-kokpit"><div class="kp-wrap">
       <div class="kp-top"><span class="kp-brand"><span class="logo" style="width:30px;height:30px;border-radius:9px"><svg viewBox="0 0 24 24" width="20" height="20"><g fill="#fff"><ellipse cx="11" cy="12" rx="7.6" ry="4.1"/></g></svg></span>Borsa Komitesi</span>
         <label class="kp-search"><span class="mute">🔎</span><input id="kpIn" list="tickers" placeholder="Hisse kodu ya da şirket adı (ör. THYAO)" autocomplete="off" spellcheck="false"></label>
-        <button class="kp-ib" id="kpRefresh" title="Veriyi yenile">↻</button><button class="kp-ib" id="kpTheme" title="Tema">◐</button><button class="kp-ib" data-go="dashboard" title="Tüm sayfalar ve ayrıntılı tablolar">☰ Tüm sayfalar</button></div>
+        <button class="kp-ib" id="palBtn" title="Komut paleti (Ctrl+K)">⌘K</button><button class="kp-ib" id="kpRefresh" title="Veriyi yenile">↻</button><button class="kp-ib" id="kpTheme" title="Tema">◐</button><button class="kp-ib" data-go="dashboard" title="Tüm sayfalar ve ayrıntılı tablolar">☰ Tüm sayfalar</button></div>
       <div class="kp-market" id="kpMarket"></div>
       <div id="kpBody"></div></div></div>
     <div class="view" id="v-dashboard">
@@ -486,6 +508,8 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-halkaarz"><section class="card" id="ipoView"></section></div>
     <div class="view" id="v-ozelveri"><section class="card" id="ovView"></section></div>
     <div class="view" id="v-arsiv"><section class="card" id="arView"></section></div>
+    <div class="view" id="v-seffaflik"><section class="card" id="sfView"></section></div>
+    <div class="view" id="v-defter"><section class="card" id="dfView"></section></div>
     <div class="view" id="v-arena"><section class="card" id="arenaView"></section></div>
     <div class="view" id="v-kalite"><section class="card" id="qdView"></section></div>
     <div class="view" id="v-yorumcu"><section class="card" id="cmView"></section></div>
@@ -1671,8 +1695,8 @@ function kpDecision(s, r) {
     ? `<div class="kpbig">%${fmt(k.f * 100, 1)}</div><div class="kps">kasadan pozisyon · stop çalışırsa ≈ %${fmt(k.f * k.S, 2)} risk${k.pUser != null ? " · girdiğiniz %" + fmt(k.pUser * 100, 0) + " olasılıkla" : ""}</div>`
     : `<div class="kpbig mute">Pozisyon yok</div><div class="kps">Kelly ≤ 0: istatistiksel kenar yok (olasılık %${fmt(k.pWin * 100, 0)}, gereken ≈ %${fmt(100 / (1 + k.b), 0)})</div>`;
   const lv = k ? `<div class="kpbig">${fmt(k.stop0)} <span class="mute">/</span> ${fmt(k.target)}</div><div class="kps">stop −%${fmt(k.S, 1)} (2×ATR) · hedef +%${fmt(k.T, 1)} (2R) · +1R sonrası ${fmt(k.k, 1)}×ATR izleyen stop</div>` : '<div class="kpbig mute">–</div>';
-  return `<div class="kphead"><div><div class="kpname">${esc(s.name)} <span class="kb">${esc(trSector(s.sector))}</span> ${c ? cheapBadge(s) : ""}</div><div class="kps">${esc(s.description || "")}</div><div class="kpprice">${fmt(s.close)} TL <span class="${chg > 0 ? "up" : chg < 0 ? "down" : ""}">${chg > 0 ? "+" : ""}${fmt(chg)}%</span> <span class="kps">· hacim ~${fmt(avgTl(s), 0)} mn TL/gün · RS ${fmt(s.rs, 0)}</span></div></div>
-    <div class="kpsealbox"><span class="kpseal ${sl.cls}">${esc(sl.label)}</span><div class="kps" style="max-width:300px;text-align:right">${sl.why.slice(0, 2).map(esc).join(" · ")}</div>${kpEv(sl)}</div></div>
+  return `<div class="kphead"><div><div class="kpname">${esc(s.name)} <span class="kb">${esc(trSector(s.sector))}</span> ${c ? cheapBadge(s) : ""}</div><div class="kps">${esc(s.description || "")}</div><div class="kpprice">${fmt(s.close)} TL <span class="${chg > 0 ? "up" : chg < 0 ? "down" : ""}">${chg > 0 ? "+" : ""}${fmt(chg)}%</span> <span class="kps">· hacim ~${fmt(avgTl(s), 0)} mn TL/gün · RS ${fmt(s.rs, 0)}</span></div><div class="kps" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="kp-ib" data-cardpng="1" title="Paylaşılabilir kart (PNG)">📤 Kartı paylaş</button><button class="kp-ib" data-dfadd="al" title="Tahmin defterime ekle: 10 iş günü, BIST 100'ü yener">📝 Tahminim ▲ AL</button><button class="kp-ib" data-dfadd="sat" title="Tahmin defterime ekle: 10 iş günü, BIST 100'ün gerisinde kalır">▼ SAT</button></div></div>
+    <div class="kpsealbox"><span class="kpseal ${sl.cls}">${esc(sl.label)}</span><div class="kps" style="max-width:300px;text-align:right">${sl.why.slice(0, 2).map(esc).join(" · ")}</div>${kpEv(sl)}${kpConf(sl, s)}</div></div>
     <div class="kpgrid"><div class="kpcard"><div class="kpl">Ağırlıklı karar skoru</div><div class="kpbig"><span class="up">%${d.al}</span> Boğa · <span class="down">%${d.sat}</span> Ayı</div><div class="dbt"><i class="a" style="width:${d.al}%"></i><i class="t" style="width:${d.tut}%"></i><i class="s" style="width:${d.sat}%"></i></div><div class="kps">%${d.tut} nötr · ${esc(d.label)}</div></div>
     <div class="kpcard"><div class="kpl">Kelly kriteri · kasa önerisi</div>${kelly}</div>
     <div class="kpcard"><div class="kpl">Dinamik stop ve hedef (ATR)</div>${lv}</div></div>`;
@@ -1732,7 +1756,7 @@ function kpHome() {
     <div class="kpcard"><div class="kpl">⚠ Risk / veto altındakiler (aday listesinden)</div><div>${risk.length ? risk.map(([s, r]) => chip(s, r.veto ? "veto" : "uzman itirazı")).join("") : '<span class="kps">Yok.</span>'}</div></div>
     <div class="kpcard"><div class="kpl">🔍 Kaliteli ama düşüşte (izleme)</div><div>${qd.length ? qd.map(x => chip(x.s, "kalite " + fmt(x.qual, 0))).join("") : '<span class="kps">Yok.</span>'}</div></div></div>
     ${kpBasket()}${kpTrust()}${kpTech()}
-    <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
+    <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#seffaflik" data-go="seffaflik">Şeffaflık Panosu</a> · <a href="#defter" data-go="defter">Tahmin Defterim</a> · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
 }
 function renderKokpit() {
   const m = $("kpMarket"), b = $("kpBody"); if (!m || !b) return;
@@ -1740,7 +1764,7 @@ function renderKokpit() {
   const s = kpSym && UNIVERSE.find(x => x.name === kpSym); if ($("kpIn") && document.activeElement !== $("kpIn")) $("kpIn").value = s ? s.name : "";
   if (!s) { b.innerHTML = kpHome(); return; }
   const r = committee(s);
-  b.innerHTML = kpDecision(s, r) + kpSealHist(s) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
+  b.innerHTML = kpDecision(s, r) + kpPath(s, r) + kpSealHist(s) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür, ajanların oy özetidir; kazanç garantisi vermez. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar →</a> · <a href="#" data-kp="">Seçimi temizle</a></p>`;
 }
 function kpSelect(name) {
@@ -1752,6 +1776,234 @@ document.addEventListener("toggle", e => { const d = e.target; if (!d || !d.data
 document.addEventListener("change", e => { if (e.target.id === "kpIn") kpSelect(e.target.value); });
 document.addEventListener("keydown", e => { if (e.target.id === "kpIn" && e.key === "Enter") kpSelect(e.target.value); });
 document.addEventListener("click", e => { if (e.target.closest("#kpRefresh")) loadData(true); if (e.target.closest("#kpTheme")) $("theme").click(); });
+
+/* ---------- WOW KATMANI: Şeffaflık Panosu, karar yolu, güven rozeti, komut paleti, paylaşım kartı, Tahmin Defterim ---------- */
+const trFold = s => String(s || "").toLocaleLowerCase("tr").replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c");
+const todayTR = () => new Date().toLocaleDateString("sv-SE", {timeZone: "Europe/Istanbul"});
+const SEAL_CLS = {"KİLİTLİ": "lock", "RİSKLİ": "risk", "GÜÇLÜ AL": "strong", "AL": "buy", "UZAK DUR": "avoid", "NÖTR": "neutral"};
+
+/* ===== Kokpit: karar yolu ve güven rozeti ===== */
+function kpPath(s, r) {
+  let pp = null, sl = null; try { pp = sealPath(s, r); sl = kokpitSeal(s, r); } catch (e) { return ""; }
+  const endDir = SEAL_DIR[pp.label] || 0;
+  const view1 = st => st.ends ? (endDir < 0 ? ["fail", "✗"] : ["pass", "★"]) : (st.id === "guclu" || st.id === "al" || st.id === "uzak") ? ["skip", "–"] : ["pass", "✓"];
+  const live = sl.gated ? `<div class="kpstep fail"><span class="ic">!</span><div><b>Canlı karne kapısı</b><div class="kps">${esc(sl.why[0])}</div></div></div>` : "";
+  return `<details class="meet" style="margin:0 0 16px"><summary>🧭 Mühür nasıl çıktı? <b>${esc(sl.label)}</b> <span class="kps">${pp.steps.length} kapı denendi · son durak: ${esc(pp.label)}</span></summary><div class="kppath" style="margin-top:8px">${pp.steps.map(st => { const [c, ic] = view1(st); return `<div class="kpstep ${c} ${st.ends ? "ends" : ""}"><span class="ic">${ic}</span><div><b>${esc(st.title)}</b>${st.ends ? ` <span class="kb">➜ ${esc(pp.label)}</span>` : ""}<div class="kps">${esc(st.detail)}</div></div></div>`; }).join("")}${live}</div>
+    <p class="note">Kapılar yukarıdan aşağıya sırayla denenir; geçilen ya da takılan ilk belirleyici kapı mührü verir (✓ geçti, – koşul sağlanmadı, ★/✗ mührü belirledi). Mühür ajanların oy özetidir, kazanç garantisi değildir.</p></details>`;
+}
+function kpConf(sl, s) {
+  let c; try { c = sealConfidence(sl, s); } catch (e) { return ""; }
+  const cls = c.level === "yüksek" ? "hi" : c.level.indexOf("orta") === 0 ? "mid" : c.level === "düşük" ? "lo" : "";
+  return `<div class="kps" style="margin-top:6px"><span class="conf ${cls}">Güven: ${esc(c.level)}</span></div><details class="kps" style="max-width:300px"><summary style="cursor:pointer">dayanak</summary>${c.basis.map(x => `<div style="margin-top:4px">${esc(x)}</div>`).join("")}</details>`;
+}
+
+/* ===== Şeffaflık Panosu ===== */
+let SF_CACHE = null;
+function sfSeals() {
+  const key = (DATA && DATA.generated) + "|" + (SEALCARD ? SEALCARD.last : "") + "|" + UNIVERSE.length; if (SF_CACHE && SF_CACHE.key === key) return SF_CACHE;
+  const rows = UNIVERSE.filter(s => s.ok && s.tl >= 10).sort((a, b) => b.tl - a.tl).slice(0, 300).map(s => { try { const sl = kokpitSeal(s, committee(s)); return {s, label: sl.label, gated: !!sl.gated}; } catch (e) { return null; } }).filter(Boolean), by = {};
+  rows.forEach(x => (by[x.label] = by[x.label] || []).push(x)); return SF_CACHE = {key, rows, by};
+}
+const sfBadge = (lv, tx) => `<span class="sfbadge ${lv === "kanıtlı" ? "up" : lv === "çürütüldü" ? "down" : lv === "ilk işaret" ? "warn" : "mute"}">${esc(tx || lv)}</span>`;
+function sfPrinciples() {
+  const P = ["<b>Her mühür kaydedilir</b> ve sonradan gerçek sonuçla ölçülür; kayıt silinmez (depo geçmişi değişmez bir ön kayıt işlevi görür).", "<b>Piyasaya göre ölçülür:</b> fazla getiri = hisse − aynı günün ~300 likit hissesinin eşit ağırlıklı ortalaması.", "<b>Şans testi:</b> aynı gün aynı sayıda rastgele hisse seçilseydi sonuç ne olurdu? (permütasyon)", "<b>Örtüşme ve çoklu test düzeltmesi:</b> aynı hisse art arda pencerelerde tekrarlanır; çok test yapıldıkça yanlış keşif artar, ikisi de düzeltilir.", "<b>Kanıt yoksa söylemeyiz:</b> yeterli gözlem yoksa \"yetersiz veri\" yazarız; tahmin vaat etmeyiz.", "<b>Kanıt tersini gösterirse sistem kendini düzeltir:</b> otomatik kapılar (ör. AL mührü anlamlı biçimde piyasanın gerisinde kalırsa NÖTR'e düşer)."];
+  return `<div class="card" style="margin:10px 0"><h3>Dürüstlük ilkelerimiz</h3><ol style="margin:6px 0 0 18px;line-height:1.55">${P.map(p => `<li>${p}</li>`).join("")}</ol></div>`;
+}
+function sfToday() {
+  const S = sfSeals(), order = ["GÜÇLÜ AL", "AL", "NÖTR", "UZAK DUR", "RİSKLİ", "KİLİTLİ"], tot = S.rows.length || 1, rows10 = SEALCARD && SEALCARD.h && SEALCARD.h[10] ? SEALCARD.h[10].rows : {};
+  const evTxt = l => { const e = rows10[l]; return e ? `${e.mean > 0 ? "+" : ""}${fmt(e.mean, 2)} puan · ${e.nEff} bağımsız gözlem · <b class="${KT_COL[e.verdict] || "mute"}">${esc(e.verdict)}</b>` : '<span class="mute">henüz ölçülmedi</span>'; };
+  return `<div class="card" style="margin:10px 0"><h3>Bugünün mühürleri <span class="sub">(${S.rows.length} likit hisse)</span></h3><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Mühür</th><th>Hisse</th><th>Pay</th><th style="text-align:left">Canlı karne (10 iş günü)</th></tr></thead><tbody>${order.map(l => { const n = (S.by[l] || []).length; return `<tr><td style="text-align:left"><span class="kpseal ${SEAL_CLS[l]}" style="font-size:12px;padding:3px 12px">${esc(l)}</span></td><td>${n}</td><td>%${fmt(n / tot * 100, 0)}</td><td style="text-align:left">${evTxt(l)}</td></tr>`; }).join("")}</tbody></table></div>
+    <p class="note">${!(S.by["AL"] || []).length && !(S.by["GÜÇLÜ AL"] || []).length ? "Şu an hiçbir hisse AL ya da GÜÇLÜ AL mührü almıyor: ayı rejiminde kapılar sıkı kalıyor. Bu yüzden AL tarafının doğruluğu şimdilik ölçülemiyor; bunu saklamıyoruz. " : ""}Bir mührün üstüne tıklamak için Kokpit'te hisseyi arayın; komut paleti (Ctrl+K) ile "GÜÇLÜ AL" ya da "RİSKLİ" yazarak listeleri açabilirsiniz.</p></div>`;
+}
+function sfScoreboard() {
+  const rows = [], T = TECHSEAL, aud = (() => { try { return researchAudit(); } catch (e) { return null; } })(), rs10 = SEALCARD && SEALCARD.h && SEALCARD.h[10] ? SEALCARD.h[10] : null;
+  const verd = rs10 ? Object.entries(rs10.rows).filter(([, r]) => r.verdict === "pozitif kanıt" || r.verdict === "ters kanıt") : [];
+  rows.push(["Mühür karnesi", "Her seans ~300 hissenin mührü; 5/10/20 gün sonraki fazla getiri, şans ve risk testi", SEALCARD && SEALCARD.ndays ? `${SEALCARD.ndays} gün kayıt (${SEALCARD.first} → ${SEALCARD.last})` : "kayıt yok", rs10 && rs10.outDays ? `${rs10.outDays} sonuçlanan gün; ${verd.length} kovada hüküm` : "ilk sonuçlar 5 iş gün sonra", verd.length ? "ilk işaret" : "ölçülmedi", "Hüküm: ≥ 30 bağımsız gözlem, 3 çakışmayan pencere"]);
+  if (T && T.h && T.h[10]) { const ok = Object.entries(T.h[10].components).filter(([, c]) => c.oos && c.oos.fdr); rows.push(["Teknik bileşenler (3 yıl)", "Seçim ilk yarıda, sınama ikinci yarıda (örneklem dışı), gün kümelemeli", `${T.from} → ${T.to}`, ok.length ? ok.map(([k, c]) => `${T.labels[k]} ${c.oos.mean > 0 ? "+" : ""}${fmt(c.oos.mean, 1)}`).join("; ") : "ayakta kalan yok", ok.length ? "ilk işaret" : "ölçülmedi", "Etki kararlı değil: ilk yarıda görünmüyordu; bileşik skor göreli gücü geçmiyor"]); }
+  const nl = NEWSLOG && NEWSLOG.events ? NEWSLOG.events : [], es = eventStudy(nl, 10), esv = es.filter(x => x.verdict !== "yetersiz veri");
+  rows.push(["Haber karnesi", "Etiketli haberden sonra, aynı likiditedeki haberi olmayan komşulara göre", `${nl.length} olay`, esv.length ? esv.map(x => `${x.tag}: ${x.verdict}`).join("; ") : "yetersiz veri (eşleşen kontrol birikiyor)", esv.some(x => x.verdict === "pozitif kanıt") ? "ilk işaret" : "ölçülmedi", "Piyasa ortalamasına göre kıyas yanıltıcı olabilir (büyük/likit hisse etkisi)"]);
+  const ar = PICKS && PICKS.picks ? arenaStats(PICKS.picks, 10).rows.find(x => x.id === "komite") : null;
+  rows.push(["Komite listesi (güç liderleri)", "Skor ±2 oyları, 10 gün", ar ? `${ar.n} oy, ${PICKS.picks.filter(p => p.src === "komite").length} kayıt` : "kayıt yok", ar ? `isabet %${fmt(ar.rate * 100, 0)}, bağımsız ≈ ${ar.nEff}` : "–", ar && ar.statusEff !== "yetersiz örnek" ? "ilk işaret" : "ölçülmedi", ar ? `Durum: ${ar.statusEff}` : ""]);
+  if (aud) rows.push(["Araştırma denetimi", "Tüm sinyal/faktör testleri tek ailede, çoklu test düzeltmesi", `${aud.tests} test`, `şansla ≈ ${fmt(aud.expectedFalse, 1)} yanlış pozitif; BH sonrası ${aud.bh.length}, Bonferroni ${aud.bonf.length}`, "kanıtlı", "Hükümler düzeltme sonrası kesinleşir"]);
+  const cr = CALRES && CALRES.tests ? CALRES : null, lv = (() => { try { return Math.max(...[1, 2, 3, 4, 5].map(w => (calendarLive(w) || {n: 0}).n)); } catch (e) { return 0; } })();
+  if (cr) rows.push(["Takvim etkileri", "Haftanın günü / tatil / ay; canlı doğrulama", `${cr.from} → ${cr.to}`, `örneklem içi ${cr.survivors.length}/${cr.family} anlamlı; canlı doğrulama en çok ${lv} gözlem`, "ilk işaret", "Doğrulama için aynı günden ≥ 30 gözlem (≈ 7 ay)"]);
+  const cb = SEALCARD && SEALCARD.calib;
+  rows.push(["Kelly olasılık kalibrasyonu", "Modelin \"hedefe stop'tan önce ulaşma\" olasılığı ↔ gerçekleşen", cb ? `${cb.n} sonuç` : "pencere dolmadı", cb ? `model %${fmt(cb.pPred * 100, 0)} ↔ gerçekleşen %${fmt(cb.pReal * 100, 0)}` : "~24 Kasım'da başlar", cb && cb.ok ? "kanıtlı" : "ölçülmedi", "≥ 30 bağımsız sonuç gerekir"]);
+  return `<div class="card" style="margin:10px 0"><h3>Doğruluk tablosu <span class="sub">hangi iddia hangi aşamada?</span></h3><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ölçüm</th><th style="text-align:left">Ne ölçüyor · dönem</th><th style="text-align:left">Sonuç</th><th>Aşama</th></tr></thead><tbody>${rows.map(r => `<tr><td style="text-align:left;white-space:normal;vertical-align:top"><b>${esc(r[0])}</b></td><td style="text-align:left;white-space:normal;vertical-align:top">${esc(r[1])}<div class="mute" style="font-size:11.5px">${esc(r[2])}</div></td><td style="text-align:left;white-space:normal;vertical-align:top">${esc(r[3])}<div class="mute" style="font-size:11.5px">${esc(r[5])}</div></td><td style="vertical-align:top">${sfBadge(r[4])}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">Aşamalar: <b>kanıtlı</b> = çoklu test düzeltmesi sonrası anlamlı; <b>ilk işaret</b> = olumlu ama örnek ya da dönem sınırlı; <b>ölçülmedi</b> = henüz hüküm için yeterli veri yok.</p></div>`;
+}
+function sfMisses() {
+  const w = worstMisses(SEALHIST, 5);
+  if (!w.n) return `<div class="card" style="margin:10px 0"><h3>En büyük hatalarımız</h3><p class="mute">Henüz sonuçlanan yönlü mühür yok. Mühür kaydı 27 Ekim'de başladı; ilk 5 günlük sonuçlar 4 Kasım'dan sonra görünür. Hatalarımızı burada saklamadan listeleyeceğiz.</p></div>`;
+  return `<div class="card" style="margin:10px 0"><h3>En büyük hatalarımız</h3><p class="note">Yönlü mühürlerin (AL / GÜÇLÜ AL / UZAK DUR / RİSKLİ / KİLİTLİ) sonuçlanan ${w.n} tanesinden ${w.hit}'i haklı çıktı, ${w.miss}'i çıkmadı (%${fmt(w.hit / w.n * 100, 0)} isabet; tek başına bir kanıt değildir). En büyük yanılgılar:</p>
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Hisse</th><th>Tarih</th><th>Mühür</th><th>Ufuk</th><th>Piyasaya göre</th></tr></thead><tbody>${w.top.map(x => `<tr><td style="text-align:left"><b data-kp="${esc(x.name)}" style="cursor:pointer">${esc(x.name)}</b></td><td>${esc(x.d)}</td><td>${esc(x.seal)}</td><td>${x.h} gün</td><td class="${x.ex > 0 ? "up" : "down"}"><b>${x.ex > 0 ? "+" : ""}${fmt(x.ex, 1)} puan</b></td></tr>`).join("")}</tbody></table></div></div>`;
+}
+function sfCalib() {
+  const pts = reliabilityPts(SEALCARD), cb = SEALCARD && SEALCARD.calib;
+  if (!pts.length) return `<div class="card" style="margin:10px 0"><h3>Güvenilirlik grafiği</h3><p class="mute">Modelin olasılıkları ile gerçekleşen sonuçların karşılaştırması, 20 iş günlük pencere dolunca burada çizilir (yaklaşık 24 Kasım). İyi kalibre bir model noktaları köşegenin üzerinde toplar.</p></div>`;
+  const W = 340, H = 300, L = 38, B = 34, X = v => L + v / 100 * (W - L - 10), Y = v => H - B - v / 100 * (H - B - 10);
+  const grid = [0, 25, 50, 75, 100].map(v => `<line x1="${L}" x2="${W - 10}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="10" fill="var(--mute)">${v}</text><text x="${X(v)}" y="${H - B + 16}" text-anchor="middle" font-size="10" fill="var(--mute)">${v}</text>`).join("");
+  const dots = pts.map(p => `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="${Math.max(4, Math.min(14, Math.sqrt(p.n) / 3))}" fill="var(--accent)" fill-opacity=".7"><title>model %${fmt(p.x, 0)} → gerçekleşen %${fmt(p.y, 0)} (n ${p.n})</title></circle>`).join("");
+  return `<div class="card" style="margin:10px 0"><h3>Güvenilirlik grafiği <span class="sub">model olasılığı ↔ gerçekleşen</span></h3><svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:420px">${grid}<line x1="${X(0)}" y1="${Y(0)}" x2="${X(100)}" y2="${Y(100)}" stroke="var(--mute)" stroke-dasharray="4 4"/>${dots}<text x="${W / 2}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--mute)">modelin olasılığı %</text><text x="12" y="${H / 2}" font-size="11" fill="var(--mute)" transform="rotate(-90 12 ${H / 2})" text-anchor="middle">gerçekleşen %</text></svg>
+    <p class="note">${cb ? `Ortalama: model %${fmt(cb.pPred * 100, 0)}, gerçekleşen %${fmt(cb.pReal * 100, 0)} (${cb.n} sonuç, ${cb.nEff} bağımsız${cb.skill != null ? `, Brier becerisi ${fmt(cb.skill, 2)}` : ""}). Köşegenin altındaki noktalar modelin aşırı iyimser olduğunu gösterir.` : ""}</p></div>`;
+}
+function sfObservers() {
+  const st = (() => { try { return observerStatus(); } catch (e) { return {}; } })(), N = {istat: "López de Prado · Baş İstatistikçi", risk: "Ed Thorp · Risk Hakemi", takvim: "Yale Hirsch · Takvim", analist: "Peter Lynch · Analist ve Kurumsal Olaylar", portfoy: "Ray Dalio · Portföy Mimarı", rejim: "Howard Marks · Rejim Bekçisi"};
+  return `<div class="card" style="margin:10px 0"><h3>Gözlemci kadro <span class="sub">oy hakkı kanıtla kazanılır</span></h3><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Uzman</th><th>Durum</th><th style="text-align:left">Terfi ilerlemesi</th></tr></thead><tbody>${Object.keys(N).map(k => { const x = st[k]; if (!x) return ""; const pr = x.progress; return `<tr><td style="text-align:left;white-space:normal;vertical-align:top"><b>${esc(N[k])}</b></td><td style="vertical-align:top;white-space:nowrap">${x.state === "oy hakkı kazandı" ? "● oy hakkı kazandı" : x.state === "aday" ? "◔ aday" : x.state === "danışman" ? "◇ danışman" : x.state === "yetki sorgulanıyor" ? "⚠ yetki sorgulanıyor" : "◌ gözlemci"}</td><td style="text-align:left;white-space:normal">${pr ? `<div>${fmt(pr.have, 0)} / ${pr.need} ${esc(pr.unit)} <span class="rbar" style="display:inline-block;width:110px;vertical-align:middle"><i style="width:${Math.min(100, pr.have / pr.need * 100)}%"></i><b></b></span></div>` : ""}<div class="mute" style="font-size:11.5px">${esc(x.why || "")}</div></td></tr>`; }).join("")}</tbody></table></div><p class="note">${esc(OBS_RULE)}</p></div>`;
+}
+function sfAge(str) { // "YYYY-MM-DD HH:MM" (TR) ya da "YYYY-MM-DD" → dakika
+  if (!str) return null; const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/); if (!m) return null;
+  const t = Date.UTC(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] - 3 : 12 - 3, m[5] ? +m[5] : 0); return Math.max(0, Math.round((Date.now() - t) / 60000));
+}
+function sfFresh() {
+  const D = 1440, src = [["Fiyatlar (TradingView)", DATA && DATA.generated, 45], ["Fiyat geçmişi (kapanış)", HIST && HIST.generated, D * 4.5], ["Mühür kaydı (kapanış)", SEALCARD && SEALCARD.last, D * 4.5], ["Komite karnesi (kapanış)", PICKS && PICKS.updated, D * 4.5], ["Sinyal araştırması (haftalık)", RESEARCH && RESEARCH.generated, D * 9], ["Teknik mühür testi (haftalık)", TECHSEAL && TECHSEAL.generated, D * 9], ["Takvim araştırması (haftalık)", CALRES && CALRES.generated, D * 9]]; // sınırlar: seans verisi 45 dk; kapanış kayıtları hafta sonunu/tatili tolere eder (4,5 gün); haftalık araştırmalar 9 gün
+  const fmtAge = m => m == null ? "–" : m < 90 ? `${m} dk önce` : m < 2880 ? `${Math.round(m / 60)} saat önce` : `${Math.round(m / 1440)} gün önce`;
+  return `<div class="card" style="margin:10px 0"><h3>Veri tazeliği</h3><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Kaynak</th><th>Zaman damgası</th><th>Yaş</th></tr></thead><tbody>${src.map(([n, t, lim]) => { const a = sfAge(t); return `<tr><td style="text-align:left">${esc(n)}</td><td>${esc(t || "–")}</td><td class="${a == null ? "mute" : a <= Math.min(lim, 45) ? "up" : a <= lim ? "" : "down"}">${fmtAge(a)}</td></tr>`; }).join("")}</tbody></table></div><p class="note">Fiyat verisi TradingView'den gecikmeli gelir ve piyasa saatlerinde yaklaşık 10 dakikada bir yenilenir; canlı (tick) veri değildir.</p></div>`;
+}
+function sfLimits() {
+  const L = ["<b>Tek rejim:</b> canlı kayıt kısa ve çoğunlukla ayı/düşüş döneminde; boğa rejiminde sonuçlar farklı olabilir.", "<b>Hayatta kalma yanlılığı:</b> geriye dönük testlerde evren bugünün likit hisseleridir; düşenler/çıkanlar yoktur.", "<b>Bilanço verisinin geçmişi yok:</b> değer/kalite bileşenleri geçmişte sınanamaz; noktasal kayıt biriktiriyoruz (≈ 4 Aralık'ta ilk test).", "<b>Etki kararlı değil:</b> göreli güç etkisi son ~19 ayda güçlü, ilk yarıda zayıftı.", "<b>Veri:</b> tek kaynak (TradingView), gecikmeli; takas/AKD ve tahta derinliği lisanslı olduğundan yalnızca kullanıcı verisiyle.", "<b>Mühür bir oy özetidir:</b> kazanç garantisi ya da yatırım tavsiyesi değildir; eğitim amaçlıdır."];
+  return `<div class="card" style="margin:10px 0"><h3>Sistemin bilinen sınırları</h3><ul style="margin:6px 0 0 18px;line-height:1.55">${L.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
+}
+let sfNL = false;
+function renderSeffaflik() {
+  const el = $("sfView"); if (!el) return; if (!UNIVERSE.length) { el.innerHTML = "<p class='mute'>Veri yükleniyor…</p>"; return; }
+  if (!NEWSLOG && !sfNL) { sfNL = true; loadNewsLog().then(() => { if (view === "seffaflik" && NEWSLOG) renderSeffaflik(); }); }
+  el.innerHTML = `<h2>🔍 Şeffaflık Panosu <span class="sub">sistem kendini nasıl sınıyor</span></h2>${sfPrinciples()}<div id="sfToday"><div class="card" style="margin:10px 0"><p class="mute">Bugünün mühürleri hesaplanıyor…</p></div></div>${sfScoreboard()}${sfMisses()}${sfCalib()}${sfObservers()}${sfFresh()}${sfLimits()}
+    <p class="note" style="text-align:center">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#kokpit" data-go="kokpit">Kokpit'e dön</a></p>`;
+  setTimeout(() => { if (view === "seffaflik" && $("sfToday")) $("sfToday").innerHTML = sfToday(); }, 30);
+}
+document.addEventListener("click", e => { if (view !== "seffaflik") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); show(g.dataset.go); return; } const k = e.target.closest("[data-kp]"); if (k) { e.preventDefault(); kpSelect(k.dataset.kp); } });
+
+/* ===== Komut paleti (Ctrl+K) ===== */
+let palSel = 0, palList = [], palCtx = null;
+const PAL_SEALS = ["GÜÇLÜ AL", "AL", "NÖTR", "UZAK DUR", "RİSKLİ", "KİLİTLİ"];
+function palCmds() {
+  const c = [{t: "Tema değiştir (açık / koyu)", kw: "tema koyu acik karanlik gece gunduz", run: () => $("theme").click()}, {t: "Veriyi yenile", kw: "yenile guncelle veri cek", run: () => loadData(true)}, {t: "Sayfayı yazdır / PDF olarak kaydet", kw: "yazdir pdf cikti", run: () => window.print()},
+    {t: "Haftalık göreli güç liderleri (liste)", kw: "lider haftalik goreli guc uyumlu", list: () => UNIVERSE.filter(s => s.ok && s.tl >= 10 && mtfTier(s) && (mtfTier(s).id === "uyumlu" || mtfTier(s).id === "hlider")).sort((a, b) => b.tl - a.tl).slice(0, 40).map(s => ({name: s.name, sub: "haftalık lider"}))},
+    {t: "Şeffaflık Panosu: en büyük hatalarımız", kw: "hata yanilgi seffaflik", run: () => show("seffaflik")}];
+  PAL_SEALS.forEach(l => c.push({t: "Mühür listesi: " + l, kw: "muhur liste " + l, list: () => (sfSeals().by[l] || []).slice(0, 40).map(x => ({name: x.s.name, sub: l}))}));
+  return c;
+}
+function palScore(q, text, kw) { const t = trFold(text), k = trFold(kw || ""); if (!q) return 0; if (t === q) return 100; if (t.indexOf(q) === 0) return 80; if (t.indexOf(q) >= 0) return 60; if (k.indexOf(q) >= 0) return 50; let i = 0; for (const ch of t) if (ch === q[i]) i++; return i === q.length ? 30 : -1; }
+function palSearch(raw) {
+  const q = trFold(raw).trim(), out = [];
+  if (palCtx) return palCtx.items.map(x => ({k: "hisse", t: x.name, sub: x.sub, run: () => kpSelect(x.name)})).filter(x => !q || palScore(q, x.t, x.sub) >= 0);
+  UNIVERSE.forEach(s => { if (!s.ok && !q) return; const sc = q ? palScore(q, s.name, s.description) : -1; if (sc >= 0) out.push({k: "hisse", t: s.name, sub: (s.description || "").slice(0, 46), sc: sc + (s.tl > 10 ? 1 : 0), run: () => kpSelect(s.name)}); });
+  [...document.querySelectorAll(".nav a")].forEach(a => { const t = a.textContent.trim().replace(/\s+/g, " "), sc = q ? palScore(q, t, a.dataset.view) : -1; if (sc >= 0) out.push({k: "sayfa", t, sub: "sayfa", sc: sc - 2, run: () => { closeDetail(); show(a.dataset.view); }}); });
+  palCmds().forEach(c => { const sc = q ? palScore(q, c.t, c.kw) : 20; if (sc >= 0) out.push({k: "komut", t: c.t, sub: c.list ? "liste" : "komut", sc: sc + 1, run: c.run, list: c.list}); });
+  if (!q) { const seen = kpSym ? [{k: "hisse", t: kpSym, sub: "son baktığınız", sc: 90, run: () => kpSelect(kpSym)}] : []; return seen.concat(out.filter(x => x.k === "komut").slice(0, 6)); }
+  return out.sort((a, b) => b.sc - a.sc).slice(0, 12);
+}
+function ensurePal() {
+  if ($("pal")) return; const d = document.createElement("div"); d.id = "pal"; d.className = "pal"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Komut paleti");
+  d.innerHTML = '<div class="palbox"><input id="palIn" placeholder="Hisse, sayfa ya da komut ara… (ör. THYAO, tahmin, güçlü al)" autocomplete="off" spellcheck="false" aria-label="Ara"><div class="pallist" id="palListEl" role="listbox"></div><div class="palhint">↑↓ gezin · Enter seç · Esc kapat · <span id="palCtxLbl"></span></div></div>';
+  document.body.appendChild(d);
+  d.addEventListener("mousedown", e => { if (e.target === d) closePalette(); });
+  $("palIn").addEventListener("input", () => { palSel = 0; palRender(); });
+  $("palIn").addEventListener("keydown", e => { if (e.key === "ArrowDown") { e.preventDefault(); palSel = Math.min(palList.length - 1, palSel + 1); palRender(true); } else if (e.key === "ArrowUp") { e.preventDefault(); palSel = Math.max(0, palSel - 1); palRender(true); } else if (e.key === "Enter") { e.preventDefault(); palRun(palList[palSel]); } else if (e.key === "Escape") { e.preventDefault(); if (palCtx) { palCtx = null; $("palIn").value = ""; palSel = 0; palRender(); } else closePalette(); } });
+  $("palListEl").addEventListener("mousedown", e => { const it = e.target.closest("[data-pi]"); if (it) { e.preventDefault(); palRun(palList[+it.dataset.pi]); } });
+}
+function palRender(keepScroll) {
+  palList = palSearch($("palIn").value); if (palSel >= palList.length) palSel = Math.max(0, palList.length - 1);
+  $("palCtxLbl").textContent = palCtx ? palCtx.title + " · Esc: geri" : "";
+  $("palListEl").innerHTML = palList.length ? palList.map((x, i) => `<div class="palitem ${i === palSel ? "on" : ""}" data-pi="${i}" role="option" aria-selected="${i === palSel}"><b>${esc(x.t)}</b><span class="mute" style="font-size:12px">${esc(x.sub || "")}</span><span class="pk">${x.k}</span></div>`).join("") : '<div class="palitem mute">Sonuç yok</div>';
+  const on = $("palListEl").querySelector(".palitem.on"); if (on && keepScroll) on.scrollIntoView({block: "nearest"});
+}
+function palRun(it) {
+  if (!it) return;
+  if (it.list) { palCtx = {title: it.t, items: it.list()}; palSel = 0; $("palIn").value = ""; palRender(); $("palIn").focus(); return; }
+  closePalette(); it.run();
+}
+function openPalette(q) { ensurePal(); palCtx = null; palSel = 0; $("pal").classList.add("open"); $("palIn").value = q || ""; palRender(); setTimeout(() => $("palIn").focus(), 0); }
+function closePalette() { const p = $("pal"); if (p) p.classList.remove("open"); palCtx = null; }
+document.addEventListener("keydown", e => {
+  const tag = (e.target && e.target.tagName) || "", typing = /INPUT|TEXTAREA|SELECT/.test(tag) || (e.target && e.target.isContentEditable);
+  if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === "k") { e.preventDefault(); const p = $("pal"); p && p.classList.contains("open") ? closePalette() : openPalette(); }
+  else if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey) { e.preventDefault(); openPalette(); }
+  else if (e.key === "Escape" && $("pal") && $("pal").classList.contains("open") && e.target.id !== "palIn") closePalette();
+});
+document.addEventListener("click", e => { if (e.target.closest("#palBtn")) openPalette(); });
+
+/* ===== Paylaşılabilir hisse kartı (PNG) ===== */
+function cardRR(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+function cardWrap(g, text, maxW) { const words = String(text).split(/\s+/), lines = []; let cur = ""; words.forEach(w => { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }); if (cur) lines.push(cur); return lines; }
+function buildCardCanvas(s) {
+  const r = committee(s), sl = kokpitSeal(s, r), d = sl.d, cf = sealConfidence(sl, s), k = (() => { try { return kellyPlan(s, 100000); } catch (e) { return null; } })();
+  const W = 1080, H = 1350, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const g = cv.getContext("2d"), F = '"Segoe UI", system-ui, -apple-system, Roboto, sans-serif';
+  const COL = {strong: "#a3e635", buy: "#3fd9a8", neutral: "#9aa6b2", risk: "#f0b43c", avoid: "#ff6b6b", lock: "#ff6b6b"}, ac = COL[sl.cls] || "#9aa6b2";
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, "#0b1016"); bg.addColorStop(1, "#111a22"); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  const gl = g.createRadialGradient(W * 0.8, 120, 10, W * 0.8, 120, 520); gl.addColorStop(0, ac + "55"); gl.addColorStop(1, "#00000000"); g.fillStyle = gl; g.fillRect(0, 0, W, 700);
+  g.fillStyle = "#12b886"; cardRR(g, 64, 60, 56, 56, 16); g.fill(); g.fillStyle = "#fff"; g.beginPath(); g.ellipse(92, 88, 17, 9, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#e8eef4"; g.font = "700 30px " + F; g.fillText("Borsa Komitesi", 136, 98); g.fillStyle = "#8a96a3"; g.font = "400 24px " + F; g.textAlign = "right"; g.fillText(new Date().toLocaleString("tr-TR", {timeZone: "Europe/Istanbul", dateStyle: "short", timeStyle: "short"}), W - 64, 98); g.textAlign = "left";
+  g.fillStyle = "#ffffff"; g.font = "800 120px " + F; g.fillText(s.name, 64, 270);
+  g.fillStyle = "#8a96a3"; g.font = "400 30px " + F; g.fillText(trSector(s.sector) + (s.description ? " · " + String(s.description).slice(0, 38) : ""), 64, 322);
+  g.fillStyle = "#e8eef4"; g.font = "700 56px " + F; const pxT = fmt(s.close) + " TL", pxW = g.measureText(pxT).width; g.fillText(pxT, 64, 410); g.fillStyle = s.change > 0 ? "#a3e635" : s.change < 0 ? "#ff6b6b" : "#9aa6b2"; g.font = "700 40px " + F; g.fillText((s.change > 0 ? "+" : "") + fmt(s.change) + "%", 64 + pxW + 26, 410);
+  g.font = "800 64px " + F; const tw = g.measureText(sl.label).width + 80; g.fillStyle = ac + "26"; cardRR(g, 64, 460, tw, 104, 52); g.fill(); g.strokeStyle = ac; g.lineWidth = 3; g.stroke(); g.fillStyle = ac; g.fillText(sl.label, 104, 534);
+  g.fillStyle = "#c9d3dc"; g.font = "400 30px " + F; let y = 626; cardWrap(g, sl.why[0] || "", W - 128).slice(0, 3).forEach(l => { g.fillText(l, 64, y); y += 42; });
+  y = Math.max(y + 30, 700); const bw = (W - 128 - 40) / 3; const boxes = [["Boğa / Ayı", `%${d.al} / %${d.sat}`], ["Kelly kasa payı", k && k.edge ? `%${fmt(k.f * 100, 1)}` : "pozisyon yok"], ["Stop / Hedef", k ? `${fmt(k.stop0)} / ${fmt(k.target)}` : "–"]];
+  boxes.forEach((b, i) => { const x = 64 + i * (bw + 20); g.fillStyle = "#18222c"; cardRR(g, x, y, bw, 150, 22); g.fill(); g.fillStyle = "#8a96a3"; g.font = "400 24px " + F; g.fillText(b[0], x + 22, y + 44); g.fillStyle = "#e8eef4"; g.font = "700 38px " + F; g.fillText(b[1], x + 22, y + 104); });
+  y += 190; g.fillStyle = "#18222c"; cardRR(g, 64, y, W - 128, 24, 12); g.fill(); if (d.al > 0) { g.fillStyle = "#a3e635"; cardRR(g, 64, y, Math.max(24, (W - 128) * d.al / 100), 24, 12); g.fill(); } g.fillStyle = "#ff6b6b"; const rw = Math.max(0, (W - 128) * d.sat / 100); if (rw > 0) { cardRR(g, 64 + (W - 128) - rw, y, Math.max(24, rw), 24, 12); g.fill(); }
+  y += 90; g.fillStyle = cf.level === "yüksek" ? "#a3e635" : cf.level === "düşük" ? "#ff6b6b" : cf.level.indexOf("orta") === 0 ? "#3fd9a8" : "#9aa6b2"; g.font = "700 34px " + F; g.fillText("Güven: " + cf.level, 64, y); g.fillStyle = "#8a96a3"; g.font = "400 26px " + F; y += 46; cardWrap(g, cf.basis[0] || "", W - 128).slice(0, 2).forEach(l => { g.fillText(l, 64, y); y += 36; });
+  g.fillStyle = "#8a96a3"; g.font = "400 22px " + F; const fl = cardWrap(g, "Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür ajanların oy özetidir; kazanç garantisi vermez. Veri: " + (DATA.generated || "") + " (TradingView, gecikmeli).", W - 128); let fy = H - 40 - fl.length * 30 + 20; fl.forEach(l => { g.fillText(l, 64, fy); fy += 30; });
+  g.fillStyle = "#12b886"; g.font = "600 24px " + F; g.textAlign = "right"; g.fillText("mertyagcii.github.io/borsa-komitesi", W - 64, H - 50); g.textAlign = "left";
+  return cv;
+}
+async function shareCard(s) {
+  let cv; try { cv = buildCardCanvas(s); } catch (e) { toast("Kart oluşturulamadı"); return; }
+  const blob = await new Promise(res => cv.toBlob(res, "image/png")); if (!blob) { toast("Kart oluşturulamadı"); return; }
+  const file = new File([blob], `${s.name}_muhur_${todayTR()}.png`, {type: "image/png"});
+  try { if (navigator.canShare && navigator.canShare({files: [file]})) { await navigator.share({files: [file], title: `${s.name} · Borsa Komitesi`, text: "Eğitim amaçlıdır, yatırım tavsiyesi değildir."}); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("Kart indirildi");
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-cardpng]"); if (!b) return; e.preventDefault(); const s = UNIVERSE.find(x => x.name === kpSym); if (s) shareCard(s); });
+
+/* ===== Tahmin Defterim: kendi tahminlerini aynı yöntemle skorla ===== */
+const dfList = () => store.get("preds", []);
+function dfAdd(o) { const l = dfList(), e = Object.assign({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5)}, o); l.push(e); store.set("preds", l.slice(-500)); return e; }
+function dfAt(dates, d) { for (let k = dates.length - 1; k >= 0; k--) if (dates[k] <= d) return k; return -1; }
+function dfClose(series, dates, i) { const idx = series.length - 1 - (dates.length - 1 - i); return idx >= 0 ? series[idx] : null; } // seri ve tarih listesi aynı son işlem gününde biter
+function dfEval(e) {
+  const c = CANDLES, h = HIST; if (!c || !c.dates || !h || !h.index || !h.stocks[e.n] || h.index.last !== c.dates[c.dates.length - 1] || h.stocks[e.n].last !== c.dates[c.dates.length - 1]) return {state: "veri yok"};
+  const i0 = dfAt(c.dates, e.date); if (i0 < 0) return {state: "veri yok"}; const i1 = i0 + e.h; if (i1 >= c.dates.length) return {state: "bekliyor", left: i1 - c.dates.length + 1};
+  const c0 = dfClose(h.stocks[e.n].closes, c.dates, i0), c1 = dfClose(h.stocks[e.n].closes, c.dates, i1), x0 = dfClose(h.index.closes, c.dates, i0), x1 = dfClose(h.index.closes, c.dates, i1);
+  if (!(c0 > 0 && c1 > 0 && x0 > 0 && x1 > 0)) return {state: "veri yok"};
+  const ex = (c1 / c0 - x1 / x0) * 100, signed = e.dir === "al" ? ex : -ex; return {state: "sonuçlandı", ex, signed, hit: signed > 0, d0: c.dates[i0], d1: c.dates[i1]};
+}
+function dfStats(list) {
+  const ev = list.map(e => ({e, r: dfEval(e)})), done = ev.filter(x => x.r.state === "sonuçlandı"), hits = done.filter(x => x.r.hit).length, n = done.length, ci = n ? wilson(hits, n) : null;
+  const cf = done.filter(x => x.e.conf >= 50 && x.e.conf <= 99), brier = cf.length ? cf.reduce((a, x) => a + (x.e.conf / 100 - (x.r.hit ? 1 : 0)) ** 2, 0) / cf.length : null;
+  const bins = [[50, 60], [60, 70], [70, 80], [80, 100]].map(([lo, hi]) => { const b = cf.filter(x => x.e.conf >= lo && (x.e.conf < hi || (hi === 100 && x.e.conf <= 99))); return b.length ? {lo, hi, n: b.length, pred: b.reduce((a, x) => a + x.e.conf, 0) / b.length, real: b.filter(x => x.r.hit).length / b.length * 100} : null; }).filter(Boolean);
+  let hh = {n: 0, you: 0, seal: 0}; done.forEach(x => { const rows = SEALHIST && SEALHIST.stocks ? SEALHIST.stocks[x.e.n] : null, row = rows && rows.find(q => q[0] === x.e.date), dir = row ? SEAL_DIR[SEALHIST.names[row[1]]] || 0 : 0; if (!dir) return; hh.n++; if (x.r.hit) hh.you++; if ((dir > 0 ? x.r.ex : -x.r.ex) > 0) hh.seal++; });
+  return {ev, n, hits, rate: n ? hits / n : null, ci, brier, bins, hh, pending: ev.filter(x => x.r.state === "bekliyor").length, nodata: ev.filter(x => x.r.state === "veri yok").length};
+}
+async function renderDefter() {
+  const el = $("dfView"); if (!el) return; if (!UNIVERSE.length) { el.innerHTML = ""; return; }
+  el.innerHTML = '<h2>📝 Tahmin Defterim</h2><p class="mute">Yükleniyor…</p>'; await loadCandles(); if (view !== "defter") return;
+  const list = dfList(), S = dfStats(list), cm = PICKS && PICKS.picks ? arenaStats(PICKS.picks, 10).rows.find(x => x.id === "komite") : null, pct = v => v == null ? "–" : "%" + fmt(v * 100, 0);
+  el.innerHTML = `<h2>📝 Tahmin Defterim <span class="sub">kendi tahminlerin, aynı yöntemle skorlanır</span></h2>
+    <p class="note">Bir hissenin BIST 100'ü <b>yeneceğini (AL)</b> ya da <b>geride kalacağını (SAT)</b> tahmin et; sistem seçtiğin ufukta (5/10/20 iş günü) gerçek sonuçla skorlar. Giriş: tahmin gününe kadarki son kapanış. Tahminlerin yalnızca bu tarayıcıda saklanır. Eğitim amaçlıdır.</p>
+    <div class="card" style="background:var(--panel2);margin:8px 0"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label>Hisse<input id="dfN" list="tickers" placeholder="THYAO" style="width:100px" autocomplete="off"></label>
+      <label>Tahmin<select id="dfDir"><option value="al">AL (piyasayı yener)</option><option value="sat">SAT (piyasanın gerisinde kalır)</option></select></label>
+      <label>Ufuk<select id="dfH"><option value="5">5 iş günü</option><option value="10" selected>10 iş günü</option><option value="20">20 iş günü</option></select></label>
+      <label>Güvenin % <input id="dfConf" type="number" min="50" max="99" step="1" placeholder="isteğe bağlı" style="width:100px"></label>
+      <label>Not<input id="dfNote" placeholder="neden?" style="width:180px"></label><button class="pbtn" data-dfsubmit="1">Deftere ekle</button></div></div>
+    <div class="kpgrid" style="margin:12px 0"><div class="kpcard"><div class="kpl">Sonuçlanan</div><div class="kpbig">${S.n}</div><div class="kps">${S.pending} bekliyor${S.nodata ? " · " + S.nodata + " veri yok" : ""}</div></div>
+      <div class="kpcard"><div class="kpl">İsabetin</div><div class="kpbig">${S.n ? pct(S.rate) : "–"}</div><div class="kps">${S.ci ? `%95 aralık ${pct(S.ci[0])}–${pct(S.ci[1])}` : "ilk sonuç bekleniyor"}${S.n && S.n < 30 ? " · <b>n &lt; 30: gürültü</b>" : ""}</div></div>
+      <div class="kpcard"><div class="kpl">Kıyas</div><div class="kpbig">${cm && cm.n ? pct(cm.rate) : "–"}</div><div class="kps">komite listesi (10 gün, canlı)${cm ? ` · ${cm.statusEff}` : ""}${S.hh.n ? `<br>Aynı hisse-günlerde: sen ${S.hh.you}/${S.hh.n}, mühür ${S.hh.seal}/${S.hh.n}` : ""}</div></div></div>
+    ${S.brier != null ? `<div class="note"><b>Kalibrasyon (Brier):</b> ${fmt(S.brier, 3)} (0,25 = yazı-tura; düşük iyi). ${S.bins.map(b => `%${b.lo}–${b.hi} dediklerinin %${fmt(b.real, 0)}'i tuttu (${b.n})`).join(" · ")}</div>` : ""}
+    <h3 style="margin:12px 0 4px">Tahminlerim (${list.length})</h3>
+    ${list.length ? `<div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Hisse</th><th>Tahmin</th><th>Ufuk</th><th>Tarih</th><th>Güven</th><th>Sonuç (piyasaya göre)</th><th></th></tr></thead><tbody>${S.ev.slice().reverse().map(({e, r}) => `<tr><td style="text-align:left"><b data-kp="${esc(e.n)}" style="cursor:pointer">${esc(e.n)}</b>${e.note ? `<div class="mute" style="font-size:11.5px">${esc(e.note)}</div>` : ""}</td><td class="${e.dir === "al" ? "up" : "down"}">${e.dir === "al" ? "▲ AL" : "▼ SAT"}</td><td>${e.h} gün</td><td>${esc(e.date)}</td><td>${e.conf ? "%" + e.conf : "–"}</td><td>${r.state === "sonuçlandı" ? `<span class="${r.hit ? "up" : "down"}">${r.hit ? "✔ haklı" : "✘ haksız"}</span> <span class="mute">(${r.ex > 0 ? "+" : ""}${fmt(r.ex, 1)} puan, ${esc(r.d1)})</span>` : r.state === "bekliyor" ? `<span class="mute">bekliyor (${r.left} işlem günü)</span>` : '<span class="mute">veri yok</span>'}</td><td><button data-dfdel="${esc(e.id)}">Sil</button></td></tr>`).join("")}</tbody></table></div>` : '<p class="mute">Henüz tahmin yok. İlkini yukarıdan ekle ya da Kokpit\'te bir hissede "Tahminim" düğmesini kullan.</p>'}
+    <p class="note">Sonuç = hisse getirisi − BIST 100 getirisi (puan). AL için pozitif, SAT için negatif fark "haklı" sayılır. Yeterli bir yargı için en az 30 sonuçlanmış tahmin gerekir; ufuklar örtüşüyorsa bağımsız sayı daha azdır.</p>`;
+}
+document.addEventListener("click", e => {
+  const add = e.target.closest("[data-dfadd]"); if (add) { e.preventDefault(); if (!kpSym) return; dfAdd({n: kpSym, dir: add.dataset.dfadd, h: 10, conf: null, date: todayTR(), note: "Kokpit"}); toast(`Tahmin deftere eklendi: ${kpSym} ${add.dataset.dfadd === "al" ? "AL" : "SAT"} (10 iş günü)`); return; }
+  if (view !== "defter") return;
+  const del = e.target.closest("[data-dfdel]"); if (del) { store.set("preds", dfList().filter(x => x.id !== del.dataset.dfdel)); renderDefter(); return; }
+  if (e.target.closest("[data-dfsubmit]")) { const n = $("dfN").value.trim().toUpperCase(); if (!UNIVERSE.some(s => s.name === n)) { toast("Geçerli bir hisse kodu girin"); return; } const cf = +$("dfConf").value || null;
+    dfAdd({n, dir: $("dfDir").value, h: +$("dfH").value, conf: cf && cf >= 50 && cf <= 99 ? Math.round(cf) : null, date: todayTR(), note: $("dfNote").value.trim().slice(0, 120)}); toast("Tahmin eklendi"); renderDefter(); return; }
+  const k = e.target.closest("[data-kp]"); if (k) { e.preventDefault(); kpSelect(k.dataset.kp); }
+});
 
 /* ---------- Kara kuğu stres testi, Kelly + izleyen stop, tahta derinliği, gölge arena ---------- */
 function stressHtml(s) {
@@ -3734,6 +3986,8 @@ function refreshView() {
   else if (view === "arsiv") renderArsiv();
   else if (view === "arena") renderArena();
   else if (view === "kokpit") renderKokpit();
+  else if (view === "seffaflik") renderSeffaflik();
+  else if (view === "defter") renderDefter();
   else if (view === "kalite") renderQualityDip();
   else if (view === "yorumcu") renderCommentators();
   else if (view === "halkaarz") renderIpo();
@@ -3956,7 +4210,7 @@ if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).to
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["kokpit", "dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "kokpit");
+show(["kokpit", "seffaflik", "defter", "dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "kokpit");
 loadData(false);
 startTourIfFirst();
 </script>
