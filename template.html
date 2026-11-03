@@ -3502,7 +3502,7 @@ function renderPortfolios() {
       <p class="note">Efsaneler kâğıt üstünde, kendi kurallarıyla işlem yapar. Emirler gün sonu kapanışta verilir ve <b>ertesi gün açılışta</b> (kayma %${fmt(PORT.config.slip * 100, 2)} + komisyon/BSMV %${fmt(PORT.config.cost * 100, 2)}) dolar; stop'lar günün en düşük fiyatıyla kontrol edilir. Nakit, tahvile yakın bir getiriyle (%${fmt(PORT.config.cashYield * 100, 0)}) faiz kazanır. Yalnızca uzun pozisyon. Gerçek para değildir.</p>
       ${perfTable()}
       <canvas id="eqCv" style="height:240px;margin:12px 0"></canvas>
-      <div class="note">Başlangıç = 100. ${Object.keys(PORT.p).map(k => `<span style="color:${LCOL[k]}">■ ${LNAMES[k]}</span>`).join(" ")} <span style="color:${LCOL.xu}">┅ BIST 100</span> <span style="color:${LCOL.ew}">┅ Likit 150 eşit ağırlık</span></div>
+      <div class="note">Başlangıç = 100. ${Object.keys(PORT.p).map(k => `<span><span style="color:${LCOL[k]}" aria-hidden="true">■</span> ${LNAMES[k]}</span>`).join(" ")} <span><span style="color:${LCOL.xu}" aria-hidden="true">┅</span> BIST 100</span> <span><span style="color:${LCOL.ew}" aria-hidden="true">┅</span> Likit 150 eşit ağırlık</span></div>
       ${fundHtml()}
       <div class="tabs" style="margin-top:14px">${Object.keys(PORT.p).map(k => `<button class="tab ${portSel === k ? "on" : ""}" data-pk="${k}">${LNAMES[k]}</button>`).join("")}</div>
       <p class="note">${esc(STRAT[portSel])}</p>

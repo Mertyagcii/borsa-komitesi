@@ -21,7 +21,7 @@ def w(s):
 
 
 # 2026-11-02 pazartesi, 2026-11-06 cuma, 2026-11-07 cumartesi
-chk("pazartesi 06:00 -> durur", w("2026-11-02T06:00:00+03:00") == 0)
+chk("pazartesi 06:00 -> 1800 (gece: seyrek ama zincir durmaz)", w("2026-11-02T06:00:00+03:00") == 1800)
 chk("pazartesi 06:30 -> 1800 (seans öncesi)", w("2026-11-02T06:30:00+03:00") == 1800)
 chk("pazartesi 09:29 -> 1800", w("2026-11-02T09:29:00+03:00") == 1800)
 chk("pazartesi 09:30 -> 540 (seans)", w("2026-11-02T09:30:00+03:00") == 540)
@@ -29,8 +29,12 @@ chk("cuma 17:00 -> 540", w("2026-11-06T17:00:00+03:00") == 540)
 chk("pazartesi 18:29 -> 540", w("2026-11-02T18:29:00+03:00") == 540)
 chk("pazartesi 18:30 -> 1200 (kapanış sonrası kayıtlar)", w("2026-11-02T18:30:00+03:00") == 1200)
 chk("pazartesi 21:59 -> 1200", w("2026-11-02T21:59:00+03:00") == 1200)
-chk("pazartesi 22:00 -> durur", w("2026-11-02T22:00:00+03:00") == 0)
-chk("cumartesi 12:00 -> durur", w("2026-11-07T12:00:00+03:00") == 0)
+chk("pazartesi 22:00 -> 1800 (gece)", w("2026-11-02T22:00:00+03:00") == 1800)
+chk("cumartesi 12:00 -> 1800 (hafta sonu: seyrek ama zincir durmaz)", w("2026-11-07T12:00:00+03:00") == 1800)
+from datetime import timedelta as _td
+_t0 = datetime.fromisoformat("2026-11-02T00:00:00+03:00"); _vals = [w((_t0 + _td(minutes=5 * i)).isoformat()) for i in range(7 * 24 * 12)]
+chk("zincir haftanın HİÇBİR 5 dakikasında durmaz (bekleme her zaman 0 < b <= 1800; zincir.yml üst sınırı 1800)", min(_vals) > 0 and max(_vals) <= 1800)
+chk("seans içi en sık (540), kapanış sonrası 1200, diğer zamanlar 1800: üç düzey de haftada görünür", set(_vals) == {540, 1200, 1800})
 chk("UTC verilince TR'ye çevrilir (07:00 UTC = 10:00 TR -> 540)", w("2026-11-02T07:00:00+00:00") == 540)
 chk("kapanış sonrası ilk kayıt penceresi (18:45 TR) zincirde", w("2026-11-02T18:45:00+03:00") > 0)
 

@@ -1,0 +1,2 @@
+# Kabuk betikleri her yerde LF kalsin (Windows'ta CRLF'ye cevrilirse Linux calistiricida bozulur)
+*.sh text eol=lf
