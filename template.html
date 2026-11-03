@@ -1969,7 +1969,7 @@ async function shareCard(s) {
 document.addEventListener("click", e => { const b = e.target.closest("[data-cardpng]"); if (!b) return; e.preventDefault(); const s = UNIVERSE.find(x => x.name === kpSym); if (s) shareCard(s); });
 
 /* ===== Gelecek Görünümü: hafta / ay / 6 ay / yıl olasılık konisi (forecast.py). Fiyat hedefi DEĞİL; ölçülmüş olası aralık + sınanmış kapsama ===== */
-let FORECAST = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "";
+let FORECAST = null, FCLIVE = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "";
 const OG_H = [5, 21, 126, 252], OG_L = {5: "Haftalık (5 iş günü)", 21: "Aylık (21 iş günü)", 126: "6 aylık (126 iş günü)", 252: "Yıllık (252 iş günü)"}, OG_S = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"};
 const ogP = (p, r) => p * (1 + r / 100), ogPrice = v => fmt(v, v >= 100 ? 0 : 2), ogPct = v => v == null ? "–" : "%" + fmt(v * 100, 0), ogSg = v => (v > 0 ? "+" : "") + fmt(v, 1);
 const ogMeta = h => FORECAST && FORECAST.horizons ? FORECAST.horizons[h] : null;
@@ -1982,6 +1982,12 @@ function ogTrust(h) {
   if (m.cov80Oos == null) return `<div class="note down"><b>${OG_S[h]}:</b> bu ufuk için yeterli geçmiş yok, aralık doğrulanamadı. Okumayın, yalnız kabaca ölçek fikri verir.</div>`;
   const cls = m.confidence === "orta" ? "" : "down", bias = m.upReal != null && Math.abs(m.upReal - m.upPred) > 0.08 ? ` Dikkat: geçmişte hisselerin %${fmt(m.upReal * 100, 0)}'i bu ufukta yükseldi, model %${fmt(m.upPred * 100, 0)} diyordu (dönem boğa ağırlıklıydı; yön olasılığına güvenmeyin).` : "";
   return `<div class="note ${cls}"><b>${OG_S[h]} aralığı ne kadar güvenilir?</b> Geçmişte "%80 aralık" kaba hâliyle vakaların %${fmt(m.cov80Raw * 100, 0)}'ini tuttu; ilk yarıdan seçilen ayarla ikinci yarıda (örneklem dışı) %${fmt(m.cov80Oos * 100, 0)} (hedef %80). %50'lik aralık ikinci yarıda %${fmt(m.cov50Oos * 100, 0)} (hedef %50). ${m.origins} deneme ≈ <b>${fmt(m.n_eff, 1)} bağımsız pencere</b> · güvenilirlik: <b>${esc(m.confidence)}</b>.${bias}</div>`;
+}
+function ogLive() {
+  const L = FCLIVE, head = '<div class="kpcard" style="margin:12px 0"><div class="kpl">📒 Canlı karne: kaydettiğimiz tahminler gerçekleşenle kıyaslandı mı?</div>';
+  if (!L || !L.h) return head + '<div class="kps">Kayıt henüz başlamadı.</div></div>';
+  const rows = OG_H.map(h => { const x = L.h[h]; if (!x) return ""; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b></td><td>${x.origins}</td><td>${x.c80 == null ? "–" : ogPct(x.c80)}</td><td>${x.c50 == null ? "–" : ogPct(x.c50)}</td><td class="${x.verdict === "hedefe uygun" ? "up" : x.origins >= 4 ? "down" : "mute"}">${esc(x.verdict)}</td></tr>`; }).join("");
+  return head + `<div class="kps">Her hafta tüm bantlar kaydedilir (silinmez, depo geçmişi ön kayıt işlevi görür); ufuk dolunca hisselerin gerçek getirisiyle kıyaslanır. ${L.origins} kayıt noktası, son veri ${esc(L.to)}.</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Ölçülen hafta</th><th>%80 bant tuttu (hedef %80)</th><th>%50 bant tuttu (hedef %50)</th><th>Hüküm</th></tr></thead><tbody>${rows}</tbody></table></div><div class="kps">Aynı haftadaki hisseler birlikte hareket eder; bu yüzden bağımsız gözlem sayısı <b>hafta sayısıdır</b>, hisse sayısı değil. En az 4 ölçülmüş hafta olmadan hüküm verilmez.</div></div>`;
 }
 function ogCard() {
   const r = FORECAST.s[ogSym], nm = ogSym === "XU100" ? "BIST 100" : ogSym; if (!r) return `<p class="note">${esc(ogSym)} için görünüm yok (likit hisse evreni dışında ya da yetersiz geçmiş).</p>`;
@@ -2006,6 +2012,7 @@ function renderOngoru() {
     ${ogCard()}
     <div class="tabs" role="group" aria-label="Güvenilirlik ufku">${OG_H.map(h => tab(h, OG_S[h], ogH, "data-ogt")).join("")}</div>
     ${ogTrust(ogH)}
+    ${ogLive()}
     <h3 style="margin:14px 0 2px">Evren: ${OG_L[ogH]} ufkunda tüm hisseler</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:6px 0"><label>Ara<input id="ogQ" value="${esc(ogQ)}" placeholder="THY…" style="width:110px" autocomplete="off"></label><div class="tabs" role="group" aria-label="Sıralama">${tab("vol", "En sakin", ogSort, "data-ogs")}${tab("volhi", "En oynak", ogSort, "data-ogs")}${tab("loss", "Kayıp olasılığı yüksek", ogSort, "data-ogs")}</div></div>
     ${ogUniverse()}
@@ -4215,6 +4222,7 @@ async function loadAux() {
   if (!GON) late.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
   late.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
   late.push(hj("forecast.json").then(m => { if (m && m.s) FORECAST = m; }));
+  late.push(hj("forecast_live.json").then(m => { if (m && m.h) FCLIVE = m; }));
   late.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
   if (!TECHSEAL) late.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
   late.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));

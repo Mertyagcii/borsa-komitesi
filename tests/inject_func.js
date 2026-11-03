@@ -150,6 +150,7 @@ setTimeout(async function () {
     var ogn = Object.keys(FORECAST.s).filter(function (k) { return k !== "XU100"; })[0]; ogSym = ogn; renderOngoru(); ok("og_hisse_secimi", $("ogView").innerHTML.indexOf("<b>" + ogn + "</b>") >= 0 || $("ogView").innerHTML.indexOf(ogn + " <span") >= 0);
     ogH = 126; ogSort = "loss"; renderOngoru(); ok("og_ufuk_ve_siralama", $("ogView").innerHTML.indexOf("6 aylık (126 iş günü)") >= 0 && $("ogView").innerHTML.indexOf('data-og="') >= 0);
     var ogk = UNIVERSE.filter(function (s) { return s.ok && FORECAST.s[s.name]; })[0]; ok("og_kokpit_karti", !!ogk && kpOutlook(ogk).indexOf("Olası fiyat aralığı") >= 0 && kpOutlook(ogk).indexOf("fiyat hedefi değil") >= 0);
+    ok("og_canli_karne", !!FCLIVE && $("ogView").innerHTML.indexOf("Canlı karne") >= 0 && $("ogView").innerHTML.indexOf("hafta sayısıdır") >= 0);
     ogH = 21; ogSort = "vol"; ogSym = "XU100";
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);
