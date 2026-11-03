@@ -21,7 +21,7 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PAGES = ["kokpit", "seffaflik", "defter", "dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
+PAGES = ["kokpit", "seffaflik", "defter", "ongoru", "dashboard", "analiz", "tarama", "halkaarz", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "ekranlar", "sektorler", "atolye",
          "arsiv", "arena", "kalite", "yorumcu", "portfoyler", "portfoyum", "hesabim", "rapor", "karsilastir", "haberler", "kutu", "karne", "arastirma", "geritest", "ayarlar", "yardim", "h=AHGAZ"]
 fails, passes = [], 0
 
@@ -74,9 +74,11 @@ def static_checks():
     r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tests" / "fresh_test.py")], capture_output=True, text=True, encoding="utf-8")
     check("tazelik mantığı içerik tabanlı (CI'da mtime yanıltır)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")))
     r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tests" / "zincir_test.py")], capture_output=True, text=True, encoding="utf-8")
+    check("zincir: kendi kendini süren veri döngüsü (saat penceresi ve iş akışı tutarlılığı)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")) or r.stderr[-300:])
     r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tests" / "tech_seal_test.py")], capture_output=True, text=True, encoding="utf-8")
     check("teknik mühür testi ve gün kümelemeli t (sentetik, örneklem dışı)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")) or r.stderr[-300:])
-    check("zincir: kendi kendini süren veri döngüsü (saat penceresi ve iş akışı tutarlılığı)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")))
+    r = subprocess.run([sys.executable, "-X", "utf8", str(ROOT / "tests" / "forecast_test.py")], capture_output=True, text=True, encoding="utf-8")
+    check("gelecek görünümü: aralık kalibrasyonu, gelecek sızıntısı yok, biçim (sentetik)", r.returncode == 0, "; ".join(l for l in r.stdout.splitlines() if l.startswith("HATA")) or r.stderr[-300:])
 
 
 def core_test(site):

@@ -141,6 +141,16 @@ setTimeout(async function () {
     ok("portfoyum_csv_ve_sepet", mh.indexOf("CSV içe aktar") >= 0 && mh.indexOf("Sepet çeşitliliği") >= 0 && mh.indexOf("myImportMsg") >= 0 && mh.indexOf("THYAO") >= 0); MY = my0;
     store.set("preds", []); kpSelect(kpS.name); document.querySelector('[data-dfadd="al"]').click();
     ok("wow_defter_kokpitten_ekleme", dfList().length === 1 && dfList()[0].n === kpS.name && dfList()[0].dir === "al" && dfList()[0].h === 10); store.set("preds", []);
+    /* ---- Gelecek Görünümü ---- */
+    ok("og_veri_yuklendi", !!FORECAST && !!FORECAST.s && !!FORECAST.s.XU100 && !!FORECAST.horizons && !!FORECAST.horizons["21"]);
+    ogSym = "XU100"; show("ongoru"); await new Promise(function (r) { setTimeout(r, 400); }); var ogh = $("ogView").innerHTML;
+    ok("og_sayfa", ogh.indexOf("Gelecek Görünümü") >= 0 && ogh.indexOf("fiyat hedefi değil") >= 0 && ogh.indexOf("BIST 100") >= 0 && ogh.indexOf("ogtrack") >= 0 && ogh.indexOf("Haftalık") >= 0 && ogh.indexOf("Yıllık") >= 0 && ogh.indexOf("aralığı ne kadar güvenilir") >= 0);
+    ok("og_guvenilirlik_gosterilir", ogh.indexOf("bağımsız pencere") >= 0 && ogh.indexOf("örneklem dışı") >= 0);
+    var ogf = FORECAST.s.XU100.f["21"]; ok("og_degerler_tutarli", ogf[0] < ogf[1] && ogf[1] < ogf[2] && ogf[2] < ogf[3] && ogf[3] < ogf[4] && ogf[5] >= 0 && ogf[5] <= 1);
+    var ogn = Object.keys(FORECAST.s).filter(function (k) { return k !== "XU100"; })[0]; ogSym = ogn; renderOngoru(); ok("og_hisse_secimi", $("ogView").innerHTML.indexOf("<b>" + ogn + "</b>") >= 0 || $("ogView").innerHTML.indexOf(ogn + " <span") >= 0);
+    ogH = 126; ogSort = "loss"; renderOngoru(); ok("og_ufuk_ve_siralama", $("ogView").innerHTML.indexOf("6 aylık (126 iş günü)") >= 0 && $("ogView").innerHTML.indexOf('data-og="') >= 0);
+    var ogk = UNIVERSE.filter(function (s) { return s.ok && FORECAST.s[s.name]; })[0]; ok("og_kokpit_karti", !!ogk && kpOutlook(ogk).indexOf("Olası fiyat aralığı") >= 0 && kpOutlook(ogk).indexOf("fiyat hedefi değil") >= 0);
+    ogH = 21; ogSort = "vol"; ogSym = "XU100";
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);
     polishA11y(); ok("a11y_etiket_ve_klavye", !!tin.getAttribute("aria-label") && tsp.getAttribute("tabindex") === "0" && tsp.getAttribute("role") === "button");

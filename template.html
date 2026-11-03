@@ -175,6 +175,7 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .tab{border-radius:99px;padding:4px 12px;font-size:12.5px}
 .tab.on{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff;border-color:transparent}
+.ogtrack{position:relative;height:22px;background:var(--panel2);border-radius:8px;margin:4px 0}.ogb80{position:absolute;top:7px;height:8px;border-radius:4px;background:color-mix(in srgb,var(--accent2) 30%,transparent)}.ogb50{position:absolute;top:3px;height:16px;border-radius:6px;background:color-mix(in srgb,var(--accent2) 65%,transparent)}.ogzero{position:absolute;top:0;width:1px;height:22px;background:var(--warn)}.ogmid{position:absolute;top:0;width:2px;height:22px;background:var(--text)}
 .ntag{display:inline-block;font-size:10.5px;font-weight:700;border-radius:99px;padding:0 7px;margin-right:6px;background:var(--panel2);color:var(--mute)}
 .ntag.up{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--up)}
 .ntag.down{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--down)}
@@ -347,6 +348,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
       <a data-view="kokpit"><i data-ico="award"></i>Kokpit (sade görünüm)</a>
       <a data-view="seffaflik"><i data-ico="shield"></i>Şeffaflık Panosu</a>
       <a data-view="defter"><i data-ico="clipboard"></i>Tahmin Defterim</a>
+      <a data-view="ongoru"><i data-ico="compass"></i>Gelecek Görünümü</a>
       <a data-view="dashboard"><i data-ico="grid"></i>Genel Bakış</a>
       <a data-view="analiz"><i data-ico="search"></i>Analiz Masası</a>
       <a data-view="tarama"><i data-ico="filter"></i>Tarama Senaryoları</a>
@@ -517,6 +519,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
     <div class="view" id="v-arsiv"><section class="card" id="arView"></section></div>
     <div class="view" id="v-seffaflik"><section class="card" id="sfView"></section></div>
     <div class="view" id="v-defter"><section class="card" id="dfView"></section></div>
+    <div class="view" id="v-ongoru"><section class="card" id="ogView"></section></div>
     <div class="view" id="v-arena"><section class="card" id="arenaView"></section></div>
     <div class="view" id="v-kalite"><section class="card" id="qdView"></section></div>
     <div class="view" id="v-yorumcu"><section class="card" id="cmView"></section></div>
@@ -1771,7 +1774,7 @@ function renderKokpit() {
   const s = kpSym && UNIVERSE.find(x => x.name === kpSym); if ($("kpIn") && document.activeElement !== $("kpIn")) $("kpIn").value = s ? s.name : "";
   if (!s) { b.innerHTML = kpHome(); return; }
   const r = committee(s);
-  b.innerHTML = kpDecision(s, r) + kpPath(s, r) + kpSealHist(s) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
+  b.innerHTML = kpDecision(s, r) + kpPath(s, r) + kpOutlook(s) + kpSealHist(s) + `<div class="kpaccs">${kpAcc("leg", "🏛️ Efsaneler &amp; Uzmanlar Görüşü", "9 oy · masa toplantısı · boğa/ayı münazarası", kpLegends(s, r))}${kpAcc("smart", "🐋 Akıllı Para &amp; Tahta Derinliği", "para akışı · takas/AKD · Level-2 spoofing", kpSmart(s, r))}${kpAcc("risk", "💣 Risk, Kara Kuğu &amp; Monte Carlo", "10.000 senaryo · şok testleri · Kelly", kpRisk(s, r))}${kpAcc("fund", "📰 Bilanço &amp; KAP Duygu Taraması", "hakiki PD/DD · enflasyon düzeltmesi · haber duygusu", kpFund(s, r))}</div>
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür, ajanların oy özetidir; kazanç garantisi vermez. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar →</a> · <a href="#" data-kp="">Seçimi temizle</a></p>`;
 }
 function kpSelect(name) {
@@ -1887,7 +1890,8 @@ const PAL_SEALS = ["GÜÇLÜ AL", "AL", "NÖTR", "UZAK DUR", "RİSKLİ", "KİLİ
 function palCmds() {
   const c = [{t: "Tema değiştir (açık / koyu)", kw: "tema koyu acik karanlik gece gunduz", run: () => $("theme").click()}, {t: "Veriyi yenile", kw: "yenile guncelle veri cek", run: () => loadData(true)}, {t: "Sayfayı yazdır / PDF olarak kaydet", kw: "yazdir pdf cikti", run: () => window.print()},
     {t: "Haftalık göreli güç liderleri (liste)", kw: "lider haftalik goreli guc uyumlu", list: () => UNIVERSE.filter(s => s.ok && s.tl >= 10 && mtfTier(s) && (mtfTier(s).id === "uyumlu" || mtfTier(s).id === "hlider")).sort((a, b) => b.tl - a.tl).slice(0, 40).map(s => ({name: s.name, sub: "haftalık lider"}))},
-    {t: "Şeffaflık Panosu: en büyük hatalarımız", kw: "hata yanilgi seffaflik", run: () => show("seffaflik")}];
+    {t: "Şeffaflık Panosu: en büyük hatalarımız", kw: "hata yanilgi seffaflik", run: () => show("seffaflik")},
+    {t: "Gelecek Görünümü (haftalık / aylık / 6 aylık / yıllık)", kw: "gelecek gorunum ongoru tahmin aralik haftalik aylik yillik", run: () => show("ongoru")}];
   PAL_SEALS.forEach(l => c.push({t: "Mühür listesi: " + l, kw: "muhur liste " + l, list: () => (sfSeals().by[l] || []).slice(0, 40).map(x => ({name: x.s.name, sub: l}))}));
   return c;
 }
@@ -1963,6 +1967,62 @@ async function shareCard(s) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("Kart indirildi");
 }
 document.addEventListener("click", e => { const b = e.target.closest("[data-cardpng]"); if (!b) return; e.preventDefault(); const s = UNIVERSE.find(x => x.name === kpSym); if (s) shareCard(s); });
+
+/* ===== Gelecek Görünümü: hafta / ay / 6 ay / yıl olasılık konisi (forecast.py). Fiyat hedefi DEĞİL; ölçülmüş olası aralık + sınanmış kapsama ===== */
+let FORECAST = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "";
+const OG_H = [5, 21, 126, 252], OG_L = {5: "Haftalık (5 iş günü)", 21: "Aylık (21 iş günü)", 126: "6 aylık (126 iş günü)", 252: "Yıllık (252 iş günü)"}, OG_S = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"};
+const ogP = (p, r) => p * (1 + r / 100), ogPrice = v => fmt(v, v >= 100 ? 0 : 2), ogPct = v => v == null ? "–" : "%" + fmt(v * 100, 0), ogSg = v => (v > 0 ? "+" : "") + fmt(v, 1);
+const ogMeta = h => FORECAST && FORECAST.horizons ? FORECAST.horizons[h] : null;
+function ogBar(f) {
+  const lo = Math.min(f[0], -1), hi = Math.max(f[4], 1), sp = hi - lo, x = v => ((v - lo) / sp * 100).toFixed(1);
+  return `<div class="ogtrack" role="img" aria-label="olası aralık ${ogSg(f[0])} ile ${ogSg(f[4])} yüzde arası, ortanca ${ogSg(f[2])}"><div class="ogb80" style="left:${x(f[0])}%;width:${(x(f[4]) - x(f[0])).toFixed(1)}%"></div><div class="ogb50" style="left:${x(f[1])}%;width:${(x(f[3]) - x(f[1])).toFixed(1)}%"></div><div class="ogzero" style="left:${x(0)}%"></div><div class="ogmid" style="left:${x(f[2])}%"></div></div>`;
+}
+function ogTrust(h) {
+  const m = ogMeta(h); if (!m) return "";
+  if (m.cov80Oos == null) return `<div class="note down"><b>${OG_S[h]}:</b> bu ufuk için yeterli geçmiş yok, aralık doğrulanamadı. Okumayın, yalnız kabaca ölçek fikri verir.</div>`;
+  const cls = m.confidence === "orta" ? "" : "down", bias = m.upReal != null && Math.abs(m.upReal - m.upPred) > 0.08 ? ` Dikkat: geçmişte hisselerin %${fmt(m.upReal * 100, 0)}'i bu ufukta yükseldi, model %${fmt(m.upPred * 100, 0)} diyordu (dönem boğa ağırlıklıydı; yön olasılığına güvenmeyin).` : "";
+  return `<div class="note ${cls}"><b>${OG_S[h]} aralığı ne kadar güvenilir?</b> Geçmişte "%80 aralık" kaba hâliyle vakaların %${fmt(m.cov80Raw * 100, 0)}'ini tuttu; ilk yarıdan seçilen ayarla ikinci yarıda (örneklem dışı) %${fmt(m.cov80Oos * 100, 0)} (hedef %80). %50'lik aralık ikinci yarıda %${fmt(m.cov50Oos * 100, 0)} (hedef %50). ${m.origins} deneme ≈ <b>${fmt(m.n_eff, 1)} bağımsız pencere</b> · güvenilirlik: <b>${esc(m.confidence)}</b>.${bias}</div>`;
+}
+function ogCard() {
+  const r = FORECAST.s[ogSym], nm = ogSym === "XU100" ? "BIST 100" : ogSym; if (!r) return `<p class="note">${esc(ogSym)} için görünüm yok (likit hisse evreni dışında ya da yetersiz geçmiş).</p>`;
+  const rows = OG_H.filter(h => r.f[h]).map(h => { const f = r.f[h], m = ogMeta(h) || {};
+    return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(m.confidence || "")}</div></td><td style="min-width:150px">${ogBar(f)}</td><td>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}<div class="kps">${ogSg(f[0])} / ${ogSg(f[4])}%</div></td><td>${ogPrice(ogP(r.p, f[2]))}<div class="kps">${ogSg(f[2])}%</div></td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
+  return `<h3 style="margin:10px 0 2px">${esc(nm)} <span class="sub">fiyat ${ogPrice(r.p)} · yıllık oynaklık %${fmt(r.v, 0)}</span></h3>
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık (koyu %50, açık %80)</th><th>%80 aralık (TL)</th><th>Ortanca</th><th>%10'dan çok kaybetme</th><th>%10'dan çok kazanma</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function ogUniverse() {
+  const h = ogH, q = ogQ.trim().toUpperCase(), key = {vol: x => x.v, volhi: x => -x.v, loss: x => -(x.f[h] ? x.f[h][5] : 0)}[ogSort] || (x => x.v);
+  const list = Object.entries(FORECAST.s).filter(([n, x]) => n !== "XU100" && x.f[h] && (!q || n.indexOf(q) >= 0)).map(([n, x]) => ({n, ...x})).sort((a, b) => key(a) - key(b));
+  const rows = list.slice(0, 30).map(x => { const f = x.f[h]; return `<tr><td style="text-align:left"><a href="#" data-og="${esc(x.n)}"><b>${esc(x.n)}</b></a></td><td>${ogPrice(x.p)}</td><td>%${fmt(x.v, 0)}</td><td>${ogSg(f[0])}</td><td>${ogSg(f[2])}</td><td>${ogSg(f[4])}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
+  return `<div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Oynaklık (yıllık)</th><th>p10 %</th><th>Ortanca %</th><th>p90 %</th><th>%10'dan çok kayıp</th><th>%10'dan çok kazanç</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="mute">Eşleşen hisse yok.</td></tr>'}</tbody></table></div><p class="note">${list.length} hisse${list.length > 30 ? ", ilk 30 gösteriliyor (arayarak daraltın)" : ""}. Kayıp/kazanç olasılığı <b>oynaklıktan</b> gelir (oynak hisse hem çok kaybedebilir hem çok kazanabilir); yön bilgisi içermez.</p>`;
+}
+function renderOngoru() {
+  const el = $("ogView"); if (!el) return;
+  if (!FORECAST) { el.innerHTML = "<h2>🧭 Gelecek Görünümü</h2><p class='mute'>Yükleniyor (ya da araştırma çalışması henüz üretmedi)…</p>"; AUX_LATE.then(() => { if (view === "ongoru" && FORECAST) renderOngoru(); }); return; }
+  const F = FORECAST, names = Object.keys(F.s).sort(), tab = (v, l, a, d) => `<button class="tab ${v === a ? "on" : ""}" ${d}="${v}">${l}</button>`;
+  el.innerHTML = `<h2>🧭 Gelecek Görünümü <span class="sub">haftalık · aylık · 6 aylık · yıllık olası aralık</span></h2>
+    <p class="note"><b>Bu bir fiyat hedefi değil.</b> Kimse "şu hisse şu fiyata gider" diye doğru söyleyemez; bu sayfa bunun yerine <b>getirinin olası aralığını</b> verir ve o aralığın geçmişte ne kadar tuttuğunu <b>her zaman yanında</b> gösterir. Aralık, hissenin kendi son dönem oynaklığından ve tüm hisselerin gerçek geçmiş getiri dağılımından (kalın kuyruklar dahil) kurulur; hisseye özel "yükselir/düşer" iddiası yoktur, çünkü kanıtlı sinyallerimiz 5–20 günde bile zayıf, 6–12 ayda ölçülemiyor. Veri: ${esc(F.from)} → ${esc(F.to)} (${F.days} gün, ${F.stocks} hisse); üretim ${esc(F.generated)}.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Hisse / endeks<input id="ogIn" list="ogList" value="${esc(ogSym)}" style="width:130px" autocomplete="off" spellcheck="false"></label><datalist id="ogList">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist><span class="kps">XU100 = BIST 100 endeksi</span></div>
+    ${ogCard()}
+    <div class="tabs" role="group" aria-label="Güvenilirlik ufku">${OG_H.map(h => tab(h, OG_S[h], ogH, "data-ogt")).join("")}</div>
+    ${ogTrust(ogH)}
+    <h3 style="margin:14px 0 2px">Evren: ${OG_L[ogH]} ufkunda tüm hisseler</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:6px 0"><label>Ara<input id="ogQ" value="${esc(ogQ)}" placeholder="THY…" style="width:110px" autocomplete="off"></label><div class="tabs" role="group" aria-label="Sıralama">${tab("vol", "En sakin", ogSort, "data-ogs")}${tab("volhi", "En oynak", ogSort, "data-ogs")}${tab("loss", "Kayıp olasılığı yüksek", ogSort, "data-ogs")}</div></div>
+    ${ogUniverse()}
+    <details class="meet" style="margin-top:12px"><summary>Yöntem, sınırlar ve neden fiyat hedefi vermiyoruz</summary><ul class="note"><li><b>Ölçek:</b> hissenin son dönem günlük oynaklığı (üstel ağırlıklı ve 1 yıllık varyansın karışımı) × √gün.</li><li><b>Şekil:</b> tüm hisselerin geçmişte yaşadığı, oynaklığa bölünmüş h günlük getirilerin ampirik dağılımı; normal dağılım varsayılmaz.</li><li><b>Merkez:</b> tarihsel nominal TL sürüklenmesi (enflasyon içinde); aşırı iyimserlik olmasın diye hisseye özel yön eklenmez.</li><li><b>Kalibrasyon:</b> tek bir ölçek katsayısı ilk yarı örneklemle seçilir, ikinci yarıda sınanır; "%80 aralık gerçekten %80 mi tutuyor?" sorusunun cevabı yukarıda yazar.</li><li><b>Sınırlar:</b> yalnızca ~3 yıl veri; 6 ay ve 1 yıl için bağımsız pencere sayısı çok az olduğundan bu ufuklar "düşük/doğrulanamadı" etiketlidir. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı); olası şoklar (kur, siyaset) tarihte yoksa aralığa yansımaz. Tek gerçek karne zamandır: bu tahminlerin tutup tutmadığını sonraki aylar gösterecek.</li></ul></details>
+    <p class="note" style="text-align:center">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#seffaflik" data-go="seffaflik">Şeffaflık Panosu</a> · <a href="#kokpit" data-go="kokpit">Kokpit</a></p>`;
+}
+document.addEventListener("click", e => { if (view !== "ongoru") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); show(g.dataset.go); return; }
+  const o = e.target.closest("[data-og]"); if (o) { e.preventDefault(); ogSym = o.dataset.og; renderOngoru(); window.scrollTo(0, 0); return; }
+  const t = e.target.closest("[data-ogt]"); if (t) { e.preventDefault(); ogH = +t.dataset.ogt; store.set("ogH", ogH); renderOngoru(); return; }
+  const s = e.target.closest("[data-ogs]"); if (s) { e.preventDefault(); ogSort = s.dataset.ogs; renderOngoru(); } });
+document.addEventListener("change", e => { if (view !== "ongoru") return; if (e.target.id === "ogIn") { const n = e.target.value.trim().toUpperCase(); if (FORECAST && FORECAST.s[n]) ogSym = n; renderOngoru(); } });
+document.addEventListener("input", e => { if (view !== "ongoru" || e.target.id !== "ogQ") return; ogQ = e.target.value; const pos = e.target.selectionStart; renderOngoru(); const q = $("ogQ"); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) { /* imleç konumu isteğe bağlı */ } } });
+function kpOutlook(s) {
+  const r = FORECAST && FORECAST.s && FORECAST.s[s.name]; if (!r) return "";
+  const rows = OG_H.filter(h => r.f[h]).map(h => { const f = r.f[h], m = ogMeta(h) || {}; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b></td><td>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}</td><td>${ogPrice(ogP(r.p, f[2]))}</td><td>${ogPct(f[5])}</td><td class="${m.confidence === "orta" ? "" : "mute"}">${esc(m.confidence || "–")}</td></tr>`; }).join("");
+  return `<div class="kpcard" style="margin:0 0 16px"><div class="kpl">🧭 Olası fiyat aralığı (fiyat hedefi değil; %80 aralık)</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>%80 aralık (TL)</th><th>Ortanca</th><th>%10'dan çok kayıp olasılığı</th><th>Güvenilirlik</th></tr></thead><tbody>${rows}</tbody></table></div><div class="kps">Geçmiş oynaklıktan ölçülür, hisseye özel yön iddiası yoktur. <a href="#ongoru" data-go="ongoru">Ayrıntı ve doğrulama →</a></div></div>`;
+}
 
 /* ===== Tahmin Defterim: kendi tahminlerini aynı yöntemle skorla ===== */
 const dfList = () => store.get("preds", []);
@@ -4040,6 +4100,7 @@ function refreshView() {
   else if (view === "kokpit") renderKokpit();
   else if (view === "seffaflik") renderSeffaflik();
   else if (view === "defter") renderDefter();
+  else if (view === "ongoru") renderOngoru();
   else if (view === "kalite") renderQualityDip();
   else if (view === "yorumcu") renderCommentators();
   else if (view === "halkaarz") renderIpo();
@@ -4153,6 +4214,7 @@ async function loadAux() {
   if (!GDT) late.push(hj("daytrade_research.json").then(m => { if (m && m.strategies) GDT = m; }));
   if (!GON) late.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
   late.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
+  late.push(hj("forecast.json").then(m => { if (m && m.s) FORECAST = m; }));
   late.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
   if (!TECHSEAL) late.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
   late.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));
@@ -4270,7 +4332,7 @@ if (first.startsWith("grafik=")) { chSym = decodeURIComponent(first.slice(7)).to
 if (first.startsWith("paylas=")) { try { window.__share = shareDecode(first.slice(7)); } catch (err) { window.__share = null; } first = "dashboard"; setTimeout(() => { if (window.__share) { shareApply(window.__share); window.__share = null; history.replaceState(null, "", "#dashboard"); } }, 2500); }
 if (first.startsWith("h=")) { pendingOpen = decodeURIComponent(first.slice(2)).toUpperCase(); first = "dashboard"; }
 syncNotifUi();
-show(["kokpit", "seffaflik", "defter", "dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "kokpit");
+show(["kokpit", "seffaflik", "defter", "ongoru", "dashboard", "analiz", "tarama", "halkaarz", "ozelveri", "arsiv", "arena", "kalite", "yorumcu", "grafik", "gunici", "gunluk", "risk", "takvim", "uyari", "senaryo", "aylik", "zaman", "tahmin", "adaylar", "tarayici", "atolye", "hesabim", "rapor", "kutu", "ekranlar", "sektorler", "portfoyler", "portfoyum", "favoriler", "karsilastir", "haberler", "karne", "arastirma", "geritest", "ayarlar", "yardim"].includes(first) ? first : "kokpit");
 loadData(false);
 startTourIfFirst();
 </script>
