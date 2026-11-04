@@ -52,7 +52,7 @@ def features(C: pd.DataFrame, V: pd.DataFrame) -> dict:
     mom6_1, mom1 = C.shift(21) / C.shift(126) - 1, C / C.shift(21) - 1
     rk = lambda df: df.rank(axis=1, pct=True)
     comp = (rk(dist52) + rk(mom6_1) + rk(mom1)) / 3  # göreli güç bileşiği (haftalık skorun özü)
-    rvol = V / V.rolling(20).mean().shift(1)
+    rvol = V / V.rolling(20).mean().shift(1) if V is not None else None   # uzun (10 yıl) veride hacim yok: hacim bileşenleri hariç
     hi20 = C.shift(1).rolling(20).max()
     return {
         "kirilim20": C > hi20,
@@ -61,8 +61,7 @@ def features(C: pd.DataFrame, V: pd.DataFrame) -> dict:
         "rs_zayif": comp <= 0.2,
         "rsi30": rsi < 30,
         "bb_alt": (C - sma20) / sd20 <= -2,
-        "kellogg_itis": (r1 >= 0.05) & (rvol >= 2),
-        "dusus_hacim": (r1 <= -0.05) & (rvol >= 2),
+        **({"kellogg_itis": (r1 >= 0.05) & (rvol >= 2), "dusus_hacim": (r1 <= -0.05) & (rvol >= 2)} if rvol is not None else {}),
         "trend": trend,
     }
 
@@ -91,7 +90,7 @@ def build(C: pd.DataFrame, V: pd.DataFrame, min_stocks: int = 40) -> dict:
     mid = n // 2
     out = {"generated": datetime.now(TR).strftime("%Y-%m-%d %H:%M"), "from": str(C.index[0].date()), "to": str(C.index[-1].date()), "split": str(C.index[mid].date()), "stocks": int(C.shape[1]), "days": n,
            "note": "Seçim ilk yarıda, sınama ikinci yarıda (örneklem dışı). Evren bugünün likit hisseleri (hayatta kalma yanlılığı). Bilanço verisi geçmişte yok, bu yüzden yalnızca teknik bileşenler.",
-           "labels": LABELS}
+           "labels": {k: v for k, v in LABELS.items() if k in f}}
     res = {}
 
     def comp_rows(sig, ex, idxs):
@@ -173,12 +172,32 @@ def icsum(a):
 
 
 def main() -> None:
-    oh = json.loads((HERE / "ohlcv.json").read_text(encoding="utf-8"))
-    idx = pd.to_datetime(oh["dates"])
-    C = pd.DataFrame({k: v["c"] for k, v in oh["stocks"].items()}, index=idx).astype(float)
-    V = pd.DataFrame({k: v["v"] for k, v in oh["stocks"].items()}, index=idx).astype(float)
+    import sys
+    long_mode = "--long" in sys.argv
+    lp = HERE / "tech_seal_long.json"
+    if long_mode and "--if-stale" in sys.argv and lp.exists():  # uzun test ağırdır (~10 dk): 6 günden eskiyse yenile (içerik damgasına göre, mtime CI'da yanıltır)
+        try:
+            g = datetime.strptime(json.loads(lp.read_text(encoding="utf-8"))["generated"], "%Y-%m-%d %H:%M").replace(tzinfo=TR)
+            if datetime.now(TR) - g < timedelta(days=6):
+                print("tech_seal_long.json güncel, atlandı")
+                return
+        except Exception:
+            pass
+    if long_mode:  # ≈10 yıllık sağlamlık testi: yalnız kapanış (hacim yok) → hacim bileşenleri hariç; ayrı dosyaya yazılır
+        import ohdata
+        oh, _ = ohdata.load(HERE)
+        idx = pd.to_datetime(oh["dates"])
+        C = pd.DataFrame({k: v["c"] for k, v in oh["stocks"].items()}, index=idx).astype(float)
+        V = None
+    else:
+        oh = json.loads((HERE / "ohlcv.json").read_text(encoding="utf-8"))
+        idx = pd.to_datetime(oh["dates"])
+        C = pd.DataFrame({k: v["c"] for k, v in oh["stocks"].items()}, index=idx).astype(float)
+        V = pd.DataFrame({k: v["v"] for k, v in oh["stocks"].items()}, index=idx).astype(float)
     res = build(C, V)
-    OUT.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    if long_mode:
+        res["note"] = "≈10 yıllık sağlamlık testi (hacim verisi yok: hacim bileşenleri hariç). " + res["note"]
+    (HERE / ("tech_seal_long.json" if long_mode else "tech_seal.json")).write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     for h, r in res["h"].items():
         print(f"\n== {h} iş günü | seçim tarihleri {r['sel_days']}, sınama (örneklem dışı) tarihleri {r['oos_days']}")
         for k, c in r["components"].items():

@@ -148,20 +148,28 @@ def confidence(n_eff, oos_cov):
     return "orta" if (oos_cov is not None and abs(oos_cov - 0.80) <= 0.06) else "düşük"
 
 
-def run(ohlcv, now=None):
-    dates = ohlcv["dates"]
-    names = list(ohlcv["stocks"].keys())
-    C = np.array([ohlcv["stocks"][n]["c"] for n in names] + [ohlcv["index"]], dtype=float).T   # (T, N+1), son sütun = BIST 100
-    C[C <= 0] = np.nan
+def cpi_daily(dates, cpi):
+    """Aylık TÜFE endeksini günlük eksene log-doğrusal yayar; son aydan sonrası son 3 ayın eğimiyle uzatılır (yayın gecikmesi). Dönüş: (T,) endeks."""
+    from datetime import date
+    xs = np.array([date.fromisoformat(d).toordinal() for d, _ in cpi], dtype=float)
+    ys = np.log(np.array([v for _, v in cpi], dtype=float))
+    t = np.array([date.fromisoformat(d).toordinal() for d in dates], dtype=float)
+    out = np.interp(t, xs, ys)
+    if len(xs) >= 4:
+        slope = (ys[-1] - ys[-4]) / (xs[-1] - xs[-4])
+        m = t > xs[-1]
+        out[m] = ys[-1] + slope * (t[m] - xs[-1])
+    return np.exp(out)
+
+
+def _engine(C, dates, ncols, label_names):
+    """Tek bir fiyat matrisi (T, N+1; son sütun endeks) için ufuk başına sınama özeti + bugünkü bantlar."""
     T = C.shape[0]
     R = np.diff(np.log(C), axis=0)
     sig = sigma_series(R)
-    cols = list(range(len(names)))   # havuza endeks girmez
+    cols = list(range(ncols))   # havuza endeks girmez
     ks = [round(0.6 + 0.05 * i, 2) for i in range(0, 25)]
-    out = {"generated": (now or datetime.now(TR)).strftime("%Y-%m-%d %H:%M"), "to": dates[-1], "from": dates[0], "days": T,
-           "stocks": len(names), "horizons": {}, "s": {}}
-    last = C[-1]
-    results = {}
+    meta_all, results = {}, {}
     for h, label in HORIZONS.items():
         Z = standardized(C, sig, h)
         rows = backtest(C, sig, Z, h, cols, ks)
@@ -183,29 +191,62 @@ def run(ohlcv, now=None):
         else:
             k = 1.0
             meta["confidence"] = "doğrulanamadı"
-        res = forecast_rows(C, sig, Z, T - 1, h, cols, k)
-        results[h] = res
-        out["horizons"][str(h)] = meta
-    allnames = names + ["XU100"]
-    for i, n in enumerate(allnames):
+        results[h] = forecast_rows(C, sig, Z, T - 1, h, cols, k)
+        meta_all[str(h)] = meta
+    recs = {}
+    last = C[-1]
+    for i, n in enumerate(label_names):
         if not np.isfinite(last[i]) or not np.isfinite(sig[-1][i]):
             continue
-        rec = {"p": round(float(last[i]), 2), "v": round(float(sig[-1][i] * math.sqrt(252) * 100), 1), "f": {}}
+        f = {}
         for h in HORIZONS:
             res = results[h]
             if res is None:
                 continue
             L, pl, pg, pup = res
-            rec["f"][str(h)] = [round(float((math.exp(x) - 1) * 100), 1) for x in L[i]] + [round(float(pl[i]), 3), round(float(pg[i]), 3), round(float(pup[i]), 3)]
-        out["s"][n] = rec
-    out["note"] = ("Fiyat hedefi değildir; geçmiş oynaklığın ölçülmüş olası aralığıdır. Merkez, tarihsel nominal TL sürüklenmesidir (enflasyon dahil), hisseye özel yön iddiası yoktur. "
-                   "Veri ~3 yıl; 6 ay ve 1 yıl ufkunda bağımsız gözlem çok az. Evren bugünün likit hisseleri (hayatta kalma yanlılığı). Eğitim amaçlıdır, yatırım tavsiyesi değildir.")
+            f[str(h)] = [round(float((math.exp(x) - 1) * 100), 1) for x in L[i]] + [round(float(pl[i]), 3), round(float(pg[i]), 3), round(float(pup[i]), 3)]
+        recs[n] = {"p": round(float(last[i]), 2), "v": round(float(sig[-1][i] * math.sqrt(252) * 100), 1), "f": f}
+    return meta_all, recs
+
+
+def _matrix(ohlcv):
+    names = list(ohlcv["stocks"].keys())
+    C = np.array([ohlcv["stocks"][n]["c"] for n in names] + [ohlcv["index"]], dtype=float).T   # (T, N+1), son sütun = BIST 100
+    C[C <= 0] = np.nan
+    return names, C
+
+
+def run(ohlcv, now=None, long=None):
+    """ohlcv: nominal TL için (kısa+uzun birleşik); long: ham uzun dosya (reel ve dolar kipleri için, cpi/usdtry içermeli) ya da None."""
+    dates = ohlcv["dates"]
+    names, C = _matrix(ohlcv)
+    out = {"generated": (now or datetime.now(TR)).strftime("%Y-%m-%d %H:%M"), "to": dates[-1], "from": dates[0], "days": C.shape[0],
+           "stocks": len(names), "horizons": {}, "s": {}}
+    out["horizons"], recs = _engine(C, dates, len(names), names + ["XU100"])
+    out["s"] = recs
+    out["modes"] = {"n": "Nominal TL"}
+    if long and long.get("cpi") and long.get("usdtry"):
+        ld = long["dates"]
+        ln, LC = _matrix(long)
+        usd = np.array([x if x else np.nan for x in long["usdtry"]], dtype=float)
+        cpi = cpi_daily(ld, long["cpi"])
+        for key, label, div in (("r", "Reel TL (enflasyondan arındırılmış)", cpi), ("d", "ABD doları", usd)):
+            meta, rr = _engine(LC / div[:, None], ld, len(ln), ln + ["XU100"])
+            out["horizons_" + key] = meta
+            out["modes"][key] = label
+            for n, rec in rr.items():
+                if n in out["s"]:
+                    out["s"][n][key] = rec["f"]
+        out["long"] = {"from": ld[0], "to": ld[-1], "days": len(ld)}
+    out["note"] = ("Fiyat hedefi değildir; geçmiş oynaklığın ölçülmüş olası aralığıdır. Nominal kipte merkez, tarihsel nominal TL sürüklenmesidir (enflasyon dahil); reel kipte TÜFE'den, dolar kipinde USD/TL'den arındırılmıştır. "
+                   "Hisseye özel yön iddiası yoktur. Bağımsız gözlem 6 ay ve 1 yıl ufkunda hâlâ azdır. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı). Eğitim amaçlıdır, yatırım tavsiyesi değildir.")
     return out
 
 
 def main():
-    ohlcv = json.loads((HERE / "ohlcv.json").read_text(encoding="utf-8-sig"))
-    out = run(ohlcv)
+    import ohdata
+    ohlcv, long = ohdata.load(HERE)
+    out = run(ohlcv, long=long)
     OUT.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     for h, m in out["horizons"].items():
         print(h, {k: v for k, v in m.items() if k in ("origins", "n_eff", "k", "cov80Raw", "cov80Oos", "cov80OosRaw", "upPred", "upReal", "confidence")})

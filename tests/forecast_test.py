@@ -83,4 +83,40 @@ R2 = R.copy()
 R2[100:300, 0] = np.nan
 s1, s2 = F.sigma_series(R), F.sigma_series(R2)
 chk("eksik günler (NaN) oynaklığı sıfıra çekmez", np.isfinite(s2[-1, 0]) and 0.5 < s2[-1, 0] / s1[-1, 0] < 1.6)
+# --- uzun veri birleşimi, reel ve dolar kipleri ---
+import ohdata
+
+full, _ = world(seed=11, n_days=900, n_stocks=40)
+cut = 600
+long = {"dates": full["dates"][:cut], "stocks": {n: {"c": s["c"][:cut]} for n, s in full["stocks"].items()}, "index": full["index"][:cut]}
+# kısa dosya: son 500 gün, ama bir bölünme/bedelsiz düzeltmesi farkı yüzünden 2x ölçekli (uzun dosya eski ölçekte kalmış)
+short = {"dates": full["dates"][400:], "stocks": {n: {"c": [x * 2 for x in s["c"][400:]]} for n, s in full["stocks"].items()}, "index": full["index"][400:]}
+m = ohdata.merge(long, short)
+chk("birleşim: tüm gün ekseni var (900)", len(m["dates"]) == 900 and m["dates"][-1] == full["dates"][-1])
+j = max(abs(c[cut] / c[cut - 1] - 1) for c in (v["c"] for v in m["stocks"].values()))
+chk("birleşim yerinde sahte sıçrama yok (iki kaynak arası ölçek farkı düzeltildi)", j < 0.2)
+# yarım gün riski: uzun dosyanın SON barı bozuksa (seans içi çekim), kısa dosyadaki doğru değer kullanılır
+longp = {"dates": long["dates"], "stocks": {n: {"c": list(v["c"])} for n, v in long["stocks"].items()}, "index": list(long["index"])}
+longp["stocks"]["S0"]["c"][-1] = longp["stocks"]["S0"]["c"][-1] * 0.5
+mp = ohdata.merge(longp, short)
+chk("uzun dosyanın bozuk (yarım gün) son barı kısa dosyadan düzeltilir", abs(mp["stocks"]["S0"]["c"][cut - 1] / m["stocks"]["S0"]["c"][cut - 1] - 1) < 1e-6)
+chk("birleşik veri uzun geçmişi korur (ilk gün uzun dosyadan)", m["dates"][0] == full["dates"][0])
+chk("uzun dosya yokken kısa veriye düşer (kırılmaz)", ohdata.load(ROOT / "tests")[1] is None if (ROOT / "tests" / "ohlcv.json").exists() else True)
+
+import math as _m
+cd = F.cpi_daily(["2025-01-15", "2025-02-15", "2026-06-01"], [["2025-01-01", 100.0], ["2025-02-01", 103.0], ["2025-03-01", 106.0], ["2025-04-01", 109.0]])
+chk("TÜFE günlük yayılımı artan ve son aydan sonra eğimle uzatılır", cd[0] < cd[1] < cd[2] and cd[2] > 109)
+
+rng = np.random.default_rng(2)
+nd = len(full["dates"])
+from datetime import date, timedelta
+full = dict(full); full["dates"] = [(date(2016, 1, 4) + timedelta(days=i)).isoformat() for i in range(nd)]   # TÜFE yayılımı gerçek tarih ister
+infl = np.exp(np.cumsum(np.full(nd, 0.0008)))     # günlük %0,08 enflasyon
+mm = [[full["dates"][i], float(100 * infl[i])] for i in range(0, nd, 21)]
+longx = dict(full); longx["cpi"] = mm; longx["usdtry"] = [float(10 * np.exp(0.0005 * i)) for i in range(nd)]
+o2 = F.run(full, long=longx)
+chk("reel ve dolar kipleri üretildi", set(o2["modes"]) == {"n", "r", "d"} and "horizons_r" in o2 and "horizons_d" in o2)
+rec = o2["s"]["S3"]
+chk("reel ortanca nominalden düşük (enflasyon arındırıldı)", rec["r"]["21"][2] < rec["f"]["21"][2])
+chk("dolar ortanca nominalden düşük (kur artışı arındırıldı)", rec["d"]["21"][2] < rec["f"]["21"][2])
 sys.exit(0 if ok else 1)

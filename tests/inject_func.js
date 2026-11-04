@@ -151,6 +151,9 @@ setTimeout(async function () {
     ogH = 126; ogSort = "loss"; renderOngoru(); ok("og_ufuk_ve_siralama", $("ogView").innerHTML.indexOf("6 aylık (126 iş günü)") >= 0 && $("ogView").innerHTML.indexOf('data-og="') >= 0);
     var ogk = UNIVERSE.filter(function (s) { return s.ok && FORECAST.s[s.name]; })[0]; ok("og_kokpit_karti", !!ogk && kpOutlook(ogk).indexOf("Olası fiyat aralığı") >= 0 && kpOutlook(ogk).indexOf("fiyat hedefi değil") >= 0);
     ok("og_canli_karne", !!FCLIVE && $("ogView").innerHTML.indexOf("Canlı karne") >= 0 && $("ogView").innerHTML.indexOf("hafta sayısıdır") >= 0);
+    ok("uzun_teknik_ve_polis", !!TECHSEAL_L && kpTechLong().indexOf("10 yıllık sağlamlık") >= 0 && !!POLICE && sfPolice().indexOf("Veri Polisi") >= 0 && sfPolice().indexOf("Hayatta kalma yanlılığı") >= 0);
+    ok("og_modlar", !!FORECAST.modes && !!FORECAST.modes.r && !!FORECAST.modes.d);
+    ogMode = "r"; renderOngoru(); ok("og_reel_kip", $("ogView").innerHTML.indexOf("Reel kip") >= 0 && $("ogView").innerHTML.indexOf("bugünkü değere göre") >= 0); ogMode = "d"; renderOngoru(); ok("og_dolar_kip", $("ogView").innerHTML.indexOf("Dolar kipi") >= 0); ogMode = "n"; store.set("ogMode", "n");
     ogH = 21; ogSort = "vol"; ogSym = "XU100";
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);

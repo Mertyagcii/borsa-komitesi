@@ -99,7 +99,8 @@ def build(ohlcv: dict, min_stocks: int = 30) -> dict:
 
 
 def main() -> None:
-    oh = json.loads((HERE / "ohlcv.json").read_text(encoding="utf-8"))
+    import ohdata
+    oh, _ = ohdata.load(HERE)   # kısa + uzun (≈10 yıl) birleşik: takvim etkileri çok rejimde sınanır
     res = build(oh)
     OUT.write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"calendar_research.json: {res['family']} test, ayakta kalan {len(res['survivors'])}: {res['survivors']} ({res['from']} → {res['to']})")

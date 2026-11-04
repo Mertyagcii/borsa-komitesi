@@ -1742,7 +1742,7 @@ function kpTech() {
     <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Teknik bileşen</th><th>Seçim yarısı (ort., t)</th><th>Sınama yarısı, örneklem dışı (ort., t)</th><th>Tüm dönem t</th><th>Sınama hükmü</th></tr></thead><tbody>${comp}</tbody></table></div>
     <div class="note"><b>Bileşik skor</b> (hepsi, yön = seçim yarısındaki işaret; yalnızca sınama yarısında ölçülür) · sıralama gücü IC: <b>${f(h.sign.ic.mean, 3)}</b> (t ${f(h.sign.ic.t, 1)}) · yalnız göreli güç IC: <b>${f(h.ic_rs_only.mean, 3)}</b> (t ${f(h.ic_rs_only.t, 1)})</div>
     <div class="tw"><table class="peert"><thead><tr><th>Skor</th><th>Gözlem</th><th>Ort. fazla getiri</th><th>İsabet</th><th>t</th><th>Hüküm</th></tr></thead><tbody>${bro}</tbody></table></div>
-    <p class="note">Okuma: ${esc(techSealSummary() || "")} Dikkat: ilk yarıda (seçim) bu etkilerin çoğu görünmüyordu; etki dönemler arasında kararlı değil. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı); bilanço dışı bileşenler test edilebilir, bilanço verisinin geçmişi yoktur.</p></details>`;
+    <p class="note">Okuma: ${esc(techSealSummary() || "")} Dikkat: ilk yarıda (seçim) bu etkilerin çoğu görünmüyordu; etki dönemler arasında kararlı değil. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı); bilanço dışı bileşenler test edilebilir, bilanço verisinin geçmişi yoktur.</p>${kpTechLong()}</details>`;
 }
 function kpSealHist(s) {
   const rows = SEALHIST && SEALHIST.stocks ? SEALHIST.stocks[s.name] : null, head = '<div class="kpcard" style="margin:0 0 16px"><div class="kpl">🗂 Bu hissede geçmiş mühürlerimiz ve sonuçları</div>';
@@ -1874,11 +1874,24 @@ function sfLimits() {
   const L = ["<b>Tek rejim:</b> canlı kayıt kısa ve çoğunlukla ayı/düşüş döneminde; boğa rejiminde sonuçlar farklı olabilir.", "<b>Hayatta kalma yanlılığı:</b> geriye dönük testlerde evren bugünün likit hisseleridir; düşenler/çıkanlar yoktur.", "<b>Bilanço verisinin geçmişi yok:</b> değer/kalite bileşenleri geçmişte sınanamaz; noktasal kayıt biriktiriyoruz (≈ 4 Aralık'ta ilk test).", "<b>Etki kararlı değil:</b> göreli güç etkisi son ~19 ayda güçlü, ilk yarıda zayıftı.", "<b>Veri:</b> tek kaynak (TradingView), gecikmeli; takas/AKD ve tahta derinliği lisanslı olduğundan yalnızca kullanıcı verisiyle.", "<b>Mühür bir oy özetidir:</b> kazanç garantisi ya da yatırım tavsiyesi değildir; eğitim amaçlıdır."];
   return `<div class="card" style="margin:10px 0"><h3>Sistemin bilinen sınırları</h3><ul style="margin:6px 0 0 18px;line-height:1.55">${L.map(x => `<li>${x}</li>`).join("")}</ul></div>`;
 }
+let POLICE = null, TECHSEAL_L = null;
+function kpTechLong() {
+  const T = TECHSEAL_L; if (!T || !T.h) return "";
+  const f = (v, d) => v == null ? "–" : fmt(v, d), sg = v => v > 0 ? "+" : "", hs = [5, 10, 20].filter(h => T.h[h]);
+  const rows = Object.keys(T.labels).map(k => `<tr><td style="text-align:left"><b>${esc(T.labels[k])}</b></td>${hs.map(h => { const c = T.h[h].components[k]; if (!c) return "<td>–</td>"; return `<td class="${c.oos.mean > 0 ? "up" : c.oos.mean < 0 ? "down" : ""}">${sg(c.oos.mean)}${f(c.oos.mean, 2)} <span class="mute">(t ${f(c.oos.t, 1)})</span> ${c.oos.fdr ? "✔" : ""}</td>`; }).join("")}</tr>`).join("");
+  return `<div class="note" style="margin-top:10px"><b>10 yıllık sağlamlık testi</b> (${esc(T.from)} → ${esc(T.to)}, ikinci yarı örneklem dışı; hacim verisi uzun geçmişte olmadığından hacim bileşenleri yok). ✔ = çoklu test düzeltmesinden sonra ayakta. Bulgu son 3 yıla özgü değilse burada da görünür.</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Bileşen</th>${hs.map(h => `<th>${h} gün fazla getiri (puan)</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function sfPolice() {
+  const P = POLICE; if (!P || !P.checks) return "";
+  const cls = {"tamam": "up", "uyarı": "down", "bilinen sınır": "mute"}, ico = {"tamam": "✔", "uyarı": "⚠", "bilinen sınır": "ℹ"};
+  const rows = P.checks.map(c => `<tr><td style="text-align:left"><span class="${cls[c.durum] || ""}">${ico[c.durum] || ""}</span> <b>${esc(c.ad)}</b></td><td class="${cls[c.durum] || ""}">${esc(c.durum)}</td><td style="text-align:left">${esc(c.ayrinti)}</td></tr>`).join("");
+  return `<div class="kpcard" style="margin:12px 0"><div class="kpl">🛡 Veri Polisi: veri ve tahmin hattı kendini her gün denetliyor ${P.uyari ? `<span class="down">(${P.uyari} uyarı)</span>` : '<span class="up">(uyarı yok)</span>'}</div><div class="kps">Son denetim ${esc(P.generated)}. "Bilinen sınır" hata değildir; dürüstçe duyurduğumuz yapısal eksiktir.</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Denetim</th><th>Durum</th><th style="text-align:left">Ayrıntı</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
 let sfNL = false;
 function renderSeffaflik() {
   const el = $("sfView"); if (!el) return; if (!UNIVERSE.length) { el.innerHTML = "<p class='mute'>Veri yükleniyor…</p>"; return; }
   if (!NEWSLOG && !sfNL) { sfNL = true; loadNewsLog().then(() => { if (view === "seffaflik" && NEWSLOG) renderSeffaflik(); }); }
-  el.innerHTML = `<h2>🔍 Şeffaflık Panosu <span class="sub">sistem kendini nasıl sınıyor</span></h2>${sfPrinciples()}<div id="sfToday"><div class="card" style="margin:10px 0"><p class="mute">Bugünün mühürleri hesaplanıyor…</p></div></div>${sfScoreboard()}${sfMisses()}${sfCalib()}${sfObservers()}${sfFresh()}${sfLimits()}
+  el.innerHTML = `<h2>🔍 Şeffaflık Panosu <span class="sub">sistem kendini nasıl sınıyor</span></h2>${sfPrinciples()}<div id="sfToday"><div class="card" style="margin:10px 0"><p class="mute">Bugünün mühürleri hesaplanıyor…</p></div></div>${sfScoreboard()}${sfMisses()}${sfCalib()}${sfObservers()}${sfFresh()}${sfPolice()}${sfLimits()}
     <p class="note" style="text-align:center">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#kokpit" data-go="kokpit">Kokpit'e dön</a></p>`;
   setTimeout(() => { if (view === "seffaflik" && $("sfToday")) $("sfToday").innerHTML = sfToday(); }, 30);
 }
@@ -1969,10 +1982,11 @@ async function shareCard(s) {
 document.addEventListener("click", e => { const b = e.target.closest("[data-cardpng]"); if (!b) return; e.preventDefault(); const s = UNIVERSE.find(x => x.name === kpSym); if (s) shareCard(s); });
 
 /* ===== Gelecek Görünümü: hafta / ay / 6 ay / yıl olasılık konisi (forecast.py). Fiyat hedefi DEĞİL; ölçülmüş olası aralık + sınanmış kapsama ===== */
-let FORECAST = null, FCLIVE = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "";
+let FORECAST = null, FCLIVE = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "", ogMode = store.get("ogMode", "n");
 const OG_H = [5, 21, 126, 252], OG_L = {5: "Haftalık (5 iş günü)", 21: "Aylık (21 iş günü)", 126: "6 aylık (126 iş günü)", 252: "Yıllık (252 iş günü)"}, OG_S = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"};
 const ogP = (p, r) => p * (1 + r / 100), ogPrice = v => fmt(v, v >= 100 ? 0 : 2), ogPct = v => v == null ? "–" : "%" + fmt(v * 100, 0), ogSg = v => (v > 0 ? "+" : "") + fmt(v, 1);
-const ogMeta = h => FORECAST && FORECAST.horizons ? FORECAST.horizons[h] : null;
+const OG_M = {n: "Nominal TL", r: "Reel (enflasyondan arındırılmış)", d: "Dolar"}, ogMo = () => FORECAST && FORECAST.modes && FORECAST.modes[ogMode] ? ogMode : "n";
+const ogFS = x => ogMo() === "n" ? x.f : (x[ogMo()] || {}), ogMeta = h => { const m = FORECAST && (ogMo() === "n" ? FORECAST.horizons : FORECAST["horizons_" + ogMo()]); return m ? m[h] : null; }, ogMetaN = h => FORECAST && FORECAST.horizons ? FORECAST.horizons[h] : null;
 function ogBar(f) {
   const lo = Math.min(f[0], -1), hi = Math.max(f[4], 1), sp = hi - lo, x = v => ((v - lo) / sp * 100).toFixed(1);
   return `<div class="ogtrack" role="img" aria-label="olası aralık ${ogSg(f[0])} ile ${ogSg(f[4])} yüzde arası, ortanca ${ogSg(f[2])}"><div class="ogb80" style="left:${x(f[0])}%;width:${(x(f[4]) - x(f[0])).toFixed(1)}%"></div><div class="ogb50" style="left:${x(f[1])}%;width:${(x(f[3]) - x(f[1])).toFixed(1)}%"></div><div class="ogzero" style="left:${x(0)}%"></div><div class="ogmid" style="left:${x(f[2])}%"></div></div>`;
@@ -1991,15 +2005,15 @@ function ogLive() {
 }
 function ogCard() {
   const r = FORECAST.s[ogSym], nm = ogSym === "XU100" ? "BIST 100" : ogSym; if (!r) return `<p class="note">${esc(ogSym)} için görünüm yok (likit hisse evreni dışında ya da yetersiz geçmiş).</p>`;
-  const rows = OG_H.filter(h => r.f[h]).map(h => { const f = r.f[h], m = ogMeta(h) || {};
-    return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(m.confidence || "")}</div></td><td style="min-width:150px">${ogBar(f)}</td><td>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}<div class="kps">${ogSg(f[0])} / ${ogSg(f[4])}%</div></td><td>${ogPrice(ogP(r.p, f[2]))}<div class="kps">${ogSg(f[2])}%</div></td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
+  const fs = ogFS(r), nom = ogMo() === "n", rows = OG_H.filter(h => fs[h]).map(h => { const f = fs[h], m = ogMeta(h) || {};
+    return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(m.confidence || "")}</div></td><td style="min-width:150px">${ogBar(f)}</td><td>${nom ? `${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}<div class="kps">${ogSg(f[0])} / ${ogSg(f[4])}%</div>` : `${ogSg(f[0])} / ${ogSg(f[4])}%`}</td><td>${nom ? `${ogPrice(ogP(r.p, f[2]))}<div class="kps">${ogSg(f[2])}%</div>` : `${ogSg(f[2])}%`}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
   return `<h3 style="margin:10px 0 2px">${esc(nm)} <span class="sub">fiyat ${ogPrice(r.p)} · yıllık oynaklık %${fmt(r.v, 0)}</span></h3>
-    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık (koyu %50, açık %80)</th><th>%80 aralık (TL)</th><th>Ortanca</th><th>%10'dan çok kaybetme</th><th>%10'dan çok kazanma</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık (koyu %50, açık %80)</th><th>${ogMo() === "n" ? "%80 aralık (TL)" : "%80 aralık (bugünkü değere göre)"}</th><th>Ortanca</th><th>%10'dan çok kaybetme</th><th>%10'dan çok kazanma</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function ogUniverse() {
-  const h = ogH, q = ogQ.trim().toUpperCase(), key = {vol: x => x.v, volhi: x => -x.v, loss: x => -(x.f[h] ? x.f[h][5] : 0)}[ogSort] || (x => x.v);
-  const list = Object.entries(FORECAST.s).filter(([n, x]) => n !== "XU100" && x.f[h] && (!q || n.indexOf(q) >= 0)).map(([n, x]) => ({n, ...x})).sort((a, b) => key(a) - key(b));
-  const rows = list.slice(0, 30).map(x => { const f = x.f[h]; return `<tr><td style="text-align:left"><a href="#" data-og="${esc(x.n)}"><b>${esc(x.n)}</b></a></td><td>${ogPrice(x.p)}</td><td>%${fmt(x.v, 0)}</td><td>${ogSg(f[0])}</td><td>${ogSg(f[2])}</td><td>${ogSg(f[4])}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
+  const h = ogH, q = ogQ.trim().toUpperCase(), key = {vol: x => x.v, volhi: x => -x.v, loss: x => -(ogFS(x)[h] ? ogFS(x)[h][5] : 0)}[ogSort] || (x => x.v);
+  const list = Object.entries(FORECAST.s).filter(([n, x]) => n !== "XU100" && ogFS(x)[h] && (!q || n.indexOf(q) >= 0)).map(([n, x]) => ({n, ...x})).sort((a, b) => key(a) - key(b));
+  const rows = list.slice(0, 30).map(x => { const f = ogFS(x)[h]; return `<tr><td style="text-align:left"><a href="#" data-og="${esc(x.n)}"><b>${esc(x.n)}</b></a></td><td>${ogPrice(x.p)}</td><td>%${fmt(x.v, 0)}</td><td>${ogSg(f[0])}</td><td>${ogSg(f[2])}</td><td>${ogSg(f[4])}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
   return `<div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Hisse</th><th>Fiyat</th><th>Oynaklık (yıllık)</th><th>p10 %</th><th>Ortanca %</th><th>p90 %</th><th>%10'dan çok kayıp</th><th>%10'dan çok kazanç</th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="mute">Eşleşen hisse yok.</td></tr>'}</tbody></table></div><p class="note">${list.length} hisse${list.length > 30 ? ", ilk 30 gösteriliyor (arayarak daraltın)" : ""}. Kayıp/kazanç olasılığı <b>oynaklıktan</b> gelir (oynak hisse hem çok kaybedebilir hem çok kazanabilir); yön bilgisi içermez.</p>`;
 }
 function renderOngoru() {
@@ -2007,8 +2021,10 @@ function renderOngoru() {
   if (!FORECAST) { el.innerHTML = "<h2>🧭 Gelecek Görünümü</h2><p class='mute'>Yükleniyor (ya da araştırma çalışması henüz üretmedi)…</p>"; AUX_LATE.then(() => { if (view === "ongoru" && FORECAST) renderOngoru(); }); return; }
   const F = FORECAST, names = Object.keys(F.s).sort(), tab = (v, l, a, d) => `<button class="tab ${v === a ? "on" : ""}" ${d}="${v}">${l}</button>`;
   el.innerHTML = `<h2>🧭 Gelecek Görünümü <span class="sub">haftalık · aylık · 6 aylık · yıllık olası aralık</span></h2>
-    <p class="note"><b>Bu bir fiyat hedefi değil.</b> Kimse "şu hisse şu fiyata gider" diye doğru söyleyemez; bu sayfa bunun yerine <b>getirinin olası aralığını</b> verir ve o aralığın geçmişte ne kadar tuttuğunu <b>her zaman yanında</b> gösterir. Aralık, hissenin kendi son dönem oynaklığından ve tüm hisselerin gerçek geçmiş getiri dağılımından (kalın kuyruklar dahil) kurulur; hisseye özel "yükselir/düşer" iddiası yoktur, çünkü kanıtlı sinyallerimiz 5–20 günde bile zayıf, 6–12 ayda ölçülemiyor. Veri: ${esc(F.from)} → ${esc(F.to)} (${F.days} gün, ${F.stocks} hisse); üretim ${esc(F.generated)}.</p>
+    <p class="note"><b>Bu bir fiyat hedefi değil.</b> Kimse "şu hisse şu fiyata gider" diye doğru söyleyemez; bu sayfa bunun yerine <b>getirinin olası aralığını</b> verir ve o aralığın geçmişte ne kadar tuttuğunu <b>her zaman yanında</b> gösterir. Aralık, hissenin kendi son dönem oynaklığından ve tüm hisselerin gerçek geçmiş getiri dağılımından (kalın kuyruklar dahil) kurulur; hisseye özel "yükselir/düşer" iddiası yoktur, çünkü kanıtlı sinyallerimiz 5–20 günde bile zayıf, 6–12 ayda ölçülemiyor. Nominal veri: ${esc(F.from)} → ${esc(F.to)} (${F.days} gün, ${F.stocks} hisse)${F.long ? `; reel ve dolar kipleri ${esc(F.long.from)} → ${esc(F.long.to)} uzun geçmişle sınanır` : ""}; üretim ${esc(F.generated)}.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Hisse / endeks<input id="ogIn" list="ogList" value="${esc(ogSym)}" style="width:130px" autocomplete="off" spellcheck="false"></label><datalist id="ogList">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist><span class="kps">XU100 = BIST 100 endeksi</span></div>
+    <div class="tabs" role="group" aria-label="Getiri türü">${Object.keys(F.modes || {n: 1}).map(k => tab(k, OG_M[k] || k, ogMo(), "data-ogm")).join("")}</div>
+    ${ogMo() === "r" ? '<p class="note">Reel kip: getiri TÜFE endeksine bölünerek enflasyondan arındırılmıştır; "aralık" bugünkü satın alma gücüne göre değişimdir. TL fiyat basamağı yoktur.</p>' : ogMo() === "d" ? '<p class="note">Dolar kipi: getiri USD/TL\'ye bölünerek dolar cinsine çevrilmiştir (bugünkü dolar değerine göre değişim).</p>' : ""}
     ${ogCard()}
     <div class="tabs" role="group" aria-label="Güvenilirlik ufku">${OG_H.map(h => tab(h, OG_S[h], ogH, "data-ogt")).join("")}</div>
     ${ogTrust(ogH)}
@@ -2022,12 +2038,13 @@ function renderOngoru() {
 document.addEventListener("click", e => { if (view !== "ongoru") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); show(g.dataset.go); return; }
   const o = e.target.closest("[data-og]"); if (o) { e.preventDefault(); ogSym = o.dataset.og; renderOngoru(); window.scrollTo(0, 0); return; }
   const t = e.target.closest("[data-ogt]"); if (t) { e.preventDefault(); ogH = +t.dataset.ogt; store.set("ogH", ogH); renderOngoru(); return; }
+  const mo = e.target.closest("[data-ogm]"); if (mo) { e.preventDefault(); ogMode = mo.dataset.ogm; store.set("ogMode", ogMode); renderOngoru(); return; }
   const s = e.target.closest("[data-ogs]"); if (s) { e.preventDefault(); ogSort = s.dataset.ogs; renderOngoru(); } });
 document.addEventListener("change", e => { if (view !== "ongoru") return; if (e.target.id === "ogIn") { const n = e.target.value.trim().toUpperCase(); if (FORECAST && FORECAST.s[n]) ogSym = n; renderOngoru(); } });
 document.addEventListener("input", e => { if (view !== "ongoru" || e.target.id !== "ogQ") return; ogQ = e.target.value; const pos = e.target.selectionStart; renderOngoru(); const q = $("ogQ"); if (q) { q.focus(); try { q.setSelectionRange(pos, pos); } catch (x) { /* imleç konumu isteğe bağlı */ } } });
 function kpOutlook(s) {
   const r = FORECAST && FORECAST.s && FORECAST.s[s.name]; if (!r) return "";
-  const rows = OG_H.filter(h => r.f[h]).map(h => { const f = r.f[h], m = ogMeta(h) || {}; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b></td><td>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}</td><td>${ogPrice(ogP(r.p, f[2]))}</td><td>${ogPct(f[5])}</td><td class="${m.confidence === "orta" ? "" : "mute"}">${esc(m.confidence || "–")}</td></tr>`; }).join("");
+  const rows = OG_H.filter(h => r.f[h]).map(h => { const f = r.f[h], m = ogMetaN(h) || {}; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b></td><td>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}</td><td>${ogPrice(ogP(r.p, f[2]))}</td><td>${ogPct(f[5])}</td><td class="${m.confidence === "orta" ? "" : "mute"}">${esc(m.confidence || "–")}</td></tr>`; }).join("");
   return `<div class="kpcard" style="margin:0 0 16px"><div class="kpl">🧭 Olası fiyat aralığı (fiyat hedefi değil; %80 aralık)</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>%80 aralık (TL)</th><th>Ortanca</th><th>%10'dan çok kayıp olasılığı</th><th>Güvenilirlik</th></tr></thead><tbody>${rows}</tbody></table></div><div class="kps">Geçmiş oynaklıktan ölçülür, hisseye özel yön iddiası yoktur. <a href="#ongoru" data-go="ongoru">Ayrıntı ve doğrulama →</a></div></div>`;
 }
 
@@ -4222,6 +4239,8 @@ async function loadAux() {
   if (!GON) late.push(hj("overnight_research.json").then(m => { if (m && m.groups) GON = m; }));
   late.push(hj("scan_log.json").then(m => { if (m && m.days) SLOG = m; }));
   late.push(hj("forecast.json").then(m => { if (m && m.s) FORECAST = m; }));
+  late.push(hj("tech_seal_long.json").then(m => { if (m && m.h) TECHSEAL_L = m; }));
+  late.push(hj("veri_polisi.json").then(m => { if (m && m.checks) POLICE = m; }));
   late.push(hj("forecast_live.json").then(m => { if (m && m.h) FCLIVE = m; }));
   late.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
   if (!TECHSEAL) late.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
