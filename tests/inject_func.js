@@ -154,6 +154,14 @@ setTimeout(async function () {
     ok("uzun_teknik_ve_polis", !!TECHSEAL_L && kpTechLong().indexOf("10 yıllık sağlamlık") >= 0 && !!POLICE && sfPolice().indexOf("Veri Polisi") >= 0 && sfPolice().indexOf("Hayatta kalma yanlılığı") >= 0);
     ok("og_modlar", !!FORECAST.modes && !!FORECAST.modes.r && !!FORECAST.modes.d);
     ogMode = "r"; renderOngoru(); ok("og_reel_kip", $("ogView").innerHTML.indexOf("Reel kip") >= 0 && $("ogView").innerHTML.indexOf("bugünkü değere göre") >= 0); ogMode = "d"; renderOngoru(); ok("og_dolar_kip", $("ogView").innerHTML.indexOf("Dolar kipi") >= 0); ogMode = "n"; store.set("ogMode", "n");
+    ogMode = "x"; renderOngoru(); ok("og_endekse_gore_kip", $("ogView").innerHTML.indexOf("Endekse göre kip") >= 0 && $("ogView").innerHTML.indexOf("Endeksi yenme olasılığı") >= 0); ogMode = "n"; store.set("ogMode", "n");
+    ogSym = ogn; renderOngoru(); var ogh2 = $("ogView").innerHTML; ok("og_sade_anlatim_ve_sozluk", ogh2.indexOf("Sade anlatım") >= 0 && ogh2.indexOf("Terimler sözlüğü") >= 0 && ogh2.indexOf("Bu bir hedef değil") >= 0 && ogh2.indexOf("data-ogdf") >= 0);
+    store.set("preds", []); var dfb = $("ogView").querySelector('[data-ogdf="al"]'); dfb.click(); var dl = dfList(); ok("og_deftere_ekleme", dl.length === 1 && dl[0].n === ogn && dl[0].dir === "al" && dl[0].h === 20 && dl[0].note.indexOf("Gelecek Görünümü") >= 0); store.set("preds", []); ogSym = "XU100";
+    await loadOhlc(); var cn = Object.keys(OHLC.stocks).filter(function (k) { var c = OHLC.stocks[k].c; return c.slice(-500).every(function (x) { return x > 0; }); }).slice(0, 2);
+    var pc = portfolioConeCalc(cn, [1000, 3000], 0, FORECAST, OHLC), pc2 = portfolioConeCalc(cn, [1000, 3000], 4000, FORECAST, OHLC);
+    ok("portfoy_koni_hesap", !pc.err && pc.h[21] && pc.h[21].q[0] < pc.h[21].q[2] && pc.h[21].q[2] < pc.h[21].q[4] && pc.h[21].pLoss >= 0 && pc.h[21].pLoss <= 1 && pc.sigmaYr > 5 && pc.sigmaYr < 120);
+    ok("portfoy_koni_nakit_daraltir", (pc2.h[21].q[4] - pc2.h[21].q[0]) < 0.6 * (pc.h[21].q[4] - pc.h[21].q[0]) && Math.abs(pc2.h[21].val[2] - pc2.tot) < pc2.tot * 0.2);
+    ok("portfoy_koni_hata_yolu", !!portfolioConeCalc(["YOKHISSE"], [100], 0, FORECAST, OHLC).err && !!portfolioConeCalc(cn, [0, 0], 0, FORECAST, OHLC).err);
     ogH = 21; ogSort = "vol"; ogSym = "XU100";
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);

@@ -4,6 +4,7 @@ Her gün araştırma iş akışında çalışır. Sessiz hataları (düzeltilmem
 Her denetim: {id, durum: "tamam" | "uyarı" | "bilinen sınır", ad, ayrıntı}. 'bilinen sınır' bir hata değil, dürüstçe duyurulan yapısal eksiktir (örn. hayatta kalma yanlılığı).
 Kullanım: python veri_polisi.py"""
 import json
+import math
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,6 +28,30 @@ def bdays_between(d0, d1):
         if d.weekday() < 5:
             n += 1
     return n
+
+
+def survivorship_gap(long):
+    """Hayatta kalma yanlılığının ÜST SINIR göstergesi: bugünkü evrenin eşit ağırlıklı yıllık getirisi − BIST 100 yıllık getirisi (endeks geçmiş üyeleri içerir, evren içermez).
+    Fark yalnızca yanlılık değildir (eşit ağırlık / küçük hisse etkisini de içerir); gerçek yanlılık bundan küçüktür. Dönüş: (ew %, endeks %, fark puan, yıl) ya da None."""
+    try:
+        st = [[(x if x else float("nan")) for x in s["c"]] for s in long["stocks"].values()]
+        idx = long["index"]
+        n = len(idx) - 1
+        ew, ir = [], []
+        for t in range(1, n + 1):
+            r = [c[t] / c[t - 1] - 1 for c in st if c[t - 1] == c[t - 1] and c[t] == c[t] and c[t - 1] > 0]
+            if len(r) < 20 or not (idx[t - 1] and idx[t]):
+                continue
+            ew.append(sum(r) / len(r))
+            ir.append(idx[t] / idx[t - 1] - 1)
+        yrs = len(ew) / 252
+        if yrs < 3:
+            return None
+        g = lambda x: (math.prod(1 + v for v in x) ** (1 / yrs) - 1) * 100
+        a, b = g(ew), g(ir)
+        return round(a, 1), round(b, 1), round(a - b, 1), round(yrs, 1)
+    except Exception:
+        return None
 
 
 def checks(oh, long, fc, live, today=None):
@@ -84,7 +109,9 @@ def checks(oh, long, fc, live, today=None):
             add("tahmin_karne", "Canlı tahmin karnesi hedefte mi", "tamam", "ölçülen: " + ", ".join(info))
         else:
             add("tahmin_karne", "Canlı tahmin karnesi hedefte mi", "tamam", "henüz hüküm için yeterli ölçülmüş hafta yok (en az 4 gerekir)")
-    add("hayatta_kalma", "Hayatta kalma yanlılığı", "bilinen sınır", "evren bugünün likit hisseleri; düşüp çıkarılan hisseler yok, mutlak getiriler iyimser olabilir (göreli sonuçlar daha az etkilenir)")
+    sg = survivorship_gap(long) if long else None
+    add("hayatta_kalma", "Hayatta kalma yanlılığı", "bilinen sınır", "evren bugünün likit hisseleri; düşüp çıkarılan hisseler yok, mutlak getiriler iyimser olabilir (göreli sonuçlar daha az etkilenir)"
+        + (f". Üst sınır göstergesi: evrenin eşit ağırlıklı getirisi (son {sg[3]} yıl) yıllık %{sg[0]}, BIST 100 %{sg[1]} (fark {sg[2]:+.1f} puan/yıl; bu fark kısmen eşit ağırlık/küçük hisse etkisidir, gerçek yanlılık bundan küçüktür). Mutlak getirilerin iyimser olabileceğini unutmayın; göreli sıralama sonuçları daha az etkilenir" if sg else ""))
     add("rejim_cesitliligi", "Rejim çeşitliliği", "tamam" if long else "bilinen sınır", "≈10 yıl: 2018 krizi, 2020, 2021 faiz indirimi, 2023 seçim dahil" if long else "yalnız ~3 yıl, tek rejim")
     return out
 

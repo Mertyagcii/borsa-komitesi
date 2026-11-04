@@ -1985,7 +1985,7 @@ document.addEventListener("click", e => { const b = e.target.closest("[data-card
 let FORECAST = null, FCLIVE = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "", ogMode = store.get("ogMode", "n");
 const OG_H = [5, 21, 126, 252], OG_L = {5: "Haftalık (5 iş günü)", 21: "Aylık (21 iş günü)", 126: "6 aylık (126 iş günü)", 252: "Yıllık (252 iş günü)"}, OG_S = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"};
 const ogP = (p, r) => p * (1 + r / 100), ogPrice = v => fmt(v, v >= 100 ? 0 : 2), ogPct = v => v == null ? "–" : "%" + fmt(v * 100, 0), ogSg = v => (v > 0 ? "+" : "") + fmt(v, 1);
-const OG_M = {n: "Nominal TL", r: "Reel (enflasyondan arındırılmış)", d: "Dolar"}, ogMo = () => FORECAST && FORECAST.modes && FORECAST.modes[ogMode] ? ogMode : "n";
+const OG_M = {n: "Nominal TL", r: "Reel (enflasyondan arındırılmış)", d: "Dolar", x: "Endekse göre (BIST 100'e kıyasla)"}, ogMo = () => FORECAST && FORECAST.modes && FORECAST.modes[ogMode] ? ogMode : "n";
 const ogFS = x => ogMo() === "n" ? x.f : (x[ogMo()] || {}), ogMeta = h => { const m = FORECAST && (ogMo() === "n" ? FORECAST.horizons : FORECAST["horizons_" + ogMo()]); return m ? m[h] : null; }, ogMetaN = h => FORECAST && FORECAST.horizons ? FORECAST.horizons[h] : null;
 function ogBar(f) {
   const lo = Math.min(f[0], -1), hi = Math.max(f[4], 1), sp = hi - lo, x = v => ((v - lo) / sp * 100).toFixed(1);
@@ -2003,12 +2003,30 @@ function ogLive() {
   const rows = OG_H.map(h => { const x = L.h[h]; if (!x) return ""; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b></td><td>${x.origins}</td><td>${x.c80 == null ? "–" : ogPct(x.c80)}</td><td>${x.c50 == null ? "–" : ogPct(x.c50)}</td><td class="${x.verdict === "hedefe uygun" ? "up" : x.origins >= 4 ? "down" : "mute"}">${esc(x.verdict)}</td></tr>`; }).join("");
   return head + `<div class="kps">Her hafta tüm bantlar kaydedilir (silinmez, depo geçmişi ön kayıt işlevi görür); ufuk dolunca hisselerin gerçek getirisiyle kıyaslanır. ${L.origins} kayıt noktası, son veri ${esc(L.to)}.</div><div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Ölçülen hafta</th><th>%80 bant tuttu (hedef %80)</th><th>%50 bant tuttu (hedef %50)</th><th>Hüküm</th></tr></thead><tbody>${rows}</tbody></table></div><div class="kps">Aynı haftadaki hisseler birlikte hareket eder; bu yüzden bağımsız gözlem sayısı <b>hafta sayısıdır</b>, hisse sayısı değil. En az 4 ölçülmüş hafta olmadan hüküm verilmez.</div></div>`;
 }
+function ogPlain() {
+  const r = FORECAST.s[ogSym], nm = ogSym === "XU100" ? "BIST 100" : ogSym, fs = r ? ogFS(r) : null, f = fs && fs[ogH], m = ogMeta(ogH) || {}; if (!f) return "";
+  const mo = ogMo(), U = OG_S[ogH].toLowerCase() + " ufukta", up = ogPct(f[7]), loss = ogPct(f[5]), gain = ogPct(f[6]);
+  let s;
+  if (mo === "n") s = `${nm} için ${U}: geçmişteki benzer durumlara bakarsak 10 vakanın 8'inde fiyat <b>${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))} TL</b> arasında kalıyor; ortanca ${ogPrice(ogP(r.p, f[2]))} TL. Yaklaşık ${loss} ihtimalle %10'dan çok kaybedebilir, ${gain} ihtimalle %10'dan çok kazanabilir. Bu bir hedef değil, olası bir genişlik.`;
+  else if (mo === "x") s = `${nm} için ${U}: hisse BIST 100'ü geçmişte ortalama vakaların <b>${up}</b>'inde yendi (yani çoğu zaman endeksin gerisinde kalmak olağan). Aralık ${ogSg(f[0])} ile ${ogSg(f[4])} puan arasında (10 vakanın 8'i). Bu hisseye özel bir üstünlük iddiası değildir.`;
+  else s = `${nm} için ${U} (${OG_M[mo].toLowerCase()}): 10 vakanın 8'inde bugünkü değere göre değişim <b>${ogSg(f[0])}% ile ${ogSg(f[4])}%</b> arasında, ortanca ${ogSg(f[2])}%.`;
+  return `<div class="note" style="border-left:3px solid var(--accent2);padding-left:10px"><b>🗣 Sade anlatım:</b> ${s} <span class="mute">Güvenilirlik: ${esc(m.confidence || "–")}${m.cov80Oos != null ? ` (sınamada %80'lik aralık gerçekte %${fmt(m.cov80Oos * 100, 0)} tuttu)` : ""}.</span></div>`;
+}
+function ogDefter() {
+  if (ogSym === "XU100" || !FORECAST.s[ogSym]) return "";
+  const f = FORECAST.s[ogSym].x && FORECAST.s[ogSym].x[21], p = f ? ogPct(f[7]) : "–";
+  return `<div class="note">📝 Sen ne düşünüyorsun? Model, ${esc(ogSym)}'in endeksi 1 ayda yenme olasılığını ${p} görüyor. Kendi tahminini deftere yaz, sistem aynı yöntemle skorlasın (20 iş günü):
+    <button class="pbtn" data-ogdf="al">Endeksi yener (AL)</button> <button class="pbtn" data-ogdf="sat">Geride kalır (SAT)</button> <a href="#defter" data-go="defter">Tahmin Defterim →</a></div>`;
+}
+const OG_GLOSS = [["Olası aralık / %80", "Geçmişteki benzer durumların 10'undan 8'inde sonuç bu iki değerin arasında kaldı. Kalan 2 vaka bunun dışına taştı: biri çok yukarı, biri çok aşağı."], ["Koyu bant (%50)", "10 vakanın 5'i bu daha dar aralıkta kaldı."], ["Ortanca", "Vakaların tam ortasındaki sonuç. 'En olası fiyat' ya da hedef değildir."], ["%10'dan çok kaybetme", "Geçmişte benzer oynaklıktaki hisselerin bu ufukta %10'dan fazla düştüğü vakaların oranı."],
+  ["Bağımsız pencere", "Birbirini örtmeyen ölçüm sayısı. Az olursa sonuç kesin değil, ipucudur."], ["Kapsama / örneklem dışı", "'%80 aralık' gerçekten %80 tuttu mu? Ayarı ilk yarıda yapıp ikinci yarıda (görmediği veride) sınadık."], ["Reel", "Enflasyondan arındırılmış: alım gücüne göre getiri."], ["Endekse göre", "Hissenin BIST 100'e göre fazla getirisi; piyasayı yenip yenmediğine bakar."], ["Güvenilirlik: orta / düşük / doğrulanamadı", "Aralığın geçmişte ne kadar tuttuğuna ve kaç bağımsız pencereyle sınandığına göre etiket."]];
+function ogGloss() { return `<details class="meet" style="margin-top:12px"><summary>📖 Terimler sözlüğü (sade Türkçe)</summary><dl class="note">${OG_GLOSS.map(g => `<dt><b>${esc(g[0])}</b></dt><dd style="margin:0 0 6px 14px">${esc(g[1])}</dd>`).join("")}</dl></details>`; }
 function ogCard() {
   const r = FORECAST.s[ogSym], nm = ogSym === "XU100" ? "BIST 100" : ogSym; if (!r) return `<p class="note">${esc(ogSym)} için görünüm yok (likit hisse evreni dışında ya da yetersiz geçmiş).</p>`;
   const fs = ogFS(r), nom = ogMo() === "n", rows = OG_H.filter(h => fs[h]).map(h => { const f = fs[h], m = ogMeta(h) || {};
-    return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(m.confidence || "")}</div></td><td style="min-width:150px">${ogBar(f)}</td><td>${nom ? `${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}<div class="kps">${ogSg(f[0])} / ${ogSg(f[4])}%</div>` : `${ogSg(f[0])} / ${ogSg(f[4])}%`}</td><td>${nom ? `${ogPrice(ogP(r.p, f[2]))}<div class="kps">${ogSg(f[2])}%</div>` : `${ogSg(f[2])}%`}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td></tr>`; }).join("");
+    return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(m.confidence || "")}</div></td><td style="min-width:150px">${ogBar(f)}</td><td>${nom ? `${ogPrice(ogP(r.p, f[0]))} – ${ogPrice(ogP(r.p, f[4]))}<div class="kps">${ogSg(f[0])} / ${ogSg(f[4])}%</div>` : `${ogSg(f[0])} / ${ogSg(f[4])}%`}</td><td>${nom ? `${ogPrice(ogP(r.p, f[2]))}<div class="kps">${ogSg(f[2])}%</div>` : `${ogSg(f[2])}%`}</td><td>${ogPct(f[5])}</td><td>${ogPct(f[6])}</td>${ogMo() === "x" ? `<td><b>${ogPct(f[7])}</b></td>` : ""}</tr>`; }).join("");
   return `<h3 style="margin:10px 0 2px">${esc(nm)} <span class="sub">fiyat ${ogPrice(r.p)} · yıllık oynaklık %${fmt(r.v, 0)}</span></h3>
-    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık (koyu %50, açık %80)</th><th>${ogMo() === "n" ? "%80 aralık (TL)" : "%80 aralık (bugünkü değere göre)"}</th><th>Ortanca</th><th>%10'dan çok kaybetme</th><th>%10'dan çok kazanma</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık (koyu %50, açık %80)</th><th>${ogMo() === "n" ? "%80 aralık (TL)" : "%80 aralık (bugünkü değere göre)"}</th><th>Ortanca</th><th>${ogMo() === "x" ? "Endeksin %10 gerisinde kalma" : "%10'dan çok kaybetme"}</th><th>${ogMo() === "x" ? "Endeksi %10 aşma" : "%10'dan çok kazanma"}</th>${ogMo() === "x" ? "<th>Endeksi yenme olasılığı</th>" : ""}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function ogUniverse() {
   const h = ogH, q = ogQ.trim().toUpperCase(), key = {vol: x => x.v, volhi: x => -x.v, loss: x => -(ogFS(x)[h] ? ogFS(x)[h][5] : 0)}[ogSort] || (x => x.v);
@@ -2024,19 +2042,22 @@ function renderOngoru() {
     <p class="note"><b>Bu bir fiyat hedefi değil.</b> Kimse "şu hisse şu fiyata gider" diye doğru söyleyemez; bu sayfa bunun yerine <b>getirinin olası aralığını</b> verir ve o aralığın geçmişte ne kadar tuttuğunu <b>her zaman yanında</b> gösterir. Aralık, hissenin kendi son dönem oynaklığından ve tüm hisselerin gerçek geçmiş getiri dağılımından (kalın kuyruklar dahil) kurulur; hisseye özel "yükselir/düşer" iddiası yoktur, çünkü kanıtlı sinyallerimiz 5–20 günde bile zayıf, 6–12 ayda ölçülemiyor. Nominal veri: ${esc(F.from)} → ${esc(F.to)} (${F.days} gün, ${F.stocks} hisse)${F.long ? `; reel ve dolar kipleri ${esc(F.long.from)} → ${esc(F.long.to)} uzun geçmişle sınanır` : ""}; üretim ${esc(F.generated)}.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0"><label>Hisse / endeks<input id="ogIn" list="ogList" value="${esc(ogSym)}" style="width:130px" autocomplete="off" spellcheck="false"></label><datalist id="ogList">${names.map(n => `<option value="${esc(n)}">`).join("")}</datalist><span class="kps">XU100 = BIST 100 endeksi</span></div>
     <div class="tabs" role="group" aria-label="Getiri türü">${Object.keys(F.modes || {n: 1}).map(k => tab(k, OG_M[k] || k, ogMo(), "data-ogm")).join("")}</div>
-    ${ogMo() === "r" ? '<p class="note">Reel kip: getiri TÜFE endeksine bölünerek enflasyondan arındırılmıştır; "aralık" bugünkü satın alma gücüne göre değişimdir. TL fiyat basamağı yoktur.</p>' : ogMo() === "d" ? '<p class="note">Dolar kipi: getiri USD/TL\'ye bölünerek dolar cinsine çevrilmiştir (bugünkü dolar değerine göre değişim).</p>' : ""}
+    ${ogMo() === "x" ? '<p class="note">Endekse göre kip: aralık, hissenin BIST 100\'e göre fazla getirisidir (hisse/endeks oranının değişimi). <b>Ortanca ve "endeksi yenme olasılığı" tarihsel ortalamadır; hisseye özel üstünlük iddiası yoktur</b> (kanıtlı üstünlük sinyalleri Kokpit\'te ayrıca ölçülür).</p>' : ogMo() === "r" ? '<p class="note">Reel kip: getiri TÜFE endeksine bölünerek enflasyondan arındırılmıştır; "aralık" bugünkü satın alma gücüne göre değişimdir. TL fiyat basamağı yoktur.</p>' : ogMo() === "d" ? '<p class="note">Dolar kipi: getiri USD/TL\'ye bölünerek dolar cinsine çevrilmiştir (bugünkü dolar değerine göre değişim).</p>' : ""}
     ${ogCard()}
+    ${ogPlain()}${ogDefter()}
     <div class="tabs" role="group" aria-label="Güvenilirlik ufku">${OG_H.map(h => tab(h, OG_S[h], ogH, "data-ogt")).join("")}</div>
     ${ogTrust(ogH)}
     ${ogLive()}
     <h3 style="margin:14px 0 2px">Evren: ${OG_L[ogH]} ufkunda tüm hisseler</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:6px 0"><label>Ara<input id="ogQ" value="${esc(ogQ)}" placeholder="THY…" style="width:110px" autocomplete="off"></label><div class="tabs" role="group" aria-label="Sıralama">${tab("vol", "En sakin", ogSort, "data-ogs")}${tab("volhi", "En oynak", ogSort, "data-ogs")}${tab("loss", "Kayıp olasılığı yüksek", ogSort, "data-ogs")}</div></div>
     ${ogUniverse()}
+    ${ogGloss()}
     <details class="meet" style="margin-top:12px"><summary>Yöntem, sınırlar ve neden fiyat hedefi vermiyoruz</summary><ul class="note"><li><b>Ölçek:</b> hissenin son dönem günlük oynaklığı (üstel ağırlıklı ve 1 yıllık varyansın karışımı) × √gün.</li><li><b>Şekil:</b> tüm hisselerin geçmişte yaşadığı, oynaklığa bölünmüş h günlük getirilerin ampirik dağılımı; normal dağılım varsayılmaz.</li><li><b>Merkez:</b> tarihsel nominal TL sürüklenmesi (enflasyon içinde); aşırı iyimserlik olmasın diye hisseye özel yön eklenmez.</li><li><b>Kalibrasyon:</b> tek bir ölçek katsayısı ilk yarı örneklemle seçilir, ikinci yarıda sınanır; "%80 aralık gerçekten %80 mi tutuyor?" sorusunun cevabı yukarıda yazar.</li><li><b>Sınırlar:</b> yalnızca ~3 yıl veri; 6 ay ve 1 yıl için bağımsız pencere sayısı çok az olduğundan bu ufuklar "düşük/doğrulanamadı" etiketlidir. Evren bugünün likit hisseleridir (hayatta kalma yanlılığı); olası şoklar (kur, siyaset) tarihte yoksa aralığa yansımaz. Tek gerçek karne zamandır: bu tahminlerin tutup tutmadığını sonraki aylar gösterecek.</li></ul></details>
     <p class="note" style="text-align:center">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#seffaflik" data-go="seffaflik">Şeffaflık Panosu</a> · <a href="#kokpit" data-go="kokpit">Kokpit</a></p>`;
 }
 document.addEventListener("click", e => { if (view !== "ongoru") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); show(g.dataset.go); return; }
   const o = e.target.closest("[data-og]"); if (o) { e.preventDefault(); ogSym = o.dataset.og; renderOngoru(); window.scrollTo(0, 0); return; }
+  const df = e.target.closest("[data-ogdf]"); if (df) { e.preventDefault(); const x = FORECAST.s[ogSym] && FORECAST.s[ogSym].x && FORECAST.s[ogSym].x[21]; dfAdd({n: ogSym, dir: df.dataset.ogdf, h: 20, conf: null, date: todayTR(), note: "Gelecek Görünümü" + (x ? ": model endeksi yenme olasılığı " + ogPct(x[7]) : "")}); toast(`Tahmin deftere eklendi: ${ogSym} ${df.dataset.ogdf === "al" ? "AL" : "SAT"} (20 iş günü)`); return; }
   const t = e.target.closest("[data-ogt]"); if (t) { e.preventDefault(); ogH = +t.dataset.ogt; store.set("ogH", ogH); renderOngoru(); return; }
   const mo = e.target.closest("[data-ogm]"); if (mo) { e.preventDefault(); ogMode = mo.dataset.ogm; store.set("ogMode", ogMode); renderOngoru(); return; }
   const s = e.target.closest("[data-ogs]"); if (s) { e.preventDefault(); ogSort = s.dataset.ogs; renderOngoru(); } });
@@ -3400,6 +3421,32 @@ function myAdd(n, sh, cost) {
   if (ex) { ex.cost = (ex.cost * ex.sh + cost * sh) / (ex.sh + sh); ex.sh += sh; } else MY.pos.push({n, sh, cost});
   saveMy(); return true;
 }
+/* ===== Portföyüm: gelecek konisi. Şekil = sınanmış havuz dağılımı (forecast.json zq); ölçek = portföyün GERÇEK ortak oynaklığı (korelasyonlar dahil, ohlcv.json) ===== */
+function portfolioConeCalc(names, vals, cash, F, O) {
+  if (!F || !F.horizons || !O || !O.stocks) return {err: "Tahmin ya da fiyat geçmişi verisi yüklenmedi."};
+  const inv = vals.reduce((a, b) => a + b, 0); if (!(inv > 0)) return {err: "Portföyde yatırılmış değer yok."};
+  const idx = names.map(n => O.stocks[n] ? O.stocks[n].c : null); if (idx.some(c => !c)) return {err: "Bazı hisselerin fiyat geçmişi yok: " + names.filter((n, i) => !idx[i]).join(", ") + "."};
+  const w = vals.map(v => v / inv), T = O.dates.length, r = [];
+  for (let t = T - 500; t < T; t++) { if (t < 1) continue; let s = 0, ok = true; for (let i = 0; i < idx.length; i++) { const a = idx[i][t - 1], b = idx[i][t]; if (!(a > 0) || !(b > 0)) { ok = false; break; } s += w[i] * (b / a - 1); } if (ok) r.push(s); }
+  if (r.length < 120) return {err: "Ortak fiyat geçmişi yetersiz (" + r.length + " gün; yeni halka arz hisseleri sepeti kısaltır)."};
+  let v = r.slice(0, 20).reduce((a, x) => a + x * x, 0) / 20; r.forEach(x => { v = 0.94 * v + 0.06 * x * x; });
+  const yr = r.slice(-250), v1 = yr.reduce((a, x) => a + x * x, 0) / yr.length, sg = Math.sqrt(0.5 * v + 0.5 * v1), share = inv / (inv + (cash || 0)), tot = inv + (cash || 0), out = {sigmaYr: sg * Math.sqrt(252) * 100, days: r.length, tot, h: {}};
+  [5, 21, 126, 252].forEach(h => {
+    const m = F.horizons[h]; if (!m || !m.zq) return; const z = m.zq, sh = sg * Math.sqrt(h), at = p => Math.exp(sh * z[p / 5 - 1]) - 1;
+    const thr = Math.log(1 - 0.1 * tot / inv), zz = thr / sh; let pl; if (zz <= z[0]) pl = 0.05; else if (zz >= z[18]) pl = 0.95; else { let j = 0; while (j < 17 && z[j + 1] < zz) j++; pl = (j + 1) * 0.05 + 0.05 * (zz - z[j]) / (z[j + 1] - z[j]); }
+    out.h[h] = {q: [10, 25, 50, 75, 90].map(p => at(p) * 100 * share), val: [10, 25, 50, 75, 90].map(p => tot * (1 + at(p) * share)), pLoss: pl, tail: zz <= z[0], conf: m.confidence};
+  });
+  return out;
+}
+async function myConeFill(live, cash) {
+  const box = $("myCone"); if (!box || !live.length) return; await loadOhlc(); const b2 = $("myCone"); if (!b2 || view !== "portfoyum") return;
+  const R = portfolioConeCalc(live.map(x => x.s.name), live.map(x => x.val), cash, FORECAST, OHLC);
+  if (R.err) { b2.innerHTML = `<div class="kpcard" style="margin:12px 0"><div class="kpl">🧭 Portföyüm: olası aralık</div><div class="kps">${esc(R.err)}</div></div>`; return; }
+  const rows = [5, 21, 126, 252].filter(h => R.h[h]).map(h => { const x = R.h[h]; return `<tr><td style="text-align:left"><b>${OG_S[h]}</b><div class="kps">${esc(x.conf || "")}</div></td><td style="min-width:140px">${ogBar(x.q.concat([0, 0, 0]))}</td><td>${fmt(x.val[0], 0)} – ${fmt(x.val[4], 0)}<div class="kps">${ogSg(x.q[0])} / ${ogSg(x.q[4])}%</div></td><td>${fmt(x.val[2], 0)}<div class="kps">${ogSg(x.q[2])}%</div></td><td>${x.tail ? "≤ " : ""}${ogPct(x.pLoss)}</td></tr>`; }).join("");
+  b2.innerHTML = `<div class="kpcard" style="margin:12px 0"><div class="kpl">🧭 Portföyüm: olası değer aralığı (fiyat hedefi değil)</div><div class="kps">Şekil, 10 yılda sınanmış hisse dağılımından; ölçek, sepetinizin <b>gerçek ortak oynaklığı</b> (korelasyonlar dahil, son ${R.days} gün): yıllık %${fmt(R.sigmaYr, 0)}. Nakit payı getiriyi sıfır sayarak hesaba katılır. Aralık %80'dir; koyu bant %50.</div>
+    <div class="tw"><table class="peert"><thead><tr><th style="text-align:left">Ufuk</th><th>Olası aralık</th><th>Toplam değer, %80 (TL)</th><th>Ortanca (TL)</th><th>Portföyün %10'undan çoğunu kaybetme</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="kps">Dürüst not: tek hisse dağılımının şekli kullanıldığı için çeşitlendirilmiş sepetlerde kuyruklar biraz geniş kalır (temkinli yön). Portföy ölçeğinde doğrudan geriye dönük sınama henüz yok; ufuk güvenilirliği Gelecek Görünümü'ndeki etiketle aynıdır. Aynı merkez uyarısı geçerli: nominal TL ortanca enflasyon içerir.</div></div>`;
+}
 function renderMyPort() {
   const el = $("myView"); if (!UNIVERSE.length) { el.innerHTML = ""; return; }
   const rows = MY.pos.map(p => { const s = UNIVERSE.find(x => x.name === p.n); if (!s) return {p, s: null}; const r = committee(s); return {p, s, r, val: s.close * p.sh, pnl: (s.close / p.cost - 1) * 100, adv: adviceFor(s, r, p)}; });
@@ -3436,7 +3483,9 @@ function renderMyPort() {
     ${rows.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Hisse</th><th>Adet</th><th>Maliyet</th><th>Son</th><th>K/Z</th><th>Ağırlık</th><th>Komite</th><th>Stop (2×ATR)</th><th style="text-align:left">Masanın görüşü</th><th></th></tr></thead><tbody>
       ${rows.map(x => x.s ? `<tr><td style="text-align:left"><b class="pill" data-an="${esc(x.s.name)}" style="cursor:pointer">${esc(x.s.name)}</b></td><td>${fmt(x.p.sh, 0)}</td><td>${fmt(x.p.cost)}</td><td>${fmt(x.s.close)}</td><td>${pcell(x.pnl)}</td><td>%${fmt(x.val / tot * 100, 0)}</td><td>${badge(x.r.score)} ${chipsOf(x.r)}</td>
         <td>${x.r.l.seytan.stopPct ? fmt(x.s.close * (1 - x.r.l.seytan.stopPct / 100)) + ` (−%${fmt(x.r.l.seytan.stopPct, 1)})` : "–"}</td><td style="text-align:left;white-space:normal;max-width:380px" class="${x.adv[1]}">${esc(x.adv[0])}</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`
-        : `<tr><td style="text-align:left">${esc(x.p.n)}</td><td colspan="8" class="mute">Veri bulunamadı</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz hisse eklemediniz. Yukarıdan ekleyin ya da Analiz Masası'nda “+ Portföyüme ekle”ye basın.</p>"}`;
+        : `<tr><td style="text-align:left">${esc(x.p.n)}</td><td colspan="8" class="mute">Veri bulunamadı</td><td><button data-my-del="${esc(x.p.n)}" style="padding:0 6px">✕</button></td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz hisse eklemediniz. Yukarıdan ekleyin ya da Analiz Masası'nda “+ Portföyüme ekle”ye basın.</p>"}
+    <div id="myCone"></div>`;
+  myConeFill(live, MY.cash || 0);
 }
 document.addEventListener("input", e => { if (e.target.id === "myCash") { MY.cash = +e.target.value || 0; saveMy(); } });
 document.addEventListener("change", e => {

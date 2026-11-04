@@ -46,4 +46,14 @@ live_ok = {"h": {"5": {"origins": 6, "c80": 0.78}}}
 c5 = byid(V.checks(mk(), None, {"to": mk()["dates"][-1]}, live_ok, today))
 chk("hedefe yakın karne tamam", c5["tahmin_karne"]["durum"] == "tamam" and c5["tahmin_tazelik"]["durum"] == "tamam")
 chk("hayatta kalma yanlılığı her zaman duyurulur", c0["hayatta_kalma"]["durum"] == "bilinen sınır")
+# hayatta kalma göstergesi: evren endeksten hızlı büyüyorsa pozitif fark
+n = 1000
+idx = [1000 * (1.0004 ** i) for i in range(n)]
+stk = {f"S{i}": {"c": [100 * (1.0010 ** t) for t in range(n)]} for i in range(30)}
+sg = V.survivorship_gap({"stocks": stk, "index": idx})
+chk(f"hayatta kalma göstergesi pozitif farkı bulur (evren %{sg[0]}, endeks %{sg[1]}, fark {sg[2]})" if sg else "hayatta kalma göstergesi hesaplandı", sg is not None and sg[2] > 10 and 3.5 < sg[3] < 4.5)
+chk("kısa veride (<3 yıl) gösterge üretilmez", V.survivorship_gap({"stocks": {"A": {"c": [1.0] * 300}}, "index": [1.0] * 300}) is None)
+long_ok = {"dates": [f"d{i}" for i in range(n)], "generated": "2026-11-03 07:00", "stocks": stk, "index": idx, "audit": {"jumps": []}}
+c6 = byid(V.checks(mk(), long_ok, None, None, today))
+chk("uzun veri varken hayatta kalma ayrıntısı sayısal üst sınırı içerir", "Üst sınır göstergesi" in c6["hayatta_kalma"]["ayrinti"] and "puan/yıl" in c6["hayatta_kalma"]["ayrinti"])
 sys.exit(0 if ok else 1)

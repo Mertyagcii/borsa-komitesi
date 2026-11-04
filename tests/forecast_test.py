@@ -115,7 +115,11 @@ infl = np.exp(np.cumsum(np.full(nd, 0.0008)))     # günlük %0,08 enflasyon
 mm = [[full["dates"][i], float(100 * infl[i])] for i in range(0, nd, 21)]
 longx = dict(full); longx["cpi"] = mm; longx["usdtry"] = [float(10 * np.exp(0.0005 * i)) for i in range(nd)]
 o2 = F.run(full, long=longx)
-chk("reel ve dolar kipleri üretildi", set(o2["modes"]) == {"n", "r", "d"} and "horizons_r" in o2 and "horizons_d" in o2)
+chk("endekse göre kip üretildi, endeks satırında yok, hisse satırında var", "x" in o2["modes"] and "x" in o2["s"]["S3"] and "x" not in o2["s"]["XU100"] and "5" in o2["s"]["S3"]["x"])
+mx = o2["horizons_x"]["21"]
+chk(f"endekse göre %80 aralık gerçekte yaklaşık %80 tutuyor -> {mx['cov80Raw']}", 0.70 <= mx["cov80Raw"] <= 0.90)
+chk("endekse göre aralık: yüzdelikler artan, olasılık 0-1", all(all(f[i] < f[i + 1] for i in range(4)) and 0 <= f[7] <= 1 for f in (o2["s"]["S3"]["x"]["21"],)))
+chk("reel ve dolar kipleri üretildi", set(o2["modes"]) == {"n", "r", "d", "x"} and "horizons_r" in o2 and "horizons_d" in o2)
 rec = o2["s"]["S3"]
 chk("reel ortanca nominalden düşük (enflasyon arındırıldı)", rec["r"]["21"][2] < rec["f"]["21"][2])
 chk("dolar ortanca nominalden düşük (kur artışı arındırıldı)", rec["d"]["21"][2] < rec["f"]["21"][2])

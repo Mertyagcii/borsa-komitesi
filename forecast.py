@@ -192,6 +192,10 @@ def _engine(C, dates, ncols, label_names):
             k = 1.0
             meta["confidence"] = "doğrulanamadı"
         results[h] = forecast_rows(C, sig, Z, T - 1, h, cols, k)
+        Pq = pool_quantiles(Z, T - 1, h, cols)
+        if len(Pq) >= 500:  # havuzun standart getiri şekli (kalibrasyon ayarlı, %5..%95 yüzdelikleri): tarayıcı portföy konisini bununla ölçekler
+            q19 = np.percentile(Pq, list(range(5, 100, 5)))
+            meta["zq"] = [round(float(q19[9] + k * (x - q19[9])), 4) for x in q19]
         meta_all[str(h)] = meta
     recs = {}
     last = C[-1]
@@ -225,6 +229,13 @@ def run(ohlcv, now=None, long=None):
     out["horizons"], recs = _engine(C, dates, len(names), names + ["XU100"])
     out["s"] = recs
     out["modes"] = {"n": "Nominal TL"}
+    # Endekse göre: hisse/BIST 100 oranı aynı sınanmış motordan geçer ("piyasayı yener mi?"); P(yukarı) = endeksi yenme olasılığı
+    meta_x, rx = _engine(C[:, :-1] / C[:, -1:], dates, len(names), names)
+    out["horizons_x"] = meta_x
+    out["modes"]["x"] = "Endekse göre (BIST 100'e kıyasla)"
+    for n, rec in rx.items():
+        if n in out["s"]:
+            out["s"][n]["x"] = rec["f"]
     if long and long.get("cpi") and long.get("usdtry"):
         ld = long["dates"]
         ln, LC = _matrix(long)
