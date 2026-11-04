@@ -110,7 +110,7 @@ const dayA = archiveDay("2026-10-13", __data.ts), mdA = archiveMd(dayA, {alarms:
 if (dayA.stocks.length !== current.length) errs.push("arşiv aday sayısı tutarsız");
 for (const k of ["# Borsa Komitesi Seans Raporu", "Baş Denetçi", "Hata Avcısı", "Monte Carlo", "Masa tartışması", "Geri test skor kartı", "Gün içi alarmlar", "deneme alarmı"]) if (mdA.indexOf(k) < 0) errs.push("arşivde eksik bölüm: " + k);
 if (!/^\| .* \| .* \|/m.test(mdA)) errs.push("arşiv özet tablosu yok");
-const lk = current[0], lkRsi = lk.rsi; lk.rsi = lkRsi > 50 ? 5 : 95; fcReset();
+const lk = current.find(s => { const c = committee(s); return c && factCheck(s, c).stale === false; }) || current[0], lkRsi = lk.rsi; lk.rsi = lkRsi > 50 ? 5 : 95; fcReset();
 const dayB = archiveDay("2026-10-13", __data.ts), mdB = archiveMd(dayB, {});
 if (!dayB.locks.includes(lk.name) || dayB.audit.indexOf("RED") !== 0) errs.push("kilitli hisse arşivde mühürü bozmadı");
 if ((mdB.match(/### Masa tartışması/g) || []).length !== (mdA.match(/### Masa tartışması/g) || []).length - 1 && committee(lk) && factCheck(lk, committee(lk)).stale === false) errs.push("kilitli hissenin tartışması arşive girdi");
