@@ -163,6 +163,15 @@ setTimeout(async function () {
     ok("portfoy_koni_nakit_daraltir", (pc2.h[21].q[4] - pc2.h[21].q[0]) < 0.6 * (pc.h[21].q[4] - pc.h[21].q[0]) && Math.abs(pc2.h[21].val[2] - pc2.tot) < pc2.tot * 0.2);
     ok("portfoy_koni_hata_yolu", !!portfolioConeCalc(["YOKHISSE"], [100], 0, FORECAST, OHLC).err && !!portfolioConeCalc(cn, [0, 0], 0, FORECAST, OHLC).err);
     ogH = 21; ogSort = "vol"; ogSym = "XU100";
+    /* ---- Koruma katmanları: rozetler ve günlük paneli (sentetik ai) ---- */
+    var P0 = PORT, aiT = {macro: {name: "Normal", mode: "izleme", level: 0, count: 0, reasons: ["VIX 31"], evidence: "kanıt YOK: kalkan izleme modunda", mdate: "2026-11-03"},
+      dec: [{d: "2026-11-04", port: "komite", n: "AAAA", res: "ret", kind: "supheci", why: ["Kovalama: bugün %9 yükselmiş"], shadow: null, px: 10, r5: -3, x5: -2, r10: null, x10: null}, {d: "2026-11-04", port: "simons", n: "BBBB", res: "onay", kind: "supheci", why: ["Onay: kusur bulunamadı"], shadow: "yarıya inerdi", px: 10, r5: 4, x5: 3, r10: null, x10: null}],
+      health: [{d: "2026-11-04", t: "14:30", port: "komite", n: "CCCC", act: "kapat", why: "Fiyat stop altına indi", px: 9}], mem: [{d: "2026-11-03", port: "simons", n: "DDDD", pct: -8, win: false, exit: "Stop", why: "Masa uzlaştı"}, {d: "2026-11-02", port: "zaman", n: "EEEE", pct: 3, win: true, exit: "hedef", ctx: {sector: "X"}}], healthLast: {d: "2026-11-04", t: "14:30", n: 12, a: 1}};
+    PORT = {p: {}, ai: aiT}; var gbh = guardBadges(), glh = guardLog(); PORT = P0;
+    ok("koruma_rozetleri", gbh.indexOf("Makro Kalkan") >= 0 && gbh.indexOf("Normal · izleme") >= 0 && gbh.indexOf("1 onay · 1 ret") >= 0 && gbh.indexOf("14:30 · 12 poz · 1 olay") >= 0 && gbh.indexOf("2 kayıt · 1 zarar · 1 bağlamlı") >= 0);
+    ok("koruma_gunlugu", glh.indexOf("Şüpheci Denetçi") >= 0 && glh.indexOf("RET") >= 0 && glh.indexOf("AAAA") >= 0 && glh.indexOf("KAPAT") >= 0 && glh.indexOf("CCCC") >= 0 && glh.indexOf("DDDD") >= 0 && glh.indexOf("EEEE") < 0 && glh.indexOf("Kalkan yarıya inerdi") >= 0);
+    ok("koruma_olcum_tablosu", glh.indexOf("Şüpheci onayladı") >= 0 && glh.indexOf("+3,00 puan") >= 0 && glh.indexOf("-2,00 puan") >= 0 && glh.indexOf("anlamlı biçimde düşükse") >= 0);
+    PORT = {p: {}}; ok("koruma_ai_yoksa_sessiz", guardBadges() === "" && guardLog() === ""); PORT = P0;
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);
     polishA11y(); ok("a11y_etiket_ve_klavye", !!tin.getAttribute("aria-label") && tsp.getAttribute("tabindex") === "0" && tsp.getAttribute("role") === "button");

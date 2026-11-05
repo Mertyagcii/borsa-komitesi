@@ -56,4 +56,22 @@ chk("kısa veride (<3 yıl) gösterge üretilmez", V.survivorship_gap({"stocks":
 long_ok = {"dates": [f"d{i}" for i in range(n)], "generated": "2026-11-03 07:00", "stocks": stk, "index": idx, "audit": {"jumps": []}}
 c6 = byid(V.checks(mk(), long_ok, None, None, today))
 chk("uzun veri varken hayatta kalma ayrıntısı sayısal üst sınırı içerir", "Üst sınır göstergesi" in c6["hayatta_kalma"]["ayrinti"] and "puan/yıl" in c6["hayatta_kalma"]["ayrinti"])
+# koruma katmanı denetimleri
+def dec(res, d, x5, shadow=None):
+    return {"res": res, "d": d, "x5": x5, "shadow": shadow, "n": "A", "port": "p"}
+days = [f"d{i}" for i in range(10)]
+strict = {"ai": {"dec": [dec("ret", d, 3.0 + 0.1 * i) for i, d in enumerate(days)] + [dec("onay", d, -1.0 - 0.1 * i) for i, d in enumerate(days)]}}
+c7 = byid(V.checks(mk(), None, None, None, today, ports=strict))
+chk("reddedilenler onaylananlardan anlamlı iyiyse 'fazla katı' uyarısı", c7["supheci_karne"]["durum"] == "uyarı" and "fazla katı" in c7["supheci_karne"]["ayrinti"])
+good = {"ai": {"dec": [dec("ret", d, -2.0 - 0.1 * i) for i, d in enumerate(days)] + [dec("onay", d, 1.0 + 0.1 * i) for i, d in enumerate(days)]}}
+c8 = byid(V.checks(mk(), None, None, None, today, ports=good))
+chk("denetçi isabetliyse (reddedilen daha kötü) tamam", c8["supheci_karne"]["durum"] == "tamam" and "reddedilen" in c8["supheci_karne"]["ayrinti"])
+few = {"ai": {"dec": [dec("ret", "d1", 5.0), dec("onay", "d1", -5.0)]}}
+c9 = byid(V.checks(mk(), None, None, None, today, ports=few))
+chk("az örnekte hüküm verilmez (en az 8 gün)", c9["supheci_karne"]["durum"] == "tamam" and "henüz ölçülmedi" in c9["supheci_karne"]["ayrinti"])
+chk("ai yoksa denetim eklenmez (eski kayıtla uyumlu)", "supheci_karne" not in byid(V.checks(mk(), None, None, None, today, ports={})))
+cm = byid(V.checks(mk(), None, None, None, today, macro={"risk": {"vol_t": -0.66, "vol_fark": -1.7, "2+": {"vol20": 22.0}, "0-1": {"vol20": 23.7}}}))
+chk("makro kalkan: oynaklık artışı kanıtsızsa 'bilinen sınır' (izleme modu)", cm["makro_kalkan"]["durum"] == "bilinen sınır" and "izleme" in cm["makro_kalkan"]["ayrinti"])
+cm2 = byid(V.checks(mk(), None, None, None, today, macro={"risk": {"vol_t": 2.5, "vol_fark": 6.0, "2+": {"vol20": 30.0}, "0-1": {"vol20": 24.0}}}))
+chk("makro kalkan: kanıt varsa tamam (etkin)", cm2["makro_kalkan"]["durum"] == "tamam" and "etkin" in cm2["makro_kalkan"]["ayrinti"])
 sys.exit(0 if ok else 1)

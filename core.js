@@ -1470,8 +1470,8 @@ function arenaByRegime(picks, h, regimeMap) {
    yeniliğe göre ağırlıklandırıp toplar. KAP'ın kendi API'si buradan güvenilir erişilemedi; KAP kaynaklı başlıklar Google Haberler akışıyla (news.json, 15 dakikada bir) gelir.
    Sosyal medya (X/forum) için ücretsiz güvenilir kaynak yoktur: dahil değildir. Bu bir makine öğrenmesi modeli değil, kurallı sözlük yöntemidir; başlıkları okuyun. Oy vermez, bilgi olarak masaya iletilir. */
 const SENT_RULES = [ // yön değiştiren kalıplar: önce uygulanır, eşleşen kısım sözlüğe girmez
-  [/(zarar|borç|maliyet|gider)\w*.{0,28}?(azal|düş|geriled|iyileş|kapan)/, 1.2], [/(zarar|borç|maliyet|gider)\w*.{0,28}?(art|yüksel|büyü|derinleş)/, -1.3],
-  [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*.{0,28}?(düş|azal|geriled|eridi|daral)/, -1.2], [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*.{0,28}?(art|yüksel|büyü|rekor|katla|iyileş)/, 1.2],
+  [/(zarar|borç|maliyet|gider)\w*[^,;.:!?]{0,28}?(azal|düş|geriled|iyileş|kapan)/, 1.2], [/(zarar|borç|maliyet|gider)\w*[^,;.:!?]{0,28}?(art|yüksel|büyü|derinleş)/, -1.3],
+  [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*[^,;.:!?]{0,28}?(düş|azal|geriled|eridi|daral)/, -1.2], [/(kâr|kar|gelir|satış|hasılat|marj|sipariş|ihracat)\w*[^,;.:!?]{0,28}?(art|yüksel|büyü|rekor|katla|iyileş)/, 1.2],
   [/zarar (etmedi|açıklamadı)|kâra geçti|kara geçti|zarardan kâra/, 1.4], [/kâr(a|ı)?\s*(ulaşamadı|açıklayamadı)|zarara geçti|zarara döndü/, -1.5]];
 const SENT_POS = [[/rekor/, 1.2], [/temettü|kâr payı|kar payı/, 1], [/bedelsiz/, 1.2], [/geri alım/, 1], [/ihale|sipariş|sözleşme imza|anlaşma imza|yeni anlaşma|iş ilişkisi/, 0.8], [/hedef fiyat\w*.{0,15}(yükselt|artır)/, 1], [/al tavsiyesi|endeksin üzerinde getiri|olumlu/, 0.8],
   [/yükseliş|yükseldi|arttı|artış|büyüme|büyüdü|güçlü|onay|yatırım|kapasite artış|tavan|rekabetçi|kazandı/, 0.6]];

@@ -27,7 +27,8 @@ function sellPos(p, pos, sh, px, date, why, lg) {
   const pnl = gross - fee - sh * pos.avg;
   p.trades.push({d: date, n: pos.n, side: "SAT", sh, px: r2(px), pnl: r2(pnl), pct: r2((px * (1 - ENGINE.cost) / pos.avg - 1) * 100), why});
   pos.sh -= sh;
-  if (pos.sh <= 0) p.pos.splice(p.pos.indexOf(pos), 1);
+  pos.real = (pos.real || 0) + pnl;
+  if (pos.sh <= 0) { p.pos.splice(p.pos.indexOf(pos), 1); if (typeof memRecord === "function") memRecord(p, pos, date, (px * (1 - ENGINE.cost) / pos.avg - 1) * 100, why); }
   say(p, date, `${pos.n}: ${sh} adet ${fmt(px)} TL'den sattım (${pnl >= 0 ? "+" : ""}${fmt(pnl, 0)} TL). ${why}`, pos.n);
 }
 
@@ -49,7 +50,7 @@ function fillOrders(p, by, date, lg) {
         if (o.moveStop) pos.stop = Math.max(pos.stop || 0, o.moveStop);
       } else {
         pos = {n: o.n, sh, avg: (gross + fee) / sh, entry: date, entryPx: px, stop: o.stop ?? null, target: o.target ?? null, trimmed: false, peak: s.hi || px,
-          days: 0, units: o.unit || 1, lastAdd: px, sector: s.sector, why: o.reason, fv: o.fv ?? null, lastClose: s.close};
+          days: 0, units: o.unit || 1, lastAdd: px, sector: s.sector, why: o.reason, fv: o.fv ?? null, lastClose: s.close, ctx: o.ctx || null};
         p.pos.push(pos);
       }
       p.trades.push({d: date, n: o.n, side: "AL", sh, px: r2(px), why: o.reason});
@@ -112,7 +113,10 @@ function manageDay(p, by, date, lg) {
 function queueSell(p, pos, why, frac) {
   if (!p.orders.some(o => o.side === "sell" && o.n === pos.n)) p.orders.push({n: pos.n, side: "sell", frac: frac || 1, reason: why, age: 0});
 }
-function queueBuy(p, o) { p.orders.push({side: "buy", age: 0, ...o}); }
+function queueBuy(p, o) {
+  const g = typeof gateBuy === "function" ? gateBuy(p, o) : o;   // koruma katmanları (guards.js): Makro Kalkan + Şüpheci Denetçi + Hata Hafızası; null = emir yazılmaz
+  if (g) p.orders.push({side: "buy", age: 0, ...g});
+}
 /* risk limiti (Şeytanın Avukatı): aynı sektörden en fazla maxN pozisyon+emir */
 const sectorOk = (p, s, maxN) => p.pos.filter(x => x.sector === s.sector).length + p.orders.filter(o => o.side === "buy" && !o.add && ((window_by || {})[o.n] || {}).sector === s.sector).length < maxN;
 let window_by = null;
@@ -311,11 +315,14 @@ function runDay(st, data, date, idx) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s])); window_by = by;
   rankUniverse(stocks); computeSectorStats(stocks); REGIME = computeRegime(stocks, HIST);
   current = strengthList(stocks, 25, 5);
+  const AI = bindAI(st, date), mgd = macroGuard();
+  AI.macro = {d: date, level: mgd.level, name: mgd.name, mode: mgd.mode, count: mgd.count, reasons: mgd.reasons, evidence: mgd.evidence, supported: mgd.supported, active: mgd.active, fresh: mgd.fresh, mdate: mgd.date};
+  if (!AI.macroLog.length || AI.macroLog[AI.macroLog.length - 1].d !== date) { AI.macroLog.push({d: date, level: mgd.level, count: mgd.count}); capArr(AI.macroLog, 120); }
   const prevDate = st.lastDate, days = prevDate ? Math.max(1, Math.round((new Date(date) - new Date(prevDate)) / 864e5)) : 0;
   const cy = st.config.cashYield || 0.30;
   for (const lg of ALLP) {
     if (!st.p[lg]) st.p[lg] = {cash: capOf(lg), cap: capOf(lg), pos: [], orders: [], nav: [], trades: [], log: [], startDate: date}; // sonradan eklenen portföy
-    const p = st.p[lg];
+    const p = st.p[lg]; p.key = lg;
     if (prevDate && p.nav.length) {
       p.cash += p.cash * cy * days / 365; // nakit faizi
       if (st.fillDate !== date) fillOrders(p, by, date, lg); // seans içinde (açılışta) zaten doldurulduysa tekrar etme
@@ -329,6 +336,7 @@ function runDay(st, data, date, idx) {
   const liquid = stocks.filter(s => s.close > 0 && s.volume).sort((a, b) => b.tl - a.tl).slice(0, 150).map(s => s.change).filter(c => c != null && Math.abs(c) <= 15);
   const mean = liquid.length ? liquid.reduce((a, b) => a + b, 0) / liquid.length : 0, last = st.bench[st.bench.length - 1];
   st.bench.push({d: date, xu: idx ?? (last ? last.xu : null), ew: r2((last ? last.ew : 100) * (prevDate ? 1 + mean / 100 : 1))});
+  resolveDec(st, by);
   st.lastDate = date;
   return st;
 }
@@ -336,8 +344,8 @@ function runDay(st, data, date, idx) {
 /* ======== Seans içi doldurma: önceki kapanışta verilen emirler bugünün AÇILIŞ fiyatından, açılış belli olunca hemen doldurulur ======== */
 function fillOnly(st, data, date) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s]));
-  let n = 0;
-  for (const lg of ALLP) { const p = st.p[lg]; if (!p) continue; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
+  let n = 0; bindAI(st, date);
+  for (const lg of ALLP) { const p = st.p[lg]; if (!p) continue; p.key = lg; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
   st.fillDate = date;
   return n;
 }

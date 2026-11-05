@@ -54,7 +54,30 @@ def survivorship_gap(long):
         return None
 
 
-def checks(oh, long, fc, live, today=None):
+def guard_stats(ai, field="x5"):
+    """Koruma katmanı kararları: grup (onay/ret/…) başına karar GÜNLERİ bazında kümelenmiş ortalama fazla getiri. {grup: (n, gün, ortalama, günlük ortalamalar)}"""
+    grp = {}
+    for e in (ai or {}).get("dec", []):
+        if e.get(field) is None:
+            continue
+        grp.setdefault(e["res"] + ("*" if e.get("shadow") else ""), {}).setdefault(e["d"], []).append(e[field])
+    out = {}
+    for g, byday in grp.items():
+        days = [sum(v) / len(v) for v in byday.values()]
+        out[g] = (sum(len(v) for v in byday.values()), len(days), sum(days) / len(days), days)
+    return out
+
+
+def welch_t(a, b):
+    if len(a) < 2 or len(b) < 2:
+        return None
+    va = sum((x - sum(a) / len(a)) ** 2 for x in a) / (len(a) - 1)
+    vb = sum((x - sum(b) / len(b)) ** 2 for x in b) / (len(b) - 1)
+    se = math.sqrt(va / len(a) + vb / len(b))
+    return (sum(a) / len(a) - sum(b) / len(b)) / se if se > 0 else None
+
+
+def checks(oh, long, fc, live, today=None, ports=None, macro=None):
     today = today or datetime.now(TR).date()
     out = []
 
@@ -109,6 +132,24 @@ def checks(oh, long, fc, live, today=None):
             add("tahmin_karne", "Canlı tahmin karnesi hedefte mi", "tamam", "ölçülen: " + ", ".join(info))
         else:
             add("tahmin_karne", "Canlı tahmin karnesi hedefte mi", "tamam", "henüz hüküm için yeterli ölçülmüş hafta yok (en az 4 gerekir)")
+    ai = (ports or {}).get("ai")
+    if ai is not None:
+        st = guard_stats(ai)
+        ret, onay = st.get("ret"), st.get("onay")
+        if ret and onay and ret[1] >= 8 and onay[1] >= 8:
+            t = welch_t(ret[3], onay[3])
+            if t is not None and t >= 1.64 and ret[2] > onay[2]:
+                add("supheci_karne", "Şüpheci Denetçi isabeti", "uyarı", f"reddedilen adaylar 5 günde onaylananlardan {ret[2] - onay[2]:+.1f} puan DAHA İYİ (t {t:.1f}, {ret[1]}/{onay[1]} gün): denetçi fazla katı olabilir, eşikleri gevşetin")
+            else:
+                add("supheci_karne", "Şüpheci Denetçi isabeti", "tamam", f"5 günde endekse göre fazla getiri: reddedilen {ret[2]:+.1f} / onaylanan {onay[2]:+.1f} puan (t {0 if t is None else t:.1f}; ret {ret[1]} gün, onay {onay[1]} gün)")
+        else:
+            nr = (ret or (0, 0))[1]; no = (onay or (0, 0))[1]
+            add("supheci_karne", "Şüpheci Denetçi isabeti", "tamam", f"henüz ölçülmedi: ileri 5 günü dolan karar günü ret {nr}, onay {no} (her biri için en az 8 gerekir)")
+    rk = (macro or {}).get("risk")
+    if rk:
+        sup = rk.get("vol_t") is not None and rk["vol_t"] >= 1.64 and rk.get("vol_fark", 0) > 0
+        add("makro_kalkan", "Makro Kalkan dayanağı", "tamam" if sup else "bilinen sınır",
+            f"2+ risk bayrağında BIST 100'ün sonraki 20 gün oynaklığı {rk.get('2+', {}).get('vol20', '?')}% (az bayrakta {rk.get('0-1', {}).get('vol20', '?')}%; t {rk.get('vol_t')}): " + ("risk artışı kanıtlı, kalkan etkin" if sup else "risk artışı KANITLANMADI: kalkan izleme modunda, alımı değiştirmez; kanıt oluşunca kendiliğinden devreye girer"))
     sg = survivorship_gap(long) if long else None
     add("hayatta_kalma", "Hayatta kalma yanlılığı", "bilinen sınır", "evren bugünün likit hisseleri; düşüp çıkarılan hisseler yok, mutlak getiriler iyimser olabilir (göreli sonuçlar daha az etkilenir)"
         + (f". Üst sınır göstergesi: evrenin eşit ağırlıklı getirisi (son {sg[3]} yıl) yıllık %{sg[0]}, BIST 100 %{sg[1]} (fark {sg[2]:+.1f} puan/yıl; bu fark kısmen eşit ağırlık/küçük hisse etkisidir, gerçek yanlılık bundan küçüktür). Mutlak getirilerin iyimser olabileceğini unutmayın; göreli sıralama sonuçları daha az etkilenir" if sg else ""))
@@ -118,7 +159,7 @@ def checks(oh, long, fc, live, today=None):
 
 def main():
     oh, long, fc, live = rd("ohlcv.json"), rd("ohlcv_long.json"), rd("forecast.json"), rd("forecast_live.json")
-    cs = checks(oh, long, fc, live)
+    cs = checks(oh, long, fc, live, ports=rd("portfolios.json"), macro=rd("macro_research.json"))
     warn = [c for c in cs if c["durum"] == "uyarı"]
     res = {"generated": datetime.now(TR).strftime("%Y-%m-%d %H:%M"), "durum": "uyarı" if warn else "tamam", "uyari": len(warn), "checks": cs}
     (HERE / "veri_polisi.json").write_text(json.dumps(res, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

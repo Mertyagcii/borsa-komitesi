@@ -195,6 +195,8 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 #toast.on{opacity:1;transform:translate(-50%,0)}
 .karne td,.karne th{white-space:nowrap}
 .few{color:var(--warn);font-size:11px;margin-left:4px}
+.gbs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.gb{display:inline-flex;gap:5px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;background:var(--panel2);cursor:help}.gb b{font-weight:600}.gb.ok{border-color:var(--up)}.gb.wa{border-color:var(--warn)}.gb.bd{border-color:var(--down)}
+.gl{font-size:12.5px;margin:3px 0;display:flex;gap:8px;align-items:baseline}.gl time{color:var(--mute);min-width:84px;font-size:11.5px}
 .crit{margin-bottom:16px;border:2px solid var(--down);background:rgba(255,107,107,.12);border-radius:16px;padding:12px 14px}
 .crit b.t{color:var(--down);font-size:15px}.crit ul{margin:6px 0 4px;padding-left:20px}.crit li{margin:2px 0}
 .lockbox{margin:8px 0;border:2px solid var(--down);background:rgba(255,107,107,.1);border-radius:14px;padding:10px 12px}
@@ -3624,6 +3626,43 @@ function drawEquity() {
   for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4, y = Y(v); g.beginPath(); g.moveTo(L, y); g.lineTo(w - 8, y); g.stroke(); g.fillText(fmt(v, 1), L - 4, y + 4); }
   norm.forEach(([k, a]) => { g.beginPath(); a.forEach((v, i) => { if (v == null) return; i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)); }); g.strokeStyle = LCOL[k]; g.lineWidth = k === "xu" || k === "ew" ? 1.4 : 2; g.setLineDash(k === "xu" || k === "ew" ? [5, 4] : []); g.stroke(); g.setLineDash([]); });
 }
+/* Koruma katmanları (guards.js; durum portfolios.json içindeki `ai`): rozetler + günlük paneli */
+function gdStats(ai, f) {
+  const grp = {}; ((ai && ai.dec) || []).forEach(e => { if (e[f] == null) return; const g = e.res + (e.shadow ? "*" : ""); ((grp[g] = grp[g] || {})[e.d] = grp[g][e.d] || []).push(e[f]); });
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length, out = {};
+  Object.entries(grp).forEach(([g, byDay]) => { const days = Object.values(byDay).map(mean), n = Object.values(byDay).reduce((a, v) => a + v.length, 0), m = mean(days), sd = days.length > 1 ? Math.sqrt(days.reduce((a, v) => a + (v - m) ** 2, 0) / (days.length - 1)) : null; out[g] = {n, days: days.length, mean: m, t: sd ? m / (sd / Math.sqrt(days.length)) : null}; });
+  return out;
+}
+function guardBadges() {
+  const ai = PORT && PORT.ai; if (!ai) return "";
+  const mc = ai.macro, dec = ai.dec || [], lastD = dec.length ? dec[dec.length - 1].d : null, td = dec.filter(e => e.d === lastD), no = td.filter(e => e.res === "onay" || e.res === "küçült").length, nr = td.filter(e => e.res === "ret" || e.res === "ertele").length;
+  const hl = ai.healthLast, mem = ai.mem || [], mctx = mem.filter(m => m.ctx).length, loss = mem.filter(m => !m.win).length;
+  const mcls = !mc ? "" : mc.mode === "etkin" ? "bd" : mc.mode === "izleme" ? "wa" : "ok";
+  const b = (cls, ico, lab, val, tip) => `<span class="gb ${cls}" title="${esc(tip)}"><span aria-hidden="true">${ico}</span> ${lab} <b>${esc(val)}</b></span>`;
+  return `<div class="gbs">${[
+    mc ? b(mcls, "🛡", "Makro Kalkan", `${mc.name} · ${mc.mode}`, `${mc.reasons.length ? "Bayraklar: " + mc.reasons.join("; ") + ". " : "Bayrak yok. "}${mc.evidence} (makro veri: ${mc.mdate || "–"})`) : "",
+    b(nr ? "wa" : "ok", "🕵", "Şüpheci", lastD ? `${no} onay · ${nr} ret (${lastD.slice(5)})` : "henüz karar yok", "Her yeni alımda bağımsız kusur arar; onay vermeden emir yazılmaz. Reddedilenlerin ileri getirisi aşağıda ölçülür."),
+    b(hl ? "ok" : "wa", "🩺", "Sağlık", hl ? `${hl.d.slice(5)} ${hl.t} · ${hl.n} poz · ${hl.a} olay` : "henüz tarama yok", "Seans içinde açık pozisyonlar periyodik taranır: stop altı fiyat ya da olumsuz haber gelirse kapatır/yarıya indirir (sanal portföy)."),
+    b(mem.length ? "ok" : "", "🧠", "Hata Hafızası", `${mem.length} kayıt · ${loss} zarar${mctx ? ` · ${mctx} bağlamlı` : ""}`, "Kapanan işlemlerin gerekçesi ve bağlamı saklanır; benzer tuzaklar yeni alımlarda uyarı/ret üretir. Bağlamlı kayıt yeni işlemlerle birikir.")].join("")}</div>`;
+}
+function guardLog() {
+  const ai = PORT && PORT.ai; if (!ai) return "";
+  const line = (d, txt) => `<div class="gl"><time>${esc(d)}</time><span>${txt}</span></div>`, none = "<p class='mute'>Henüz kayıt yok.</p>";
+  const dec = (ai.dec || []).filter(e => e.kind === "supheci" || e.kind === "makro").slice().reverse().slice(0, 14);
+  const hl = (ai.health || []).slice().reverse().slice(0, 14), mem = (ai.mem || []).filter(m => !m.win).slice().reverse().slice(0, 14);
+  const S5 = gdStats(ai, "x5"), g = k => S5[k], cell = x => x ? `${x.mean > 0 ? "+" : ""}${fmt(x.mean, 2)} puan <span class="mute">(n ${x.n}, ${x.days} gün${x.t != null ? ", t " + fmt(x.t, 1) : ""})</span>` : "<span class='mute'>henüz ölçülmedi</span>";
+  const mc = ai.macro;
+  return `<details style="margin-top:14px"><summary><b>🧾 Koruma katmanı günlüğü ve ölçümü</b> <span class="sub">(Şüpheci kararları, sağlık olayları, hata arşivi)</span></summary>
+    <p class="note">Bu katmanlar kural tabanlıdır (LLM yok) ve <b>her sanal portföyün alımından önce</b> devreye girer. Ölçüm dürüsttür: bir ret ancak reddedilen adayların 5 işlem günü sonraki getirisi, onaylananlardan (eşit ağırlıklı likit endekse göre) <i>anlamlı biçimde düşükse</i> haklı çıkar. Örnek az olduğu sürece sonuç kanıt değildir.</p>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">5 gün sonra, endekse göre fazla getiri</th><th style="text-align:left">Ortalama</th></tr></thead><tbody>
+      <tr><td style="text-align:left">Şüpheci onayladı</td><td style="text-align:left">${cell(g("onay"))}</td></tr><tr><td style="text-align:left">Şüpheci reddetti</td><td style="text-align:left">${cell(g("ret"))}</td></tr>
+      <tr><td style="text-align:left">Makro Kalkan olsaydı küçülür/ertelenirdi (izleme; alım yapıldı)</td><td style="text-align:left">${cell(g("onay*"))}</td></tr><tr><td style="text-align:left">Makro Kalkan fiilen küçülttü/erteledi</td><td style="text-align:left">${cell(g("küçült") || g("ertele"))}</td></tr></tbody></table></div>
+    ${mc ? `<p class="note"><b>Makro Kalkan:</b> ${esc(mc.evidence)}</p>` : ""}
+    <h3 style="margin:12px 0 4px">🕵 Şüpheci Denetçi</h3>${dec.length ? dec.map(e => line(e.d, `<b class="${e.res === "ret" || e.res === "ertele" ? "down" : "up"}">${e.res.toUpperCase()}</b> <span class="pill" data-x="${esc(e.n)}">${esc(e.n)}</span> <span class="mute">${esc(LNAMES[e.port] || e.port || "")}${e.shadow ? " · Kalkan " + e.shadow : ""}</span> ${esc((e.why || []).join("; "))}${e.r5 != null ? ` <span class="mute">→ 5g: ${e.r5 > 0 ? "+" : ""}${fmt(e.r5, 1)}% (endekse göre ${e.x5 > 0 ? "+" : ""}${fmt(e.x5, 1)})</span>` : ""}`)).join("") : none}
+    <h3 style="margin:12px 0 4px">🩺 Seans içi sağlık olayları</h3>${hl.length ? hl.map(e => line(`${e.d.slice(5)} ${e.t}`, `<b>${esc(e.act.toUpperCase())}</b> <span class="pill" data-x="${esc(e.n)}">${esc(e.n)}</span> <span class="mute">${esc(LNAMES[e.port] || e.port || "")}</span> ${esc(e.why)}`)).join("") : "<p class='mute'>Olay yok (seans içinde stop altı fiyat ya da olumsuz haber olmadı).</p>"}
+    <h3 style="margin:12px 0 4px">🧠 Hata arşivi <span class="sub">(son zararlar; her kayıtta giriş gerekçesi ve çıkış nedeni)</span></h3>${mem.length ? mem.map(m => line(m.d, `<span class="pill" data-x="${esc(m.n)}">${esc(m.n)}</span> <span class="down">${m.pct > 0 ? "+" : ""}${fmt(m.pct, 1)}%</span> <span class="mute">${esc(LNAMES[m.port] || m.port || "")}${m.legacy ? " · eski kayıt (bağlam yok)" : ""}</span> ${m.why ? "Giriş: " + esc(m.why) + " " : ""}<span class="mute">Çıkış: ${esc(m.exit || "")}</span>`)).join("") : none}
+  </details>`;
+}
 function renderPortfolios() {
   const el = $("portView"); el.innerHTML = "<h2>Sanal portföyler</h2><p class='mute'>Yükleniyor…</p>";
   loadPort().then(() => {
@@ -3633,6 +3672,7 @@ function renderPortfolios() {
     const first = PORT.start, days = PORT.p[portSel].nav.length;
     el.innerHTML = `<h2>💼 Sanal portföyler <span class="sub">(her biri ${fmt(PORT.config.capital, 0)} TL ile başladı · ${first} · ${days} işlem günü)</span></h2>
       <p class="note">Efsaneler kâğıt üstünde, kendi kurallarıyla işlem yapar. Emirler gün sonu kapanışta verilir ve <b>ertesi gün açılışta</b> (kayma %${fmt(PORT.config.slip * 100, 2)} + komisyon/BSMV %${fmt(PORT.config.cost * 100, 2)}) dolar; stop'lar günün en düşük fiyatıyla kontrol edilir. Nakit, tahvile yakın bir getiriyle (%${fmt(PORT.config.cashYield * 100, 0)}) faiz kazanır. Yalnızca uzun pozisyon. Gerçek para değildir.</p>
+      ${guardBadges()}
       ${perfTable()}
       <canvas id="eqCv" style="height:240px;margin:12px 0"></canvas>
       <div class="note">Başlangıç = 100. ${Object.keys(PORT.p).map(k => `<span><span style="color:${LCOL[k]}" aria-hidden="true">■</span> ${LNAMES[k]}</span>`).join(" ")} <span><span style="color:${LCOL.xu}" aria-hidden="true">┅</span> BIST 100</span> <span><span style="color:${LCOL.ew}" aria-hidden="true">┅</span> Likit 150 eşit ağırlık</span></div>
@@ -3645,6 +3685,7 @@ function renderPortfolios() {
       ${sel.orders.length ? `<ul>${sel.orders.map(o => `<li><b>${o.side === "buy" ? "AL" : "SAT"}</b> ${esc(o.n)} ${o.amount ? "(~" + fmt(o.amount, 0) + " TL)" : ""} <span class="mute">${esc(o.reason || "")}</span></li>`).join("")}</ul>` : "<p class='mute'>Bekleyen emir yok.</p>"}
       <h2 style="margin-top:14px">Masa günlüğü <span class="sub">(${LNAMES[portSel]})</span></h2>
       ${sel.log.length ? sel.log.slice(-30).reverse().map(l => `<div class="logl"><time>${l.d}</time><span>${l.n ? `<span class="pill" data-x="${esc(l.n)}">${esc(l.n)}</span> ` : ""}${esc(l.text)}</span></div>`).join("") : "<p class='mute'>Henüz işlem yok.</p>"}
+      ${guardLog()}
       <h2 style="margin-top:14px">Gerçekleşen işlemler</h2>
       ${sel.trades.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Tarih</th><th style="text-align:left">İşlem</th><th style="text-align:left">Hisse</th><th>Adet</th><th>Fiyat</th><th>K/Z (TL)</th><th>K/Z %</th><th style="text-align:left">Neden</th></tr></thead><tbody>${[...sel.trades].reverse().slice(0, 40).map(x => `<tr><td style="text-align:left">${x.d}</td><td style="text-align:left" class="${x.side === "AL" ? "up" : "down"}">${x.side}</td><td style="text-align:left"><b>${esc(x.n)}</b></td><td>${fmt(x.sh, 0)}</td><td>${fmt(x.px)}</td><td>${x.pnl == null ? "–" : `<span class="${sign(x.pnl)}">${fmt(x.pnl, 0)}</span>`}</td><td>${x.pct == null ? "–" : pcell(x.pct)}</td><td style="text-align:left;white-space:normal;max-width:380px" class="mute">${esc(x.why || "")}</td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz gerçekleşen işlem yok.</p>"}`;
     drawEquity();

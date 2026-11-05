@@ -212,8 +212,21 @@ def engine_tests(site):
             check("gölge sermaye 100.000 TL", all(p[k]["cap"] == 100000 and abs(p[k]["nav"][0]["v"] - 100000) < 1 for k in ("akilli", "vol", "kelly")), str({k: (p[k].get("cap"), p[k]["nav"][:1]) for k in ("akilli", "vol", "kelly")}))
             check("eski portföyler 1.000.000 TL", all(abs(p[k]["nav"][0]["v"] - 1000000) < 1 for k in ("buffett", "simons", "livermore", "kellogg", "komite", "zaman")), "")
             check("emirler tutarlı (bütçeyi aşmıyor)", all(sum(x["amount"] for x in p[k]["orders"] if x["side"] == "buy") <= p[k]["cash"] + 1 for k in p), "")
+            ai = o.get("ai") or {}
+            check("koruma katmanı durumu (ai) yazıldı: makro, karar listesi, hafıza", bool(ai.get("macro")) and isinstance(ai.get("dec"), list) and isinstance(ai.get("mem"), list), str(list(ai)))
+            check("her karar kaydı eksiksiz (hisse, portföy, sonuç, fiyat)", all(e.get("n") and e.get("port") and e.get("res") in ("onay", "ret", "ertele", "küçült") and (e.get("px") or 0) > 0 for e in ai.get("dec", [])), str(ai.get("dec", [])[:1]))
+            check("Şüpheci onayladığı her emir bağlam (ctx) taşır; reddedilenin emri yok", all(x.get("ctx") for k in p for x in p[k]["orders"] if x["side"] == "buy"), "")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def guard_tests(site):
+    print("2e) Koruma katmanları: guards.js (makro kalkan, şüpheci denetçi, sağlık tarayıcı, hata hafızası)")
+    r = subprocess.run(["node", str(ROOT / "tests" / "guards_test.js"), site], capture_output=True, text=True, encoding="utf-8", cwd=str(ROOT))
+    lines = [x for x in r.stdout.splitlines() if x.startswith("  ok   ") or x.startswith("  HATA ")]
+    for x in lines:
+        check("guards: " + x[7:].split("  →")[0].strip(), x.startswith("  ok"), x[-300:])
+    check("guards testleri çalıştı ve hepsi geçti", r.returncode == 0 and len(lines) >= 40, (r.stdout + r.stderr)[-400:])
 
 
 def notify_tests():
@@ -250,6 +263,7 @@ def main():
     script_tests(a.site)
     notify_tests()
     engine_tests(a.site)
+    guard_tests(a.site)
     if not a.quick:
         browser_tests(a.site)
     print(f"\nSONUÇ: {passes} geçti, {len(fails)} başarısız" + (": " + ", ".join(fails) if fails else ""))

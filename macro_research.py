@@ -115,6 +115,23 @@ def main():
         if len(a) >= 15:
             res["count"][str(n)] = {"n": int(m.sum()), "ret20": round(float(a.mean() * 100), 2), "hit": round(float((a > 0).mean() * 100), 0)}
     print("Risk-off bayrak sayısı → sonraki 20g XU100:", res["count"])
+    # Risk (getiri değil): bayrak sayısı arttığında sonraki 20 günlük gerçekleşen oynaklık ve en kötü düşüş de artıyor mu? (Makro Kalkan yalnızca pozisyon BOYUTUNU küçültür; bunun dayanağı bu ölçümdür.)
+    lr = np.log(d.xu100).diff()
+    fvol = (lr[::-1].rolling(20).std()[::-1].shift(-1) * np.sqrt(252) * 100)
+    fdd = pd.Series(np.nan, index=d.index)
+    cl = d.xu100.values
+    for i in range(len(cl) - 20):
+        fdd.iloc[i] = (cl[i + 1:i + 21].min() / cl[i] - 1) * 100
+    res["risk"] = {}
+    for name, m in (("0-1", flags <= 1), ("2+", flags >= 2)):
+        v, w = fvol[m].dropna(), fdd[m].dropna()
+        if len(v) >= 15:
+            res["risk"][name] = {"n": int(m.sum()), "vol20": round(float(v.mean()), 1), "dd20": round(float(w.mean()), 2), "dd20_p10": round(float(np.percentile(w, 10)), 2)}
+    a, b = fvol[flags >= 2].dropna(), fvol[flags <= 1].dropna()
+    if len(a) >= 15 and len(b) >= 15:
+        se = np.sqrt(a.var() / max(len(a) / 20, 1) + b.var() / max(len(b) / 20, 1))
+        res["risk"]["vol_fark"] = round(float(a.mean() - b.mean()), 1); res["risk"]["vol_t"] = round(float((a.mean() - b.mean()) / se), 2) if se > 0 else 0
+    print("Risk-off bayrakları → sonraki 20g risk:", res["risk"])
     for k in d.columns:
         res["last"][k] = round(float(d[k].iloc[-1]), 3)
     txt = json.dumps(res, ensure_ascii=False, separators=(",", ":")); assert "NaN" not in txt
