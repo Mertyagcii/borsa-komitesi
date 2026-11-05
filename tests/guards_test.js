@@ -100,6 +100,19 @@ r = gate({}, {m: hot, r: {"2+": {vol20: 22}, "0-1": {vol20: 24}, vol_fark: -1.7,
 ok("kapı: kanıt yokken (izleme) alım aynen yazılır, ama gölge karar ölçülür", r.orders.length === 1 && r.orders[0].amount === 100000 && r.dec.some(e => e.res === "onay" && e.shadow === "ertelenirdi"), JSON.stringify(r).slice(0, 400));
 ok("kapı: onaylanan emir bağlam (ctx) taşır (Hata Hafızası için)", r.orders[0].ctx && r.orders[0].ctx.sector !== undefined && r.orders[0].ctx.votes, JSON.stringify(r.orders[0]));
 
+// ---- 3b) Açılışta doldurma öncesi yeniden denetim (gateFill) ----
+const fillT = (mut, stubOk) => { fresh(); return run(`(() => {
+  const s = window_by["${S0}"], o0 = {change: s.change, open: s.open}; Object.assign(s, {open: s.close || 10}, ${JSON.stringify(mut || {})});
+  const keep = skeptic; ${stubOk ? 'skeptic = () => ({ok: true, hard: [], soft: [], text: "stub"});' : ""}
+  const p = {key: "zaman", cash: 1e6, pos: [], orders: [{n: "${S0}", side: "buy", age: 0, amount: 100000, reason: "dünkü emir"}], trades: [], log: []};
+  fillOrders(p, window_by, "${T0}", "zaman"); skeptic = keep; Object.assign(s, o0);
+  return {trades: p.trades.length, pos: p.pos.length, orders: p.orders.length, log: p.log.map(x => x.text), dec: AIX.dec.map(e => e.kind + ":" + e.res)};
+})()`); };
+let f1 = fillT({change: 9}, false);
+ok("açılış denetimi: dünkü emir, bugün kovalamaya dönüştüyse iptal edilir (pozisyon açılmaz)", f1.trades === 0 && f1.pos === 0 && f1.log.some(t => /açılışta Şüpheci Denetçi emri iptal etti/.test(t)) && f1.dec.includes("supheci-dolum:ret"), JSON.stringify(f1));
+let f2 = fillT({}, true);
+ok("açılış denetimi: kusur bulunamazsa emir normal dolar", f2.trades === 1 && f2.pos === 1, JSON.stringify(f2));
+
 // ---- 4) Hata Hafızası ----
 fresh();
 let m = run(`(() => {

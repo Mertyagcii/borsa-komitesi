@@ -38,6 +38,8 @@ function fillOrders(p, by, date, lg) {
     const s = by[o.n];
     if (!s || !(s.open > 0)) { if (o.age < 2) keep.push({...o, age: o.age + 1}); continue; }
     if (o.side === "buy") {
+      const veto = typeof gateFill === "function" ? gateFill(p, o, s) : null;   // açılışta Şüpheci Denetçi yeniden bakar (guards.js)
+      if (veto) { say(p, date, `${o.n}: açılışta Şüpheci Denetçi emri iptal etti: ${veto}.`, o.n); continue; }
       const px = s.open * (1 + ENGINE.slip);
       if (o.limit && s.open > o.limit) { say(p, date, `${o.n}: açılış ${fmt(s.open)} TL limitimin (${fmt(o.limit)}) üstünde, boşluk açtı; almadım.`, o.n); continue; }
       let sh = Math.floor(o.amount / (px * (1 + ENGINE.cost)));
@@ -344,6 +346,7 @@ function runDay(st, data, date, idx) {
 /* ======== Seans içi doldurma: önceki kapanışta verilen emirler bugünün AÇILIŞ fiyatından, açılış belli olunca hemen doldurulur ======== */
 function fillOnly(st, data, date) {
   const stocks = data.stocks.map(enrich), by = Object.fromEntries(stocks.map(s => [s.name, s]));
+  window_by = by; rankUniverse(stocks); computeSectorStats(stocks); REGIME = computeRegime(stocks, HIST); current = strengthList(stocks, 25, 5);   // açılış denetimi (gateFill) komiteyi hesaplar
   let n = 0; bindAI(st, date);
   for (const lg of ALLP) { const p = st.p[lg]; if (!p) continue; p.key = lg; const before = p.trades.length; fillOrders(p, by, date, lg); n += p.trades.length - before; }
   st.fillDate = date;

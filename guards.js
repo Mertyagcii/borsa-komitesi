@@ -137,6 +137,18 @@ function gateBuy(p, o) {
   return out;
 }
 
+/* açılışta doldurma öncesi son denetim: emir bir önceki kapanışta (ya da korumalardan önce) yazılmış olabilir; açılış verisiyle yeniden bakılır.
+   Dönüş: ret gerekçesi (metin) ya da null (doldur). Yalnız yeni pozisyonlar (eklemeler hariç). */
+function gateFill(p, o, s) {
+  if (!AIX || !GDATE || !s || typeof window_by === "undefined" || !window_by || o.add) return null;
+  let r = null; try { r = committee(s); } catch (e) { return null; }
+  const mg = macroGuard(), sk = skeptic(s, r, {p, mg, mem: memCheck(o.n, memFeatures(s, r, mg, p), GDATE)});
+  if (sk.ok) return null;
+  const why = sk.hard.concat(sk.soft);
+  logDec(p, o, s, "ret", "supheci-dolum", why);
+  return why.join("; ");
+}
+
 /* ileri 5/10 işlem günü sonucu: karar günü kapanışına göre getiri ve eşit ağırlıklı likit endekse göre fazla getiri */
 function resolveDec(st, by) {
   if (!AIX) return;
