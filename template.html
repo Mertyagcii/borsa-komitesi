@@ -1984,7 +1984,7 @@ async function shareCard(s) {
 document.addEventListener("click", e => { const b = e.target.closest("[data-cardpng]"); if (!b) return; e.preventDefault(); const s = UNIVERSE.find(x => x.name === kpSym); if (s) shareCard(s); });
 
 /* ===== Gelecek Görünümü: hafta / ay / 6 ay / yıl olasılık konisi (forecast.py). Fiyat hedefi DEĞİL; ölçülmüş olası aralık + sınanmış kapsama ===== */
-let FORECAST = null, FCLIVE = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "", ogMode = store.get("ogMode", "n");
+let FORECAST = null, FCLIVE = null, PBT = null, ogH = store.get("ogH", 21), ogSym = "XU100", ogSort = "vol", ogQ = "", ogMode = store.get("ogMode", "n");
 const OG_H = [5, 21, 126, 252], OG_L = {5: "Haftalık (5 iş günü)", 21: "Aylık (21 iş günü)", 126: "6 aylık (126 iş günü)", 252: "Yıllık (252 iş günü)"}, OG_S = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"};
 const ogP = (p, r) => p * (1 + r / 100), ogPrice = v => fmt(v, v >= 100 ? 0 : 2), ogPct = v => v == null ? "–" : "%" + fmt(v * 100, 0), ogSg = v => (v > 0 ? "+" : "") + fmt(v, 1);
 const OG_M = {n: "Nominal TL", r: "Reel (enflasyondan arındırılmış)", d: "Dolar", x: "Endekse göre (BIST 100'e kıyasla)"}, ogMo = () => FORECAST && FORECAST.modes && FORECAST.modes[ogMode] ? ogMode : "n";
@@ -3663,6 +3663,40 @@ function guardLog() {
     <h3 style="margin:12px 0 4px">🧠 Hata arşivi <span class="sub">(son zararlar; her kayıtta giriş gerekçesi ve çıkış nedeni)</span></h3>${mem.length ? mem.map(m => line(m.d, `<span class="pill" data-x="${esc(m.n)}">${esc(m.n)}</span> <span class="down">${m.pct > 0 ? "+" : ""}${fmt(m.pct, 1)}%</span> <span class="mute">${esc(LNAMES[m.port] || m.port || "")}${m.legacy ? " · eski kayıt (bağlam yok)" : ""}</span> ${m.why ? "Giriş: " + esc(m.why) + " " : ""}<span class="mute">Çıkış: ${esc(m.exit || "")}</span>`)).join("") : none}
   </details>`;
 }
+/* Portföy düzeyinde geriye test (portfolio_backtest.py): RS lideri 10 hissenin rejim kırılımı + portföy konisi. Yalnızca araştırma; işlem kararını değiştirmez. */
+function pbtChart(c) {
+  if (!c || c.length < 3) return "";
+  const W = 640, H = 210, L = 44, R = 8, T = 10, B = 22, n = c.length, X = i => L + i / (n - 1) * (W - L - R);
+  const lg = v => Math.log(v), all = c.flatMap(p => [p.p, p.e, p.x]), lo = lg(Math.min(...all, 1)), hi = lg(Math.max(...all, 1)), Y = v => T + (hi - lo ? (hi - lg(v)) / (hi - lo) : 0) * (H - T - B);
+  const rc = {bull: "var(--up)", bear: "var(--down)", mixed: "var(--mute)"};
+  let bands = "", s = 0;
+  for (let i = 1; i <= n; i++) if (i === n || c[i].r !== c[s].r) { bands += `<rect x="${X(s)}" y="${T}" width="${Math.max(X(Math.min(i, n - 1)) - X(s), 1)}" height="${H - T - B}" fill="${rc[c[s].r]}" fill-opacity="${c[s].r === "mixed" ? 0.06 : 0.13}"/>`; s = i; }
+  const line = (k, col, dash) => `<polyline fill="none" stroke="${col}" stroke-width="${dash ? 1.3 : 2}" ${dash ? 'stroke-dasharray="5 4"' : ""} points="${c.map((p, i) => X(i).toFixed(1) + "," + Y(p[k]).toFixed(1)).join(" ")}"/>`;
+  const ticks = [lo, (lo + hi) / 2, hi].map(v => `<text x="${L - 4}" y="${Y(Math.exp(v)) + 4}" text-anchor="end" font-size="10.5" fill="var(--mute)">${fmt(Math.exp(v), 1)}×</text>`).join("");
+  const yrs = [c[0].d.slice(0, 4), c[Math.floor(n / 2)].d.slice(0, 4), c[n - 1].d.slice(0, 4)].map((y, i) => `<text x="${[L, (L + W - R) / 2, W - R][i]}" y="${H - 6}" text-anchor="${["start", "middle", "end"][i]}" font-size="10.5" fill="var(--mute)">${y}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="RS lideri 10 hisse, eşit ağırlıklı evren ve BIST 100 birikimli getirisi; arka plan rejim rengi" style="width:100%;max-width:${W}px;height:auto;display:block;margin:8px 0">${bands}${ticks}${yrs}${line("x", "var(--mute)", 1)}${line("e", "#e69f00", 1)}${line("p", "#2a7de1", 0)}</svg>
+    <div class="note"><span style="color:#2a7de1" aria-hidden="true">■</span> RS lideri 10 hisse (net) <span style="color:#e69f00" aria-hidden="true">┅</span> Evren eşit ağırlık <span style="color:var(--mute)" aria-hidden="true">┅</span> BIST 100 · arka plan: <span style="color:var(--up)">■</span> boğa <span style="color:var(--mute)">■</span> geçiş <span style="color:var(--down)">■</span> ayı · log ölçek</div>`;
+}
+function pbtCard() {
+  const m = PBT; if (!m) return "";
+  const rg = m.regimes, RT = {bull: "Boğa", mixed: "Geçiş", bear: "Ayı"}, cs = m.curve_summary, cn = m.cone || {}, rd = m.regime_days || {};
+  const ex = (h, k) => { const x = rg[h] && rg[h][k]; return x ? `<span class="${x.excess_t != null && x.excess_t >= 2 ? "up" : x.excess_t != null && x.excess_t <= -2 ? "down" : ""}">${x.excess > 0 ? "+" : ""}${fmt(x.excess, 2)}</span> <span class="mute">(t ${x.excess_t == null ? "–" : fmt(x.excess_t, 1)})</span>` : "–"; };
+  const rows = ["bull", "mixed", "bear"].map(k => { const x = rg[20] && rg[20][k]; return `<tr><td style="text-align:left">${RT[k]} <span class="mute">(${rd[k] || 0} gün)</span></td><td>${x ? x.neff : "–"}</td><td>${x ? pcell(x.port) : "–"}</td><td>${x ? pcell(x.ew) : "–"}</td><td>${ex("5", k)}</td><td>${ex("10", k)}</td><td>${ex("20", k)}</td><td>${x ? fmt(x.hit, 0) + "%" : "–"}</td></tr>`; }).join("");
+  const cv = {corr: "Korelasyonlu (gerçek)", ind: "Bağımsız varsayım", com: "Tam bağlı (çeşitlenme yok)"};
+  const crow = ["corr", "ind", "com"].filter(k => cn[k]).map(k => { const x = cn[k], b = x.by_regime_out || {}; return `<tr><td style="text-align:left">${cv[k]}</td><td>${fmt(x.z_sd_out, 2)}</td><td>${fmt(x.cov_out, 0)}%</td>${["bull", "mixed", "bear"].map(r => `<td>${b[r] ? fmt(b[r].z_sd, 2) + ` <span class="mute">(n ${b[r].n})</span>` : "–"}</td>`).join("")}</tr>`; }).join("");
+  const bear = rg[20] && rg[20].bear, bull = rg[20] && rg[20].bull;
+  return `<details style="margin-top:14px"><summary><b>📊 Portföy düzeyinde geriye test: rejim kırılımı ve portföy konisi</b> <span class="sub">(${esc(m.data.from)} → ${esc(m.data.to)}, ${m.data.stocks} hisse)</span></summary>
+    <p class="note"><b>Ne ölçtük?</b> Göreceli güç (RS) en yüksek 10 hissenin eşit ağırlıklı portföyü, her 5 işlem gününde yeniden seçilip 5/10/20 gün tutuldu; aynı gün evrenin eşit ağırlıklı ortalamasıyla kıyaslandı. Rejim, BIST 100'ün 50/200 günlük ortalamalarına göre boğa/geçiş/ayı diye ayrıldı (site ile aynı kural). Bu gerçek komite skoru değil, fiyattan yeniden üretilebilen <i>vekil</i> stratejidir.</p>
+    ${pbtChart(m.curve)}
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Rejim</th><th>Bağımsız örnek</th><th>Portföy 20g</th><th>Evren 20g</th><th>Fazla 5g (puan)</th><th>Fazla 10g</th><th>Fazla 20g</th><th>İsabet 20g</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="note"><b>Okuma:</b> ${bull && bear ? `RS avantajı boğada ${bull.excess > 0 ? "+" : ""}${fmt(bull.excess, 1)} puan (t ${fmt(bull.excess_t, 1)}), ayıda ${bear.excess > 0 ? "+" : ""}${fmt(bear.excess, 1)} puan (t ${fmt(bear.excess_t, 1)}, bağımsız örnek ${bear.neff}). ` : ""}Ayı rejiminde avantaj <b>kaybolur ama tersine dönmez</b>: RS adayları evrenden kötü değil, sadece artık üstün de değil. Bu yüzden ayı rejimi tek başına "adayı ele" gerekçesi olarak kanıtlanmış değildir; yalnızca "avantaj yok" der.</p>
+    ${cs ? `<p class="note">Eğri (${fmt(cs.years, 1)} yıl, 20 günlük tur, tur başına %0,30 maliyet düşüldü): yıllık bileşik portföy %${fmt(cs.port_cagr, 0)}, evren %${fmt(cs.ew_cagr, 0)}, BIST 100 %${fmt(cs.bist_cagr, 0)}. <b>Bu rakamlara güvenme:</b> getiriler nominal TL (yıllık enflasyon yüksek), evren bugünün hayatta kalan likit hisseleri (geçmiş fazla iyimser) ve fiyat getirisi. Anlamlı olan mutlak seviye değil, rejimler arası fark ve portföyün evrene göre sıralamasıdır.</p>` : ""}
+    <h3 style="margin:12px 0 4px">Portföy olasılık konisi (20 gün)</h3>
+    <div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Risk varsayımı</th><th>Sapma oranı (örnek dışı)</th><th>%80 bant kapsaması</th><th>Boğa</th><th>Geçiş</th><th>Ayı</th></tr></thead><tbody>${crow}</tbody></table></div>
+    <p class="note">Sapma oranı, gerçekleşen getirinin tahmin edilen oynaklığa oranının standart sapmasıdır; <b>1,0 ideal</b> (&gt;1: koni dar kalmış, &lt;1: gereksiz geniş). Seçilen 10 hissenin ortalama ikili korelasyonu ${fmt(cn.avg_pair_corr, 2)}. Bağımsız varsayım riski ${cn.ind ? fmt(cn.ind.z_sd_out, 1) : "–"} kat küçümser, "çeşitlenme yok" varsayımı gereğinden geniş kalır; korelasyonlu hesap en yakınıdır ama yine de koniyi biraz dar bırakır (özellikle boğada sert toparlanmalar). Tipik bir 10'lu RS portföyünün 20 günlük %10-%90 aralığı yaklaşık ${m.cone.band_example ? fmt(m.cone.band_example.p10_pct, 0) + "% ile +" + fmt(m.cone.band_example.p90_pct, 0) + "%" : "–"}. Tahmin değil, aralıktır.</p>
+    <p class="note mute">${esc(m.assumptions)}</p>
+  </details>`;
+}
 function renderPortfolios() {
   const el = $("portView"); el.innerHTML = "<h2>Sanal portföyler</h2><p class='mute'>Yükleniyor…</p>";
   loadPort().then(() => {
@@ -3686,6 +3720,7 @@ function renderPortfolios() {
       <h2 style="margin-top:14px">Masa günlüğü <span class="sub">(${LNAMES[portSel]})</span></h2>
       ${sel.log.length ? sel.log.slice(-30).reverse().map(l => `<div class="logl"><time>${l.d}</time><span>${l.n ? `<span class="pill" data-x="${esc(l.n)}">${esc(l.n)}</span> ` : ""}${esc(l.text)}</span></div>`).join("") : "<p class='mute'>Henüz işlem yok.</p>"}
       ${guardLog()}
+      ${pbtCard()}
       <h2 style="margin-top:14px">Gerçekleşen işlemler</h2>
       ${sel.trades.length ? `<div class="tw"><table class="karne"><thead><tr><th style="text-align:left">Tarih</th><th style="text-align:left">İşlem</th><th style="text-align:left">Hisse</th><th>Adet</th><th>Fiyat</th><th>K/Z (TL)</th><th>K/Z %</th><th style="text-align:left">Neden</th></tr></thead><tbody>${[...sel.trades].reverse().slice(0, 40).map(x => `<tr><td style="text-align:left">${x.d}</td><td style="text-align:left" class="${x.side === "AL" ? "up" : "down"}">${x.side}</td><td style="text-align:left"><b>${esc(x.n)}</b></td><td>${fmt(x.sh, 0)}</td><td>${fmt(x.px)}</td><td>${x.pnl == null ? "–" : `<span class="${sign(x.pnl)}">${fmt(x.pnl, 0)}</span>`}</td><td>${x.pct == null ? "–" : pcell(x.pct)}</td><td style="text-align:left;white-space:normal;max-width:380px" class="mute">${esc(x.why || "")}</td></tr>`).join("")}</tbody></table></div>` : "<p class='mute'>Henüz gerçekleşen işlem yok.</p>"}`;
     drawEquity();
@@ -4332,6 +4367,7 @@ async function loadAux() {
   late.push(hj("tech_seal_long.json").then(m => { if (m && m.h) TECHSEAL_L = m; }));
   late.push(hj("veri_polisi.json").then(m => { if (m && m.checks) POLICE = m; }));
   late.push(hj("forecast_live.json").then(m => { if (m && m.h) FCLIVE = m; }));
+  late.push(hj("portfolio_backtest.json").then(m => { if (m && m.regimes) PBT = m; }));
   late.push(hj("seal_hist.json").then(m => { if (m && m.stocks) SEALHIST = m; }));
   if (!TECHSEAL) late.push(hj("tech_seal.json").then(m => { if (m && m.h) TECHSEAL = m; }));
   late.push(hj("analyst_now.json").then(m => { if (m && m.rows) ANALYST = m; }));

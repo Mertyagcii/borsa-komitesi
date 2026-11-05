@@ -172,6 +172,14 @@ setTimeout(async function () {
     ok("koruma_gunlugu", glh.indexOf("Şüpheci Denetçi") >= 0 && glh.indexOf("RET") >= 0 && glh.indexOf("AAAA") >= 0 && glh.indexOf("KAPAT") >= 0 && glh.indexOf("CCCC") >= 0 && glh.indexOf("DDDD") >= 0 && glh.indexOf("EEEE") < 0 && glh.indexOf("Kalkan yarıya inerdi") >= 0);
     ok("koruma_olcum_tablosu", glh.indexOf("Şüpheci onayladı") >= 0 && glh.indexOf("+3,00 puan") >= 0 && glh.indexOf("-2,00 puan") >= 0 && glh.indexOf("anlamlı biçimde düşükse") >= 0);
     PORT = {p: {}}; ok("koruma_ai_yoksa_sessiz", guardBadges() === "" && guardLog() === ""); PORT = P0;
+    /* ---- Portfoy duzeyinde geriye test karti ---- */
+    var PB0 = PBT, rgT = function (e, t, h) { return {n: 100, neff: 100 * 5 / h, port: 5, ew: 3, bist: 2, excess: e, excess_t: t, hit: 55, pos_abs: 60}; };
+    PBT = {data: {from: "2017-06-15", to: "2026-11-03", stocks: 135}, regime_days: {bull: 10, mixed: 5, bear: 3}, assumptions: "x", regimes: {"5": {bull: rgT(1, 4, 5), mixed: rgT(0.5, 2, 5), bear: rgT(-0.1, -0.3, 5)}, "10": {bull: rgT(1.7, 3.8, 10), mixed: rgT(1.2, 2.5, 10), bear: rgT(0, 0, 10)}, "20": {bull: rgT(2.6, 2.8, 20), mixed: rgT(1.9, 1.9, 20), bear: rgT(0.5, 0.4, 20)}},
+      curve: [{d: "2020-01-01", r: "bull", p: 1.1, e: 1.05, x: 1.02}, {d: "2020-02-01", r: "bull", p: 1.3, e: 1.1, x: 1.04}, {d: "2020-03-01", r: "bear", p: 1.2, e: 1.12, x: 1.0}, {d: "2020-04-01", r: "mixed", p: 1.5, e: 1.2, x: 1.1}], curve_summary: {years: 9, port_cagr: 100, ew_cagr: 50, bist_cagr: 30},
+      cone: {n: 400, avg_pair_corr: 0.25, band_example: {sigma20_pct: 8, p10_pct: -8, p90_pct: 18}, corr: {z_sd_out: 1.4, cov_out: 78, by_regime_out: {bull: {n: 50, z_sd: 1.5}}}, ind: {z_sd_out: 2.4, cov_out: 78, by_regime_out: {}}, com: {z_sd_out: 0.8, cov_out: 78, by_regime_out: {}}}};
+    var pbh = pbtCard(); PBT = null; var pbe = pbtCard(); PBT = PB0;
+    ok("pbt_karti", pbh.indexOf("<svg") >= 0 && pbh.indexOf("polyline") >= 0 && pbh.indexOf("rect") >= 0 && pbh.indexOf("kaybolur ama tersine d") >= 0 && pbh.indexOf("(t 4,0)") >= 0 && pbh.indexOf("Korelasyonlu") >= 0 && pbh.indexOf("NaN") < 0 && pbh.indexOf("undefined") < 0);
+    ok("pbt_yoksa_sessiz", pbe === "");
     /* ---- Erişilebilirlik ---- */
     var tin = document.createElement("input"); tin.type = "number"; tin.id = "zz1"; document.body.appendChild(tin); var tsp = document.createElement("span"); tsp.setAttribute("data-x", "THYAO"); tsp.textContent = "x"; document.body.appendChild(tsp);
     polishA11y(); ok("a11y_etiket_ve_klavye", !!tin.getAttribute("aria-label") && tsp.getAttribute("tabindex") === "0" && tsp.getAttribute("role") === "button");

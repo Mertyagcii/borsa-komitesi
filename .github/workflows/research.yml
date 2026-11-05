@@ -47,12 +47,13 @@ jobs:
           python calendar_research.py   # takvim etkileri (ohlcv.json'dan, saniyeler; BH düzeltmeli)
           python forecast.py            # hafta/ay/6 ay/yıl olasılık konisi + ileri doğrulamalı kapsama testi (ohlcv.json'dan, saniyeler)
           python forecast_log.py        # tahmin bantlarını kaydet, ufku dolanları gerçekleşenle kıyasla (canlı karne)
+          python portfolio_backtest.py  # portföy düzeyinde rejim kırılımlı geriye test + portföy konisi (ohlcv_long.json'dan, saniyeler)
           python tech_seal.py --long --if-stale   # 10 yıllık sağlamlık testi (ağır; 6 günde bir)
           python veri_polisi.py         # veri ve tahmin hattı denetimi (sıçrama, bayatlık, karne sapması)
           python tech_seal.py           # mührün teknik kısmının geriye dönük, ileri doğrulamalı testi (ohlcv.json'dan)
       - name: Arastirma ciktilarini kaydet
         run: |
-          FILES=""; for f in research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json kurul2_research.json macro_research.json viop_research.json stress.json calendar_research.json tech_seal.json forecast.json forecast_log.json forecast_live.json ohlcv_long.json veri_polisi.json tech_seal_long.json; do [ -e "$f" ] && FILES="$FILES $f"; done
+          FILES=""; for f in research.json research_history.json mtf_research.json mtf_composite.json mtf_walkforward.json daytrade_research.json overnight_research.json limit_research.json ipo_research.json kurul2_research.json macro_research.json portfolio_backtest.json viop_research.json stress.json calendar_research.json tech_seal.json forecast.json forecast_log.json forecast_live.json ohlcv_long.json veri_polisi.json tech_seal_long.json; do [ -e "$f" ] && FILES="$FILES $f"; done
           if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"
