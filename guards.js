@@ -7,7 +7,7 @@
    3) Sağlık Tarayıcı (healthScan): seans içinde açık pozisyonları tarar; stop altı fiyat ya da olumsuz haber gelirse pozisyonu kapatır/yarıya indirir.
    4) Hata Hafızası (memRecord/memCheck): kapanan her işlemin gerekçesi ve bağlamı kaydedilir; benzer tuzaklar yeni alımlarda uyarı/ret üretir.
    Her ret ve onayın ileri 5/10 günlük sonucu ölçülür (decStats): Şüpheci/Kalkan gerçekten işe yarıyor mu, yoksa fazla mı katı, rakamla görünür. */
-const GUARD = {macroForce: false, volT: 1.64, chase: 8, rsiHard: 82, rsiSoft: 70, ext: 25, atr: 6, fomo: 40, sector: 2, coolDays: 10, memMin: 8, memBlock: 0.75, healthEvery: 30, softMax: 2};
+const GUARD = {macroForce: false, volT: 1.64, chase: 8, rsiHard: 82, rsiSoft: 70, ext: 25, atr: 6, fomo: 40, sector: 2, coolDays: 10, memMin: 8, memBlock: 0.75, healthEvery: 30, softMax: 2, bearRs: 50};
 let AIX = null, GST = null, GDATE = null, GMG = null;
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 const capArr = (arr, n) => { if (arr.length > n) arr.splice(0, arr.length - n); };
@@ -95,7 +95,10 @@ function skeptic(s, r, x) {
   if (s.atrPct != null && s.atrPct > GUARD.atr) soft.push(`Günlük oynaklık %${fmt(s.atrPct, 1)}: yüksek`);
   if (s.p1m != null && s.p1m > GUARD.fomo) soft.push(`Son 1 ayda %${fmt(s.p1m, 0)} yükselmiş (kovalama)`);
   if (s.rvol != null && s.rvol > 4 && s.change != null && s.change > 5) soft.push(`Hacim ${fmt(s.rvol, 1)}x ve fiyat %${fmt(s.change, 1)}: tükeniş (blow-off) riski`);
-  if (REGIME && REGIME.trend === "bear") soft.push("Piyasa rejimi ayı");
+  /* Ayı rejimi yalnız zayıf göreceli güçteki adaylara çekince olur. Geriye test (portfolio_backtest.py, 2017-2026): RS lideri adaylar ayıda evreni
+     geçmez ama onlardan kötü de değildir (fazla getiri ≈ 0, t 0,4); yani rejim tek başına "ele" gerekçesi değil. Eşik (RS<50) kanıt değil, tutucu bir yargıdır;
+     RS bilinmiyorsa eski tutucu davranış sürer. Karar günlüğü (decStats) bunu canlı sınar. */
+  if (REGIME && REGIME.trend === "bear" && (s.rs == null || s.rs < GUARD.bearRs)) soft.push(s.rs == null ? "Piyasa rejimi ayı (göreceli güç bilinmiyor)" : `Piyasa rejimi ayı ve zayıf göreceli güç (RS ${fmt(s.rs, 0)})`);
   if (x.p && x.p.pos.filter(y => y.sector === s.sector).length >= GUARD.sector) soft.push(`Portföyde aynı sektörden zaten ${GUARD.sector}+ pozisyon var`);
   if (x.mg && x.mg.level >= 2 && s.beta != null && s.beta > 1.3) soft.push(`Makro ${x.mg.name} iken yüksek beta (${fmt(s.beta, 2)})`);
   const days = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null; if (days != null && days >= -1 && days <= 5) soft.push("Bilanço 5 gün içinde (sürpriz riski)");
