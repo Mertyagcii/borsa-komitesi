@@ -198,6 +198,32 @@ h = hs([fp("T6")], {T6: {name: "T6", close: 11, atrPct: 3}}, {T6: {items: [{t: "
 ok("sağlık: 6 saatten eski haber seans içi tepki üretmez", h.pos.length === 1 && h.ev.length === 0, JSON.stringify(h));
 run("globalThis.__hst = null; NEWS = __news;");
 
+// ---- 5b) KAP olay sınıflandırıcı ----
+const ev = t => run(`kapEvent(${JSON.stringify(t)})`);
+ok("kap olayı: bedelli sermaye artırımı ve bedelsiz ayrılır", ev("X bedelli sermaye artırımı kararı").id === "bedelli" && ev("X bedelsiz sermaye artırımı").id === "bedelsiz" && ev("X bedelsiz sermaye artırımı").dir === 1);
+ok("kap olayı: temettü, geri alım, ihale olumlu tür; bilanço yönsüz", ev("X temettü dağıtım kararı").id === "temettu" && ev("X pay geri alım programı").id === "geri_alim" && ev("X ihale kazandı").id === "ihale" && ev("X finansal sonuçlarını açıkladı").id === "bilanco" && ev("X finansal sonuçlarını açıkladı").dir === 0);
+ok("kap olayı: işlem yasağı/konkordato ağır; dava ve pay satışı çekince (ağır değil)", ev("X işlem yasağı getirildi").sev === true && ev("X konkordato ilan etti").sev === true && ev("X hakkında soruşturma").sev === false && ev("X hakkında soruşturma").id === "dava" && ev("X ortağı pay satışı yaptı").id === "pay_satis");
+ok("kap olayı: ilgisiz başlık olay değildir", ev("X hissesi bugün hareketli") === null);
+const nws = items => `NEWS = Object.assign({}, __news, {KRX: {items: ${JSON.stringify(items)}}});`, ts0 = Math.floor(Date.now() / 1000);
+run(nws([{t: "KRX bedelli sermaye artırımı kararı", ts: ts0 - 3600, p: "kap"}, {t: "KRX temettü dağıtım kararı", ts: ts0 - 7200, p: "kap"}, {t: "KRX bilanço", ts: ts0 - 5 * 86400, p: "kap"}]));
+const kes = run(`kapEvents("KRX").map(e => e.id)`);
+ok("kap olayları: son 3 günün olayları, eskiler dışarıda, en yeni başta", JSON.stringify(kes) === JSON.stringify(["bedelli", "temettu"]), JSON.stringify(kes));
+k = sk(Object.assign({}, clean, {name: "KRX"}), rr([1, 0, 1, 0]));
+ok("şüpheci: bedelli sermaye artırımı KAP olayı = hafif çekince (tek başına engellemez)", k.ok && k.soft.some(t => /KAP olayı: Bedelli/.test(t)) && !k.soft.some(t => /temettü/i.test(t)), JSON.stringify(k));
+run(nws([{t: "KRX işlem yasağı getirildi", ts: ts0 - 3600, p: "kap"}]));
+k = sk(Object.assign({}, clean, {name: "KRX"}), rr([1, 0, 1, 0]));
+ok("şüpheci: işlem yasağı türü KAP olayı = sert ret", !k.ok && k.hard.some(t => /KAP olayı: Tedbir/.test(t)), JSON.stringify(k));
+run(nws([{t: "KRX temettü dağıtım kararı", ts: ts0 - 3600, p: "kap"}, {t: "KRX ihale kazandı", ts: ts0 - 3000, p: "kap"}]));
+k = sk(Object.assign({}, clean, {name: "KRX"}), rr([1, 0, 1, 0]));
+ok("şüpheci: olumlu KAP olayları (temettü, ihale) bayrak üretmez", !k.soft.some(t => /KAP olayı/.test(t)) && !k.hard.some(t => /KAP olayı/.test(t)), JSON.stringify(k));
+run("globalThis.__hst = null;");
+h = hs([fp("T7")], {T7: {name: "T7", close: 10.2, atrPct: 3}}, {T7: {items: [{t: "T7 bedelli sermaye artırımı kararı", ts: nowO.ts - 600, p: "kap"}]}});
+ok("sağlık: bedelli sermaye artırımı KAP olayında uyarı yazar, otomatik satmaz", h.pos.length === 1 && h.pos[0].sh === 100 && h.ev.length === 1 && h.ev[0].act === "uyarı" && /Bedelli/.test(h.ev[0].why), JSON.stringify(h));
+run("globalThis.__hst = null;");
+h = hs([fp("T8")], {T8: {name: "T8", close: 10.2, atrPct: 3}}, {T8: {items: [{t: "T8 işlem yasağı getirildi", ts: nowO.ts - 600, p: "kap"}]}});
+ok("sağlık: işlem yasağı türü olay pozisyonu kapatır", h.pos.length === 0 && h.ev[0].act === "kapat", JSON.stringify(h));
+run("globalThis.__hst = null; NEWS = __news;");
+
 // ---- 6) İleri sonuç ölçümü ----
 const ds = run(`(() => {
   const st = initState("2026-10-01", 0.3); bindAI(st, "2026-11-04");

@@ -99,6 +99,11 @@ function skeptic(s, r, x) {
      geçmez ama onlardan kötü de değildir (fazla getiri ≈ 0, t 0,4); yani rejim tek başına "ele" gerekçesi değil. Eşik (RS<50) kanıt değil, tutucu bir yargıdır;
      RS bilinmiyorsa eski tutucu davranış sürer. Karar günlüğü (decStats) bunu canlı sınar. */
   if (REGIME && REGIME.trend === "bear" && (s.rs == null || s.rs < GUARD.bearRs)) soft.push(s.rs == null ? "Piyasa rejimi ayı (göreceli güç bilinmiyor)" : `Piyasa rejimi ayı ve zayıf göreceli güç (RS ${fmt(s.rs, 0)})`);
+  { const evs = kapEvents(s.name, null, 3), seen = new Set();
+    for (const e of evs) { if (seen.has(e.id)) continue; seen.add(e.id);
+      if (e.sev) hard.push(`KAP olayı: ${e.label} ("${e.t.slice(0, 70)}")`);
+      else if (e.dir < 0) soft.push(`KAP olayı: ${e.label}${e.id === "bilanco" ? " (olumsuz yönlü)" : ""} ("${e.t.slice(0, 60)}")`); }
+    if (soft.some(t => t.startsWith("KAP olayı"))) { const j = soft.findIndex(t => t.startsWith("Olumsuz eğilimli KAP")); if (j >= 0) soft.splice(j, 1); } /* aynı başlık iki kez sayılmasın */ }
   if (x.p && x.p.pos.filter(y => y.sector === s.sector).length >= GUARD.sector) soft.push(`Portföyde aynı sektörden zaten ${GUARD.sector}+ pozisyon var`);
   /* Korelasyon çeşitlendirme: aynı sektör olmasa da fiyatı birlikte hareket eden pozisyonlar tek risk faktörü gibi davranır (portföy geriye testi: 10'lu RS portföyünde ortalama ikili ρ ≈ 0,25;
      bağımsız varsayım portföy riskini ~2,4 kat küçümsüyor). Aday, portföydeki ≥ corrN pozisyonla 60 günlük ρ ≥ corrHi ise çekince. Eşikler yargıdır; karar günlüğü sınar. */
@@ -187,6 +192,38 @@ function decStats(ai, field) {
   return out;
 }
 
+/* ======== KAP olay sınıflandırıcı (kural tabanlı anahtar kelime; duygu skoru DEĞİL, olay türü) ========
+   Başlığı olay türüne ayırır: kapı/sağlık taraması hangi tür olayın geldiğini bilir. Yön iddiası yoktur: yalnız "tedbir/işlem yasağı/konkordato/iflas/haciz/temerrüt"
+   ağır sayılır (zaten SEVERE_RE ile kapatma sebebi); bedelli sermaye artırımı, pay satışı, dava/ceza çekince; olumlu türler (temettü, bedelsiz, geri alım, ihale) bayrak üretmez.
+   Bu türlerin getiri etkisi ölçülmedi: etiketler karar günlüğünde izlenir. */
+const KAP_EVENTS = [
+  {id: "tedbir", label: "Tedbir/işlem yasağı/iflas türü", re: /tedbir kararı|işlem yasağı|konkordato|iflas|haciz|temerrüt|tasfiye/, sev: true, dir: -1},
+  {id: "dava", label: "Dava/soruşturma/idari ceza", re: /soruşturma|idari para cezası|hakkında dava|dava aç|davası|\bceza\b|cezası/, dir: -1},
+  {id: "pay_satis", label: "Pay satışı/devri", re: /pay satış|pay devri|ortak\w* .{0,20}satış|yönetici\w* .{0,20}satış|blok satış/, dir: -1},
+  {id: "bedelsiz", label: "Bedelsiz sermaye artırımı", re: /bedelsiz/, dir: 1},
+  {id: "bedelli", label: "Bedelli sermaye artırımı", re: /bedelli|sermaye artırım|rüçhan/, dir: -1},
+  {id: "temettu", label: "Temettü", re: /temettü|kâr payı|kar payı/, dir: 1},
+  {id: "geri_alim", label: "Pay geri alımı", re: /geri alım/, dir: 1},
+  {id: "ihale", label: "İhale/sözleşme/sipariş", re: /ihale|sözleşme imza|anlaşma imza|yeni anlaşma|sipariş/, dir: 1},
+  {id: "bilanco", label: "Bilanço/finansal sonuç", re: /bilanço|finansal sonuç|finansal rapor|net dönem|dönem (kârı|karı|zararı)/, dir: 0}];
+function kapEvent(title) {
+  const t = trLower(title);
+  for (const e of KAP_EVENTS) if (e.re.test(t)) return {id: e.id, label: e.label, sev: !!e.sev, dir: e.dir};
+  return null;
+}
+/* Hissenin son `days` gündeki olayları (en yeni başta). Bilançoda yön, başlığın duygu skorundan okunur. */
+function kapEvents(name, nowMs, days) {
+  const n = typeof NEWS !== "undefined" && NEWS ? NEWS[name] : null; if (!n || !n.items) return [];
+  const now = (nowMs || (typeof NOW === "number" ? NOW : Date.now())) / 1000, lim = days || 3, out = [];
+  for (const i of n.items) {
+    const age = (now - i.ts) / 86400; if (age > lim || age < -0.2) continue;
+    const ev = kapEvent(i.t); if (!ev) continue;
+    const dir = ev.id === "bilanco" ? (() => { const sc = sentiment(i.t).score; return sc >= 0.2 ? 1 : sc <= -0.2 ? -1 : 0; })() : ev.dir;
+    out.push(Object.assign({}, ev, {dir, t: i.t, ts: i.ts, kap: i.p === "kap"}));
+  }
+  return out.sort((a, b) => b.ts - a.ts);
+}
+
 /* ======== 3) Sağlık Tarayıcı (seans içi) ======== */
 function healthScan(st, by, now) {
   bindAI(st, now.date);
@@ -200,7 +237,12 @@ function healthScan(st, by, now) {
       const px = s.close, atr = s.atrPct != null ? s.atrPct : 3, fill = px * (1 - ENGINE.slip);
       const items = ((typeof NEWS !== "undefined" && NEWS && NEWS[pos.n] && NEWS[pos.n].items) || []).filter(i => i.ts > (pos.hs || 0) && now.ts - i.ts < 6 * 3600 && i.ts - now.ts < 600);
       let worst = null;
-      for (const i of items) { const sc = sentiment(i.t).score, sev = SEVERE_RE.test(trLower(i.t)) || sc <= -0.95; if ((sc <= -0.3 || sev) && (!worst || sc < worst.sc)) worst = {t: i.t, sc, sev, kap: i.p === "kap"}; }
+      const warns = [];
+      for (const i of items) {
+        const ev = kapEvent(i.t), sc = sentiment(i.t).score, sev = SEVERE_RE.test(trLower(i.t)) || sc <= -0.95 || !!(ev && ev.sev);
+        if ((sc <= -0.3 || sev) && (!worst || sc < worst.sc)) worst = {t: i.t, sc, sev, kap: i.p === "kap", ev};
+        else if (ev && ev.dir < 0 && ev.id !== "bilanco") warns.push({t: i.t, ev});
+      }
       if (items.length) pos.hs = Math.max(...items.map(i => i.ts));
       if (pos.stop && px <= pos.stop) { push(k, pos, "kapat", `Fiyat ${fmt(px)} TL stop seviyesinin (${fmt(pos.stop)}) altına indi`, px); sellPos(p, pos, pos.sh, fill, now.date, `Seans içi sağlık taraması: fiyat ${fmt(px)} TL stop (${fmt(pos.stop)}) altında; kapattım.`, k); continue; }
       if (worst && worst.sev) { push(k, pos, "kapat", `Ağır olumsuz ${worst.kap ? "KAP" : "haber"}: "${worst.t}"`, px); sellPos(p, pos, pos.sh, fill, now.date, `Seans içi olumsuz ${worst.kap ? "KAP" : "haber"} ("${worst.t}"): pozisyonu kapattım.`, k); continue; }
@@ -210,6 +252,7 @@ function healthScan(st, by, now) {
         if (pos.sh > 0) pos.stop = Math.max(pos.stop || 0, px * (1 - atr / 100));
         continue;
       }
+      if (warns.length) { const w = warns[0]; push(k, pos, "uyarı", `KAP olayı: ${w.ev.label}: "${w.t}" (otomatik satış yok; olay türünün etkisi ölçülmedi)`, px); }
       if (pos.stop && (px / pos.stop - 1) * 100 < 0.35 * atr && pos.hw !== now.date) { pos.hw = now.date; push(k, pos, "uyarı", `Fiyat ${fmt(px)} TL stopa (${fmt(pos.stop)}) %${fmt((px / pos.stop - 1) * 100, 1)} kala`, px); }
     }
   }
