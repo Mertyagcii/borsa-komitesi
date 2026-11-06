@@ -153,7 +153,8 @@ td .nm{display:block;font-size:11px;color:var(--mute);max-width:170px;overflow:h
 #scrim.open{opacity:1;pointer-events:auto}
 #drawer{position:fixed;top:0;right:0;bottom:0;width:min(500px,100vw);background:var(--shell);border-left:1px solid var(--line);transform:translateX(105%);transition:transform .25s;z-index:50;overflow-y:auto;padding:18px;box-shadow:-20px 0 50px rgba(0,0,0,.35)}
 #drawer.open{transform:none}
-#dClose{position:sticky;top:0;float:right;z-index:2;margin-left:8px}
+#dClose,#dFull{position:sticky;top:0;float:right;z-index:2;margin-left:8px}
+#drawer{transition:transform .25s,width .2s}#drawer.full{width:100vw}#drawer.full #detail{max-width:1100px;margin:0 auto}
 .tour{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:100;padding:16px}
 .tour.open{display:grid}
 .tbox{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;max-width:440px;width:100%}
@@ -281,7 +282,7 @@ body.kp{background:radial-gradient(1100px 520px at 50% -8%,rgba(18,184,134,.13) 
   body{background:#fff;padding:0}
   body.printing .shell,body.printing #scrim,body.printing .tour,body.printing #toast{display:none!important}
   body.printing #drawer{position:static;transform:none;width:100%;box-shadow:none;border:0;overflow:visible;padding:0}
-  body.printing #dClose,body.printing .actions,body.printing .calc{display:none!important}
+  body.printing #dClose,body.printing #dFull,body.printing .actions,body.printing .calc{display:none!important}
   body:not(.printing) #drawer{display:none}
 }
 .meet{margin:10px 0;background:var(--panel2);border-radius:14px;padding:10px 12px}
@@ -671,7 +672,7 @@ textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line)
 
 <div id="picker"><div class="pbox"><input id="pickQ" placeholder="Alan ara… (örn. RSI, F/K, temettü, MACD, ROE)" autocomplete="off"><div class="plist" id="pickList"></div></div></div>
 <div id="scrim"></div>
-<aside id="drawer" aria-label="Hisse detayı"><button id="dClose" class="ibtn round" title="Kapat (Esc)">✕</button><div id="detail"></div></aside>
+<aside id="drawer" aria-label="Hisse detayı"><button id="dClose" class="ibtn round" title="Kapat (Esc)" aria-label="Kapat">✕</button><button id="dFull" class="ibtn round" title="Tam ekran" aria-label="Tam ekran" aria-pressed="false">⛶</button><div id="detail"></div></aside>
 <div class="tour" id="tour"></div>
 
 <script src="core.js"></script>
@@ -1661,7 +1662,7 @@ function commentHtml(s) {
 
 
 /* ---------- KOKPİT: tek ekran karar özeti ---------- */
-let kpSym = store.get("kpSym", null);
+let kpSym = null; store.set("kpSym", null); /* arattığınız hisse yalnız o oturumda kalır; uygulamayı yeniden açınca sade görünüm temiz ana ekranla başlar (eski kayıt da silinir) */
 const kpOpen = new Set(store.get("kpOpen", []));
 const KP_CLOSED = h => String(h).replace(/<details class="meet" open>/g, '<details class="meet">'); // kokpitte ayrıntılar varsayılan kapalı
 const kpVote = v => v > 0 ? '<span class="kb up">▲ olumlu</span>' : v < 0 ? '<span class="kb down">▼ olumsuz</span>' : '<span class="kb">• nötr</span>';
@@ -1780,7 +1781,7 @@ function renderKokpit() {
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. Mühür, ajanların oy özetidir; kazanç garantisi vermez. · <a href="#dashboard" data-go="dashboard">Tüm sayfalar →</a> · <a href="#" data-kp="">Seçimi temizle</a></p>`;
 }
 function kpSelect(name) {
-  name = String(name || "").trim().toUpperCase(); kpSym = name && UNIVERSE.some(s => s.name === name) ? name : null; store.set("kpSym", kpSym);
+  name = String(name || "").trim().toUpperCase(); kpSym = name && UNIVERSE.some(s => s.name === name) ? name : null;
   if (view !== "kokpit") show("kokpit"); else renderKokpit(); window.scrollTo(0, 0);
 }
 document.addEventListener("click", e => { if (view !== "kokpit") return; const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); e.stopPropagation(); show(g.dataset.go); return; } const x = e.target.closest("[data-kp],[data-x]"); if (!x) return; e.preventDefault(); e.stopPropagation(); kpSelect(x.dataset.kp !== undefined ? x.dataset.kp : x.dataset.x); }, true);
@@ -4274,7 +4275,8 @@ function openDetail(name) {
   detail(name); markRows();
   if (view === "dashboard") renderDashboard();
 }
-function closeDetail() { selected = null; $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); markRows(); }
+function setDrawerFull(on) { $("drawer").classList.toggle("full", on); const b = $("dFull"); b.setAttribute("aria-pressed", on ? "true" : "false"); b.title = on ? "Yan panele dön" : "Tam ekran"; b.setAttribute("aria-label", b.title); b.textContent = on ? "⤡" : "⛶"; }
+function closeDetail() { selected = null; $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); setDrawerFull(false); markRows(); }
 function show(v) {
   $("favonly").checked = v === "favoriler";
   if (v === "favoriler") v = "adaylar";
@@ -4286,7 +4288,7 @@ function show(v) {
   if (location.hash.slice(1) !== activeKey) history.replaceState(null, "", "#" + activeKey);
   window.scrollTo(0, 0); try { polishA11y(); } catch (e) { /* cila isteğe bağlı */ }
 }
-document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => { closeDetail(); show(a.dataset.view); }));
+document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => { closeDetail(); if (a.dataset.view === "kokpit") kpSym = null; /* menüden Kokpit'e her girişte seçim sıfırlanır */ show(a.dataset.view); }));
 document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
 $("gsearch").addEventListener("change", e => {
   const n = e.target.value.trim().toUpperCase(); e.target.value = "";
@@ -4461,6 +4463,7 @@ $("tbl").addEventListener("click", e => {
 });
 $("scrim").addEventListener("click", closeDetail);
 $("dClose").addEventListener("click", closeDetail);
+$("dFull").addEventListener("click", () => setDrawerFull(!$("drawer").classList.contains("full")));
 document.addEventListener("keydown", e => { if (e.key === "Escape") { closeDetail(); if ($("tour").classList.contains("open")) endTour(); } });
 $("tourBtn").addEventListener("click", startTour);
 $("notifChk").addEventListener("change", e => {

@@ -103,6 +103,13 @@ setTimeout(async function () {
     var gk = $("kpBody").innerHTML; ok("kokpit_gozlemci_kadro", gk.indexOf("Gözlemci kadro") >= 0 && ["López de Prado", "Ed Thorp", "Yale Hirsch", "Peter Lynch", "Ray Dalio", "Howard Marks"].every(function (n) { return gk.indexOf(n) >= 0; }) && gk.indexOf("oy vermez") >= 0); SEALCARD = sc0; kpSym = null; renderKokpit(); kpSelect(kpS.name);
     var kd = $("kpBody").querySelector("details.kpacc"); kd.open = true; kd.dispatchEvent(new Event("toggle")); ok("kokpit_acik_kart_hatirlanir", kpOpen.has(kd.dataset.kpa)); renderKokpit(); ok("kokpit_yenilemede_acik_kalir", $("kpBody").querySelector("details.kpacc").open === true);
     $("kpBody").querySelectorAll("details.kpacc")[0].open = false; kpOpen.clear(); kpSelect("YOKTUR123"); ok("kokpit_gecersiz_kod_temizler", kpSym === null);
+    kpSelect(kpS.name); ok("kokpit_aranan_hisse_kalici_saklanmaz", kpSym === kpS.name && store.get("kpSym", null) === null); kpSelect("YOKTUR123");
+    show("dashboard"); document.querySelector('.nav a[data-view="kokpit"]').click(); ok("kokpit_menuden_girince_secim_sifirlanir", kpSym === null);
+    kpSelect(kpS.name); document.querySelector('.nav a[data-view="kokpit"]').click(); ok("kokpit_menu_tiklayinca_secili_hisse_temizlenir", kpSym === null && $("kpBody").innerHTML.indexOf("Bir hisse se") >= 0);
+    openDetail(kpS.name); ok("yan_panel_tam_ekran_dugmesi_var", !!$("dFull") && !$("drawer").classList.contains("full") && $("dFull").getAttribute("aria-pressed") === "false");
+    $("dFull").click(); ok("yan_panel_tam_ekran_acilir", $("drawer").classList.contains("full") && $("dFull").getAttribute("aria-pressed") === "true" && $("drawer").classList.contains("open"));
+    $("dFull").click(); ok("yan_panel_tam_ekran_geri_doner", !$("drawer").classList.contains("full") && $("drawer").classList.contains("open"));
+    $("dFull").click(); closeDetail(); ok("yan_panel_kapaninca_tam_ekran_sifirlanir", !$("drawer").classList.contains("full") && !$("drawer").classList.contains("open"));
     /* ---- Wow katmanı: karar yolu, güven rozeti, kart, palet, şeffaflık, tahmin defteri ---- */
     kpSelect(kpS.name); var wk = $("kpBody").innerHTML;
     ok("wow_karar_yolu", wk.indexOf("Mühür nasıl çıktı?") >= 0 && wk.indexOf("Hata Avcısı") >= 0 && wk.indexOf("kpstep") >= 0);
