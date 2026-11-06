@@ -65,6 +65,19 @@ ok("şüpheci: yalnız oy birliği (başka kusur yok) onayı engellemez, çekinc
 k = sk(Object.assign({}, clean, {sector: "S"}), rr([1, 0, 1, 0]), {p: {pos: [{sector: "S"}, {sector: "S"}]}, mg: {level: 0}});
 ok("şüpheci: portföyde aynı sektörden 2 pozisyon = hafif çekince", k.soft.some(t => /aynı sektör/.test(t)), JSON.stringify(k));
 
+run(`(() => { let z = 7; const rnd = () => { z = (z * 16807) % 2147483647; return z / 2147483647 - 0.5; };
+  const mk = (base, noise) => { let p = 100; return base.map(b => (p *= 1 + b + noise * rnd())); };
+  const f = Array.from({length: 70}, () => 0.03 * rnd());
+  HIST.stocks.KRA = {closes: mk(f, 0.002)}; HIST.stocks.KRB = {closes: mk(f, 0.002)}; HIST.stocks.KRC = {closes: mk(f, 0.002)}; HIST.stocks.KRD = {closes: mk(Array.from({length: 70}, () => 0.03 * rnd()), 0)};
+})()`);
+k = sk(Object.assign({}, clean, {name: "KRA", sector: "A"}), rr([1, 0, 1, 0]), {p: {pos: [{n: "KRB", sector: "B"}, {n: "KRC", sector: "C"}]}, mg: {level: 0}});
+ok("şüpheci: portföydeki 2 pozisyonla yüksek fiyat korelasyonu (farklı sektör) = hafif çekince", k.soft.some(t => /yüksek fiyat korelasyonu/.test(t)) && !k.hard.some(t => /korelasyon/.test(t)), JSON.stringify(k));
+k = sk(Object.assign({}, clean, {name: "KRA", sector: "A"}), rr([1, 0, 1, 0]), {p: {pos: [{n: "KRB", sector: "B"}, {n: "KRD", sector: "D"}]}, mg: {level: 0}});
+ok("şüpheci: yalnız 1 yüksek korelasyonlu pozisyon çekince değil", !k.soft.some(t => /korelasyon/.test(t)), JSON.stringify(k));
+k = sk(Object.assign({}, clean, {name: "KRD", sector: "D"}), rr([1, 0, 1, 0]), {p: {pos: [{n: "KRB", sector: "B"}, {n: "KRC", sector: "C"}]}, mg: {level: 0}});
+ok("şüpheci: bağımsız hareketli aday korelasyon çekincesi almaz", !k.soft.some(t => /korelasyon/.test(t)), JSON.stringify(k));
+k = sk(Object.assign({}, clean, {name: "KRA", sector: "A", rsi: 75}), rr([1, 0, 1, 0]), {p: {pos: [{n: "KRB", sector: "B"}, {n: "KRC", sector: "C"}]}, mg: {level: 0}});
+ok("şüpheci: korelasyon çekincesi + başka çekince = ret", !k.ok, JSON.stringify(k));
 k = sk(clean, rr([1, 0, 1, 0]), {}, {trend: "bear"});
 ok("şüpheci: ayı rejimi hafif çekince olarak sayılır (tek başına engellemez)", k.ok && k.soft.some(t => /ayı/.test(t)), JSON.stringify(k));
 k = sk(Object.assign({}, clean, {rsi: 75}), rr([1, 0, 1, 0]), {}, {trend: "bear"});

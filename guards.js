@@ -7,7 +7,7 @@
    3) Sağlık Tarayıcı (healthScan): seans içinde açık pozisyonları tarar; stop altı fiyat ya da olumsuz haber gelirse pozisyonu kapatır/yarıya indirir.
    4) Hata Hafızası (memRecord/memCheck): kapanan her işlemin gerekçesi ve bağlamı kaydedilir; benzer tuzaklar yeni alımlarda uyarı/ret üretir.
    Her ret ve onayın ileri 5/10 günlük sonucu ölçülür (decStats): Şüpheci/Kalkan gerçekten işe yarıyor mu, yoksa fazla mı katı, rakamla görünür. */
-const GUARD = {macroForce: false, volT: 1.64, chase: 8, rsiHard: 82, rsiSoft: 70, ext: 25, atr: 6, fomo: 40, sector: 2, coolDays: 10, memMin: 8, memBlock: 0.75, healthEvery: 30, softMax: 2, bearRs: 50};
+const GUARD = {macroForce: false, volT: 1.64, chase: 8, rsiHard: 82, rsiSoft: 70, ext: 25, atr: 6, fomo: 40, sector: 2, coolDays: 10, memMin: 8, memBlock: 0.75, healthEvery: 30, softMax: 2, bearRs: 50, corrHi: 0.6, corrN: 2};
 let AIX = null, GST = null, GDATE = null, GMG = null;
 const dayDiff = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
 const capArr = (arr, n) => { if (arr.length > n) arr.splice(0, arr.length - n); };
@@ -100,6 +100,14 @@ function skeptic(s, r, x) {
      RS bilinmiyorsa eski tutucu davranış sürer. Karar günlüğü (decStats) bunu canlı sınar. */
   if (REGIME && REGIME.trend === "bear" && (s.rs == null || s.rs < GUARD.bearRs)) soft.push(s.rs == null ? "Piyasa rejimi ayı (göreceli güç bilinmiyor)" : `Piyasa rejimi ayı ve zayıf göreceli güç (RS ${fmt(s.rs, 0)})`);
   if (x.p && x.p.pos.filter(y => y.sector === s.sector).length >= GUARD.sector) soft.push(`Portföyde aynı sektörden zaten ${GUARD.sector}+ pozisyon var`);
+  /* Korelasyon çeşitlendirme: aynı sektör olmasa da fiyatı birlikte hareket eden pozisyonlar tek risk faktörü gibi davranır (portföy geriye testi: 10'lu RS portföyünde ortalama ikili ρ ≈ 0,25;
+     bağımsız varsayım portföy riskini ~2,4 kat küçümsüyor). Aday, portföydeki ≥ corrN pozisyonla 60 günlük ρ ≥ corrHi ise çekince. Eşikler yargıdır; karar günlüğü sınar. */
+  if (x.p && x.p.pos.length >= GUARD.corrN) {
+    const ra = retsOf(s.name); if (ra) {
+      const hi = x.p.pos.filter(y => y.n !== s.name).map(y => { const rb = retsOf(y.n); return rb && rb.length === ra.length ? {n: y.n, c: corr2(ra, rb)} : null; }).filter(y => y && y.c >= GUARD.corrHi);
+      if (hi.length >= GUARD.corrN) soft.push(`Portföydeki ${hi.length} pozisyonla yüksek fiyat korelasyonu (${hi.slice(0, 3).map(y => y.n + " ρ" + fmt(y.c, 2)).join(", ")}): aynı risk faktörü yoğunlaşması`);
+    }
+  }
   if (x.mg && x.mg.level >= 2 && s.beta != null && s.beta > 1.3) soft.push(`Makro ${x.mg.name} iken yüksek beta (${fmt(s.beta, 2)})`);
   const days = s.nextEarn ? (s.nextEarn * 1000 - NOW) / 864e5 : null; if (days != null && days >= -1 && days <= 5) soft.push("Bilanço 5 gün içinde (sürpriz riski)");
   const ok = hard.length === 0 && soft.length < GUARD.softMax;
