@@ -46,9 +46,11 @@ jobs:
           if [ -n "$(git status --porcelain history.json ohlcv.json candles.json)" ]; then
             git config user.name "tradingofis-bot"
             git config user.email "bot@users.noreply.github.com"
-            git add history.json ohlcv.json candles.json
+            # extdata.py ayni calismada viop/newsmood/geo dosyalarini da degistirir; bunlar eklenmezse "git pull --rebase" kirli agac yuzunden durur,
+            # push edilemeyince her sonraki calisma ayni hatayi tekrarlar (23-24 Kasim'da 14 calisma ust uste basarisiz oldu).
+            for f in history.json ohlcv.json candles.json viop.json newsmood.json newsmood_log.json geo.json; do [ -e "$f" ] && git add "$f"; done
             git commit -m "history.json guncellendi"
-            git pull --rebase origin main
+            git pull --rebase --autostash origin main
             git push
           fi
       - uses: actions/setup-node@v4
@@ -82,7 +84,7 @@ jobs:
             git config user.email "bot@users.noreply.github.com"
             git add $FILES
             git commit -m "karne/portfoy kaydi guncellendi"
-            git pull --rebase origin main
+            git pull --rebase --autostash origin main
             git push
           fi
       - name: Telegram uyarisi (TELEGRAM_BOT_TOKEN ve TELEGRAM_CHAT_ID tanimliysa)
