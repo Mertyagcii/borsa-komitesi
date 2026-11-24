@@ -46,7 +46,21 @@ for n, rec in out["s"].items():
         if not all(q[i] < q[i + 1] for i in range(4)) or not all(0 <= p <= 1 for p in f[5:]) or q[0] <= -100:
             bad += 1
 chk("yüzdelikler artan, olasılıklar 0-1, düşüş %100'ü geçmez", bad == 0)
-chk("endeks (XU100) satırı üretildi", "XU100" in out["s"] and set(out["s"]["XU100"]["f"]) == {"5", "21", "126", "252"})
+chk("endeks (XU100) satırı üretildi", "XU100" in out["s"] and set(out["s"]["XU100"]["f"]) == {"1", "5", "21", "126", "252"})
+m1 = out["horizons"]["1"]
+chk(f"günlük ufuk (1 gün) üretiliyor, çok bağımsız gözlemle sınanır ve kapsama hedefe yakın -> {m1['cov80Oos']}", m1["n_eff"] > 200 and 0.70 <= m1["cov80Oos"] <= 0.90)
+chk("günlük ufukta bağımsız pencere sayısı kaynak sayısını aşmaz (3 günde bir örnekleme şişirmez)", m1["n_eff"] <= m1["origins"])
+
+# hisse başına geçmiş doğruluk ("c"): biçim ve dürüstlük
+cc = [(n, rec["c"]) for n, rec in out["s"].items() if "c" in rec]
+chk("hisse başına doğruluk kaydı büyük çoğunlukta var", len(cc) >= 0.9 * len(out["s"]))
+okc = all(0 <= v[0] <= 1 and v[1] > 0 and (v[2] is None or 0 <= v[2] <= 1) for _, c in cc for v in c.values())
+chk("kapsama oranları 0-1, bağımsız pencere sayısı pozitif", okc)
+chk("hisse başına bağımsız pencere, ufuk uzadıkça azalır (1g > 21g > 252g)", all(("252" not in c) or c["1"][1] > c["21"][1] > c["252"][1] for _, c in cc if "1" in c and "21" in c))
+med21 = float(np.median([c["21"][0] for _, c in cc if "21" in c]))
+chk(f"saf sentetik dünyada hisse başına %80 aralık medyan kapsama ≈ %80 ({med21:.3f})", 0.72 <= med21 <= 0.88)
+sd5 = float(np.std([c["5"][0] for _, c in cc if "5" in c]))
+chk(f"haftalık ufukta hisseler arası kapsama dağılımı, örnekleme gürültüsü kadar (sd={sd5:.3f} < 0.06; hisseye özgü sahte fark üretmez)", sd5 < 0.06)
 
 # oynak hissenin bandı daha geniş
 i_lo, i_hi = int(np.argmin(vols)), int(np.argmax(vols))

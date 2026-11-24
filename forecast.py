@@ -24,7 +24,8 @@ import numpy as np
 HERE = Path(__file__).parent
 OUT = HERE / "forecast.json"
 TR = timezone(timedelta(hours=3))
-HORIZONS = {5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"}
+HORIZONS = {1: "Günlük", 5: "Haftalık", 21: "Aylık", 126: "6 aylık", 252: "Yıllık"}
+STEP = 3            # sınama kaynakları 3 günde bir alınır (kesişen pencereler bağımsız değildir; n_eff buna göre)
 QS = (10, 25, 50, 75, 90)
 MIN_HIST = 120      # oynaklık için en az gün
 LAM = 0.94          # EWMA
@@ -120,8 +121,24 @@ def backtest(C, sig, Z, h, cols, ks, step=3):
             per_k[k] = (np.mean((F >= lo80)[ok] & (F <= hi80)[ok]), np.mean((F >= lo50)[ok] & (F <= hi50)[ok]))
         up_pred = float(np.mean(P > 0))
         up_real = float(np.mean((F > 0)[ok]))
-        rows.append((t, per_k, up_pred, up_real))
+        rows.append((t, per_k, up_pred, up_real, qz0, s_t, F, ok))
     return rows
+
+
+def stock_coverage(rows, k_all, k_first, mid, n_cols):
+    """Hisse başına geçmiş kaplama: o hissenin gerçekleşen getirisi, o günkü %80 aralığın içinde kaldı mı?
+    (tümü: son k ile; örneklem dışı: yalnız ikinci yarı, ilk yarıdan seçilen k ile). Dönüş: (hit_all, n_all, hit_oos, n_oos) her biri (n_cols,)."""
+    ha, na, ho, no = (np.zeros(n_cols) for _ in range(4))
+    for t, _, _, _, qz0, s_t, F, ok in rows:
+        zm = qz0[2]
+        qa = zm + k_all * (qz0 - zm)
+        ha += ((F >= qa[0] * s_t) & (F <= qa[4] * s_t) & ok)
+        na += ok
+        if t >= mid:
+            qo = zm + k_first * (qz0 - zm)
+            ho += ((F >= qo[0] * s_t) & (F <= qo[4] * s_t) & ok)
+            no += ok
+    return ha, na, ho, no
 
 
 def cov(rows, k, a, b):
@@ -162,19 +179,20 @@ def cpi_daily(dates, cpi):
     return np.exp(out)
 
 
-def _engine(C, dates, ncols, label_names):
-    """Tek bir fiyat matrisi (T, N+1; son sütun endeks) için ufuk başına sınama özeti + bugünkü bantlar."""
+def _engine(C, dates, ncols, label_names, stock_acc=False):
+    """Tek bir fiyat matrisi (T, N+1; son sütun endeks) için ufuk başına sınama özeti + bugünkü bantlar.
+    stock_acc=True: her hisse için geçmiş %80 aralık kaplaması da hesaplanır (kayıtta "c")."""
     T = C.shape[0]
     R = np.diff(np.log(C), axis=0)
     sig = sigma_series(R)
     cols = list(range(ncols))   # havuza endeks girmez
     ks = [round(0.6 + 0.05 * i, 2) for i in range(0, 25)]
-    meta_all, results = {}, {}
+    meta_all, results, sacc = {}, {}, {}
     for h, label in HORIZONS.items():
         Z = standardized(C, sig, h)
         rows = backtest(C, sig, Z, h, cols, ks)
         n_o = len(rows)
-        meta = {"label": label, "days": h, "origins": n_o, "n_eff": round(n_o * 3 / h, 1) if n_o else 0}
+        meta = {"label": label, "days": h, "origins": n_o, "n_eff": round(min(n_o, n_o * STEP / h), 1) if n_o else 0}
         if n_o >= 12:
             ts = [r[0] for r in rows]
             mid = ts[len(ts) // 2]
@@ -188,6 +206,8 @@ def _engine(C, dates, ncols, label_names):
                         upPred=round(float(np.mean([r[2] for r in rows])), 3), upReal=round(float(np.mean([r[3] for r in rows])), 3),
                         first=dates[ts[0]], last=dates[ts[-1]])
             meta["confidence"] = confidence(meta["n_eff"], meta["cov80Oos"])
+            if stock_acc:
+                sacc[h] = stock_coverage(rows, k, k1, mid, C.shape[1])
         else:
             k = 1.0
             meta["confidence"] = "doğrulanamadı"
@@ -210,6 +230,14 @@ def _engine(C, dates, ncols, label_names):
             L, pl, pg, pup = res
             f[str(h)] = [round(float((math.exp(x) - 1) * 100), 1) for x in L[i]] + [round(float(pl[i]), 3), round(float(pg[i]), 3), round(float(pup[i]), 3)]
         recs[n] = {"p": round(float(last[i]), 2), "v": round(float(sig[-1][i] * math.sqrt(252) * 100), 1), "f": f}
+        if stock_acc:
+            c = {}
+            for h, (ha, na, ho, no) in sacc.items():
+                if na[i] >= 12:
+                    ne, neo = min(na[i], na[i] * STEP / h), min(no[i], no[i] * STEP / h)
+                    c[str(h)] = [round(float(ha[i] / na[i]), 3), round(float(ne), 1)] + ([round(float(ho[i] / no[i]), 3), round(float(neo), 1)] if no[i] >= 6 else [None, None])
+            if c:
+                recs[n]["c"] = c
     return meta_all, recs
 
 
@@ -226,7 +254,7 @@ def run(ohlcv, now=None, long=None):
     names, C = _matrix(ohlcv)
     out = {"generated": (now or datetime.now(TR)).strftime("%Y-%m-%d %H:%M"), "to": dates[-1], "from": dates[0], "days": C.shape[0],
            "stocks": len(names), "horizons": {}, "s": {}}
-    out["horizons"], recs = _engine(C, dates, len(names), names + ["XU100"])
+    out["horizons"], recs = _engine(C, dates, len(names), names + ["XU100"], stock_acc=True)
     out["s"] = recs
     out["modes"] = {"n": "Nominal TL"}
     # Endekse göre: hisse/BIST 100 oranı aynı sınanmış motordan geçer ("piyasayı yener mi?"); P(yukarı) = endeksi yenme olasılığı

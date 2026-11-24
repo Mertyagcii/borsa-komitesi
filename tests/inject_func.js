@@ -157,6 +157,19 @@ setTimeout(async function () {
     var ogn = Object.keys(FORECAST.s).filter(function (k) { return k !== "XU100"; })[0]; ogSym = ogn; renderOngoru(); ok("og_hisse_secimi", $("ogView").innerHTML.indexOf("<b>" + ogn + "</b>") >= 0 || $("ogView").innerHTML.indexOf(ogn + " <span") >= 0);
     ogH = 126; ogSort = "loss"; renderOngoru(); ok("og_ufuk_ve_siralama", $("ogView").innerHTML.indexOf("6 aylık (126 iş günü)") >= 0 && $("ogView").innerHTML.indexOf('data-og="') >= 0);
     var ogk = UNIVERSE.filter(function (s) { return s.ok && FORECAST.s[s.name]; })[0]; ok("og_kokpit_karti", !!ogk && kpOutlook(ogk).indexOf("Olası fiyat aralığı") >= 0 && kpOutlook(ogk).indexOf("fiyat hedefi değil") >= 0);
+    /* ---- Olasilik tahmini + hisse bazli dogruluk: Kokpit, yan panel, Zaman Taramasi, Tarama Senaryolari ---- */
+    var okh = kpOutlook(ogk), fa = fcAcc(ogk.name, 21);
+    ok("tahmin_gunluk_ufuk_var", !!FORECAST.horizons["1"] && !!FORECAST.s[ogk.name].f["1"] && okh.indexOf("Günlük") >= 0);
+    ok("tahmin_hisse_dogruluk_hucresi", !!fa && fa.cov >= 0 && fa.cov <= 1 && fa.lo <= fa.cov && fa.cov <= fa.hi && fcAccCell(ogk.name, 21).indexOf("%") >= 0 && fcAccCell(ogk.name, 21).indexOf("NaN") < 0);
+    ok("tahmin_yetersiz_ornek_isaretlenir", (function () { var z = FORECAST.s[ogk.name].c; var c0 = z["252"]; return !c0 || c0[1] >= 10 || fcAccCell(ogk.name, 252).indexOf("yetersiz") >= 0; })());
+    ok("tahmin_kokpit_olasilik_ve_dogruluk", okh.indexOf("Yukarı olasılığı") >= 0 && okh.indexOf("Bu hissede geçmişte tuttu") >= 0 && okh.indexOf("hisseye özel yön iddiası yoktur") >= 0 && okh.indexOf("NaN") < 0 && okh.indexOf("undefined") < 0);
+    openDetail(ogk.name); ok("tahmin_yan_panelde_var", $("detail").innerHTML.indexOf("Olası fiyat aralığı ve olasılıklar") >= 0 && $("detail").innerHTML.indexOf("Bu hissede geçmişte tuttu") >= 0); closeDetail();
+    ogSym = ogk.name; ogMode = "n"; ogH = 21; renderOngoru(); ok("tahmin_gelecek_gorunumu_hisse_dogrulugu", $("ogView").innerHTML.indexOf("Bu hissede geçmişte tuttu") >= 0 && $("ogView").innerHTML.indexOf('data-ogt="1"') >= 0 && $("ogView").innerHTML.indexOf("<b>Günlük</b>") >= 0);
+    var zt0 = zTab, zh0 = zHz, zmn0 = zMin; zHz = 0; zMin = 1;
+    zTab = "gun"; renderZaman(); var zg = $("zView").innerHTML; zTab = "hafta"; renderZaman(); var zw = $("zView").innerHTML; zTab = "ay"; renderZaman(); var zm = $("zView").innerHTML;
+    ok("tahmin_zaman_taramasi_gunluk_haftalik_aylik", (zg.indexOf("Olası %80 aralık (Günlük)") >= 0 || zg.indexOf("hisse yok") >= 0) && (zw.indexOf("Olası %80 aralık (Haftalık)") >= 0 || zw.indexOf("hisse yok") >= 0) && (zm.indexOf("Olası %80 aralık (Aylık)") >= 0 || zm.indexOf("hisse yok") >= 0) && zg.indexOf("NaN") < 0 && zw.indexOf("undefined") < 0);
+    zHz = 126; zTab = "uyum"; renderZaman(); ok("tahmin_zaman_ufuk_secimi", $("zView").innerHTML.indexOf("(6 aylık)") >= 0 || $("zView").innerHTML.indexOf("hisse yok") >= 0); zHz = zh0; zTab = zt0; zMin = zmn0; store.set("zHz", 0);
+    ok("tahmin_tarama_senaryolari_hucreleri", fcRowCells(ogk, 5).indexOf("<td>") >= 0 && fcRowCells(ogk, 5).indexOf("NaN") < 0 && SCAN_HZ.gunluk === 1 && SCAN_HZ.haftalik === 5 && SCAN_HZ.aylik === 21 && fcRowCells({name: "YOKHISSE"}, 5).indexOf("–") >= 0);
     ok("og_canli_karne", !!FCLIVE && $("ogView").innerHTML.indexOf("Canlı karne") >= 0 && $("ogView").innerHTML.indexOf("hafta sayısıdır") >= 0);
     ok("uzun_teknik_ve_polis", !!TECHSEAL_L && kpTechLong().indexOf("10 yıllık sağlamlık") >= 0 && !!POLICE && sfPolice().indexOf("Veri Polisi") >= 0 && sfPolice().indexOf("Hayatta kalma yanlılığı") >= 0);
     ok("og_modlar", !!FORECAST.modes && !!FORECAST.modes.r && !!FORECAST.modes.d);
