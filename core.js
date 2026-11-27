@@ -233,10 +233,9 @@ function computeSectorStats(uni) {
   const g = {};
   uni.filter(s => s.ok && s.rs != null && s.tl >= 10).forEach(s => { (g[s.sector || "Diğer"] = g[s.sector || "Diğer"] || []).push(s); });
   const med = a => { const b = a.filter(x => x != null && !Number.isNaN(x)).sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : null; };
-  const ratio = (a, fn) => { const r = a.map(fn).filter(x => x != null && Number.isFinite(x) && x > 0.05 && x < 20); return r.length >= 5 ? med(r) : null; };
   const rows = Object.entries(g).filter(([, a]) => a.length >= 3).map(([name, a]) => ({name, n: a.length,
     peArr: a.map(s => s.pe > 0 ? s.pe : null).filter(x => x != null).sort((x, y) => x - y), pbArr: a.map(s => s.pb > 0 ? s.pb : null).filter(x => x != null).sort((x, y) => x - y),
-    kEps: ratio(a, s => { const f = intrinsic(s).fvEps; return f > 0 ? s.close / f : null; }), kRoe: ratio(a, s => { const q = roePbValue(s, intrinsic(s)); return q ? s.close / q.v : null; }), rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
+    rs: med(a.map(s => s.rs)), p1m: med(a.map(s => s.p1m)), p3m: med(a.map(s => s.p3m)), above: a.filter(s => s.close > s.sma50).length / a.length * 100, medPe: med(a.map(s => s.pe > 0 ? s.pe : null)), medPb: med(a.map(s => s.pb > 0 ? s.pb : null)), medRoe: med(a.map(s => s.roe))}));
   rows.sort((x, y) => y.rs - x.rs); rows.forEach((r, i) => { r.rank = i + 1; });
   SECTOR_STATS = Object.fromEntries(rows.map(r => [r.name, {...r, total: rows.length}]));
   return rows;
@@ -252,7 +251,10 @@ function computeSectorStats(uni) {
    İki tahmin: kazanç (EPS) ve sahip kazancı (FCF/hisse; banka dışı). Buffett için temkinli olan (küçük olan) alınır. */
 function intrinsic(s) {
   const m = macro(), rNom = m.rf + m.erp, rReal = (1 + m.rf) / (1 + m.infl) - 1 + m.erp, fin = isFin(s); // reel risksiz getiri + hisse risk primi
-  const epsgReal = s.epsg != null && Math.abs(s.epsg) <= 200 ? s.epsg / 100 : null; // TMS 29 (enflasyon muhasebesi) sonrası bilanço rakamları cari satın alma gücüyle yeniden ifade edilir: büyüme zaten reel kabul edilir
+  /* Yıllık büyüme oranları NOMİNALDİR (ölçüm: TÜFE %29,8 iken sanayide medyan satış büyümesi %32,6, EPS büyümesi %57; reel olsaydı medyan %33 reel büyüme demek olurdu). Oranlar (ROE, marj, F/K, PD/DD) aynı dönem
+     birimlerinde olduğundan tutarlıdır, ama iki dönemi karşılaştıran büyüme oranı enflasyonu içerir: reele çevrilir. (Önceki sürüm bunu zaten reel sayıp büyümeyi şişiriyordu: g tavanı %4'e çok sık dayanıyor,
+     adil çarpan ~19'a çıkıyor ve kazanç değeri fiyatın medyan 1,4 katı çıkıyordu.) */
+  const epsgReal = s.epsg != null && Math.abs(s.epsg) <= 200 ? (1 + s.epsg / 100) / (1 + m.infl) - 1 : null;
   const gMax = (R.gMax ?? 4) / 100, gMin = (R.gMin ?? -2) / 100, gK = R.gK ?? 0.35;
   const g = Math.max(gMin, Math.min(gMax, epsgReal == null ? 0 : gK * epsgReal));
   const mult = rReal - g > 0.01 ? Math.max(3, Math.min(20, (1 + g) / (rReal - g))) : 20;
@@ -265,9 +267,14 @@ function intrinsic(s) {
   return out;
 }
 /* Duyarlılık: adil değer iskonto oranı ve büyümeye çok duyarlıdır; ±2 puanlık değişimle kazanç değeri nasıl oynuyor? */
-function roePbValue(s, iv) { // gerekçeli PD/DD: sürdürülebilir ROE (TMS 29 sonrası reel kabul; yarı yarıya iskonto oranına sönümlü)
-  const book = s.bvps > 0 ? s.bvps : null; if (!(book && s.roe != null && s.roe > 0 && s.roe < 200)) return null;
-  const roeS = 0.5 * s.roe / 100 + 0.5 * iv.r, pbJ = Math.max(0.2, Math.min(4, (roeS - iv.g) / (iv.r - iv.g)));
+function roeRealPct(s) { // reel ROE (%): sanayide raporlanan ROE (kâr / özkaynak aynı dönem biriminde) reel okunur; piyasa sanayide PD/DD = 1 eşiğini ROE ≈ %10-17'de koyuyor, nominal %40'ta değil.
+  // Finans/banka ROE'si nominaldir (parasal kalemler: piyasa bankaları ROE %20-45'te bile defter altında fiyatlıyor): enflasyon düşülür.
+  if (s.roe == null) return null; const m = macro();
+  return isFin(s) ? ((1 + s.roe / 100) / (1 + m.infl) - 1) * 100 : s.roe;
+}
+function roePbValue(s, iv) { // gerekçeli PD/DD: sürdürülebilir reel ROE (yarı yarıya reel iskonto oranına sönümlü)
+  const book = s.bvps > 0 ? s.bvps : null, roeR = roeRealPct(s); if (!(book && roeR != null && s.roe > 0 && s.roe < 200)) return null;
+  const roeS = 0.5 * roeR / 100 + 0.5 * iv.r, pbJ = Math.max(0.2, Math.min(4, (roeS - iv.g) / (iv.r - iv.g)));
   return {v: pbJ * book, roeS, pbJ};
 }
 function valSens(s) {
@@ -281,14 +288,13 @@ function valSens(s) {
    Manda: anlayabileceği, kârlı, yeterince büyük işletmeler. Kalite + fiyat disiplini; neredeyse hiç satmaz. */
 function buffett(s) {
   const m = macro(), fin = isFin(s), iv = intrinsic(s);
-  const real = x => x == null ? null : ((1 + x / 100) / (1 + m.infl) - 1) * 100;
-  const roeReal = real(s.roe), nd = s.debt != null && s.ebitda > 0 ? (s.debt - (s.cash || 0)) / s.ebitda : null;
+  const roeReal = roeRealPct(s), nd = s.debt != null && s.ebitda > 0 ? (s.debt - (s.cash || 0)) / s.ebitda : null;
   const ey = s.pe > 0 ? 100 / s.pe : null, fcfy = !fin && s.fcf != null && s.mcap > 0 ? s.fcf / s.mcap * 100 : null;
   const gyo = /GYO$/.test(s.name); // GYO kazancı çoğunlukla değer artışıdır, işletme kazancı değildir
   const inCircle = s.mcap >= R.bMcap * 1e9 && s.eps > 0 && !gyo;
   const checks = [
     chk(inCircle, `Yeterince büyük, kârlı ve anlaşılır işletme (piyasa değeri ≥ ${R.bMcap} mlr TL, EPS > 0, GYO değil)`, gyo ? "GYO: kazanç değer artışı kaynaklı" : `${s.mcap ? fmt(s.mcap / 1e9, 0) + " mlr TL" : "–"}, EPS ${fmt(s.eps)}`),
-    chk(roeReal == null ? null : roeReal >= R.bRoe, `Reel özsermaye getirisi ≥ %${R.bRoe} (enflasyon düşülmüş)`, `${pc(s.roe)} nominal → ${pc(roeReal)} reel`),
+    chk(roeReal == null ? null : roeReal >= R.bRoe, `Reel özsermaye getirisi ≥ %${R.bRoe} (sanayide raporlanan ROE reel okunur; finansta enflasyon düşülür)`, fin ? `${pc(s.roe)} nominal → ${pc(roeReal)} reel` : `${pc(s.roe)} (raporlanan, reel okunur)`),
     chk(s.nm == null || s.nm > 100 ? null : s.nm >= R.bNm, `Net kâr marjı ≥ %${R.bNm}`, s.nm > 100 ? `anormal (${pc(s.nm)})` : pc(s.nm)),
     chk(fin || s.gm == null ? null : s.gm >= R.bGm, `Brüt marj ≥ %${R.bGm} (fiyatlama gücü vekili)`, fin ? "banka/finans: geçerli değil" : pc(s.gm)),
     chk(fin || s.de == null ? null : s.de <= R.bDe && (nd == null || nd <= 2.5), `Borç/Özsermaye ≤ ${R.bDe} ve net borç/FAVÖK ≤ 2,5`, fin ? "banka/finans: geçerli değil" : `${fmt(s.de)} / ${nd == null ? "–" : fmt(nd, 1)}`),
@@ -776,26 +782,30 @@ function dataHealth(ageMin) {
   return {score: Math.max(0, score), label: score >= 85 ? "İYİ" : score >= 60 ? "DİKKAT" : "KÖTÜ", issues, mtfCov, cmfCov, n: act.length};
 }
 
-/* ---------- Değer tablosu: defter değeri, şu anki değer, olması gereken değer ----------
-   Altı yöntem (varsa): kazanç değeri, nakit akışı değeri, gerekçeli PD/DD (reel ROE), Graham sayısı, sektör medyan F/K ve PD/DD çarpanları.
-   "Olması gereken değer" = yöntemlerin medyanı; aralık = en düşük–en yüksek. Yöntemler birbirinden çok farklıysa güven düşüktür. */
+/* ---------- Değer tablosu: defter değeri, şu anki değer, model değeri ----------
+   Bağımsız yöntemler (hissenin kendi verisi): kazanç değeri, nakit akışı değeri, gerekçeli PD/DD (reel ROE), Graham sayısı. Adil (model) değer = bunların medyanı; aralık = en düşük–en yüksek.
+   Sektör medyan F/K ve PD/DD çarpanları ayrı "karşılaştırma" bilgisidir (rel), medyana katılmaz. Bağımsız yöntem yoksa (kazanç/nakit akışı yok) değer HESAPLANAMAZ (fair = null). */
 function valuation(s) {
   const iv = intrinsic(s), gn = graham(s), st = SECTOR_STATS[s.sector || "Diğer"], book = s.bvps > 0 ? s.bvps : null, m = [];
   if (iv.fvEps != null) m.push({id: "eps", l: `Kazanç değeri (EPS × adil çarpan ${fmt(iv.mult, 1)}; reel iskonto %${fmt(iv.r * 100, 1)}, reel büyüme %${fmt(iv.g * 100, 1)})`, v: iv.fvEps});
   if (iv.fvOe != null) m.push({id: "fcf", l: `Nakit akışı değeri (serbest nakit akışı/hisse × ${fmt(iv.mult, 1)})`, v: iv.fvOe});
   const rp = roePbValue(s, iv);
   if (rp) m.push({id: "roepb", l: `Gerekçeli PD/DD (sürdürülebilir ROE %${fmt(rp.roeS * 100, 1)}; ${fmt(rp.pbJ, 2)}x) × defter değeri`, v: rp.v});
-  // Sektör kalibreli yöntemler: piyasa bu sektöre mutlak modelin kaç katını ödüyor? Hisse, sektörünün seviyesine büyüme/kârlılık farkıyla ayarlanarak değerlenir.
-  if (st && st.kEps && iv.fvEps != null) m.push({id: "sec_eps", l: `Sektör kalibreli kazanç değeri (piyasa bu sektöre modelin ${fmt(st.kEps, 2)} katını ödüyor)`, v: iv.fvEps * st.kEps});
-  if (st && st.kRoe && rp) m.push({id: "sec_roe", l: `Sektör kalibreli gerekçeli PD/DD (piyasa modelin ${fmt(st.kRoe, 2)} katını ödüyor)`, v: rp.v * st.kRoe});
-  if (gn != null) m.push({id: "graham", l: "Graham sayısı (√(22,5 × EPS × defter değeri))", v: gn});
-  if (st && st.medPe > 0 && s.eps > 0) m.push({id: "pe", l: `Sektör medyan F/K (${fmt(st.medPe, 1)}) × EPS`, v: st.medPe * s.eps});
-  if (st && st.medPb > 0 && book) m.push({id: "pb", l: `Sektör medyan PD/DD (${fmt(st.medPb, 2)}) × defter değeri`, v: st.medPb * book});
-  const vals = m.map(x => x.v).filter(x => x > 0).sort((a, b) => a - b);
-  const mid = vals.length ? (vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2) : null;
-  const spread = vals.length >= 2 ? vals[vals.length - 1] / vals[0] : null;
-  return {book, price: s.close, pbNow: book ? s.close / book : null, methods: m, lo: vals.length ? vals[0] : null, hi: vals.length ? vals[vals.length - 1] : null, fair: mid,
-    upside: mid ? (mid / s.close - 1) * 100 : null, bookUpside: book ? (book / s.close - 1) * 100 : null, confidence: spread == null ? "az yöntem" : spread < 1.6 ? "yüksek" : spread < 3 ? "orta" : "düşük"};
+  /* Yukarıdakiler BAĞIMSIZ yöntemlerdir (aynı reel iskonto/büyüme çerçevesi: kazanç, nakit akışı, ROE'li PD/DD) (hissenin kendi kazancı, nakit akışı, ROE'si): adil değer yalnız bunların ortancasıdır.
+     Aşağıdaki sektör çarpanları ise piyasanın kendisine bakar ("sektör neyse o"): karşılaştırma bilgisidir (rel), adil değere KATILMAZ; aksi halde ölçüt kendi kendini doğrular ve
+     kazancı olmayan hisse bile "defter × sektör PD/DD" ile değer alırdı. (Önceki sürümdeki "sektör kalibreli" iki yöntem modeli piyasaya göre ayarlıyordu: kaldırıldı.) */
+  const absN = m.length;
+  // Graham sayısı: sabit 22,5 çarpanı (F/K 15 × PD/DD 1,5) düşük faizli ABD piyasasının kuralıdır; faiz/enflasyon rejimine uymaz (BIST'te hisselerin çoğuna "ucuz" der: medyan fiyatın 1,7 katı). Bilgi olarak gösterilir, medyana katılmaz.
+  if (gn != null) m.push({id: "graham", rel: true, l: "Graham sayısı (√(22,5 × EPS × defter değeri)); tarihsel kural, faiz rejimine uymaz: bilgi", v: gn});
+  if (st && st.medPe > 0 && s.eps > 0) m.push({id: "pe", rel: true, l: `Sektör medyan F/K (${fmt(st.medPe, 1)}) × EPS`, v: st.medPe * s.eps});
+  if (st && st.medPb > 0 && book) m.push({id: "pb", rel: true, l: `Sektör medyan PD/DD (${fmt(st.medPb, 2)}) × defter değeri`, v: st.medPb * book});
+  const med = a => a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : null;
+  const vals = m.filter(x => !x.rel).map(x => x.v).filter(x => x > 0).sort((a, b) => a - b), rv = m.filter(x => x.rel).map(x => x.v).filter(x => x > 0).sort((a, b) => a - b);
+  const mid = med(vals), relMid = med(rv), spread = vals.length >= 2 ? vals[vals.length - 1] / vals[0] : null;
+  return {book, price: s.close, pbNow: book ? s.close / book : null, methods: m, absN, lo: vals.length ? vals[0] : null, hi: vals.length ? vals[vals.length - 1] : null, fair: mid,
+    upside: mid ? (mid / s.close - 1) * 100 : null, bookUpside: book ? (book / s.close - 1) * 100 : null, confidence: spread == null ? "az yöntem" : spread < 1.6 ? "yüksek" : spread < 3 ? "orta" : "düşük",
+    relFair: relMid, relUpside: relMid ? (relMid / s.close - 1) * 100 : null,
+    why: mid == null ? (s.eps > 0 || s.fcf > 0 ? "bağımsız yöntemlerin değeri sıfır/negatif" : "kazanç ve serbest nakit akışı yok: adil değer hesaplanamaz") : null};
 }
 
 
@@ -1555,10 +1565,9 @@ function qualityDipList(uni, P) { return uni.map(s => { try { return qualityDip(
    - bilanço denetimi "zayıf" değil
    Defter altı = fiyat / defter değeri < 1 (olgu). Sanayide PD/DD, ROE ile birlikte artar (ROE < %10'da medyan PD/DD ≈ 0,6-0,8, ROE 20+ ≈ 2): defter altı hisselerin çoğu düşük getirili olduğu için defter altındadır;
    bu liste yalnız getirisi yüksek olduğu halde defter altında kalanları seçer (piyasanın kendi fiyatlama kuralına göre "uyumsuz" olanlar).
-   Model altı = valuation() medyanına göre ≥ %15 iskonto VE en az 3 yöntem VE en az biri mutlak (kazanç/nakit akışı/PD-DD/Graham) VE yöntem uyumu düşük değil. Bu değer geçmişte doğrulanmadı;
+   Model altı = valuation() medyanına (yalnız bağımsız yöntemler: kazanç, nakit akışı, ROE'li PD/DD) göre ≥ %15 iskonto VE en az 2 bağımsız yöntem (en çok 3: kazanç, nakit akışı, ROE'li PD/DD) VE yöntem uyumu düşük değil. Bu değer geçmişte doğrulanmadı;
    liste ilk süzgeçtir, karar değildir. Sıralama: kazanç getirisi (EPS/fiyat) yüksekten düşüğe (model altında: iskonto). */
-const VS_P = {minTl: 10, minMcap: 1e9, minRoe: 15, minRoeFin: 40, maxRoe: 150, minNp8: 6, maxDe: 1.5, minMethods: 3};
-const VS_ABS = new Set(["eps", "fcf", "roepb", "graham"]);
+const VS_P = {minTl: 10, minMcap: 1e9, minRoe: 15, minRoeFin: 40, maxRoe: 150, minNp8: 6, maxDe: 1.5, minMethods: 2};
 function valueRow(s, P) {
   if (!s.ok || !(avgTl(s) >= P.minTl) || !(s.eps > 0) || !(s.bvps > 0) || !(s.close > 0)) return null;
   if (/GYO$/.test(s.name) || !(s.mcap >= P.minMcap)) return null; // GYO kazancı çoğunlukla değer artışıdır; çok küçük şirketlerde rakamlar güvenilmez
@@ -1572,11 +1581,11 @@ function valueRow(s, P) {
   if (!(s.revg != null && s.revg >= infl)) miss.push(`satış büyümesi ${s.revg == null ? "yok" : "%" + fmt(s.revg, 0)} (şart ≥ enflasyon %${fmt(infl, 0)})`);
   if (miss.length > 1) return null;
   const pb = s.close / s.bvps, underBook = pb < 1;
-  const v = valuation(s), cheap = cheapness(s), absN = v.methods.filter(m => VS_ABS.has(m.id)).length;
-  const underFair = !!(cheap && cheap.lab === "UCUZ" && cheap.sure && v.methods.length >= P.minMethods && absN >= 1);
+  const v = valuation(s), cheap = cheapness(s), absN = v.absN; // absN: bağımsız yöntem sayısı (sektör çarpanları adil değere katılmaz)
+  const underFair = !!(cheap && cheap.lab === "UCUZ" && cheap.sure && absN >= P.minMethods);
   if (!underBook && !underFair) return null;
   const b = buffett(s); if (b.audit.verdict === "ZAYIF BİLANÇO") return null;
-  return {s, pb, fin, miss, roe: s.roe, revg: s.revg, ey: s.eps / s.close * 100, audit: b.audit.verdict, underBook, underFair, disc: cheap ? cheap.disc : null, nM: v.methods.length, absN, fair: v.fair, lo: v.lo, hi: v.hi, conf: v.confidence};
+  return {s, pb, fin, miss, roe: s.roe, revg: s.revg, ey: s.eps / s.close * 100, audit: b.audit.verdict, underBook, underFair, disc: cheap ? cheap.disc : null, nM: absN, absN, fair: v.fair, lo: v.lo, hi: v.hi, conf: v.confidence};
 }
 function valueScreens(uni, P) {
   P = Object.assign({}, VS_P, P || {});

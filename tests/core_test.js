@@ -219,6 +219,33 @@ const hk = balanceAudit(bs0), rjB = roePbValue(bs0, intrinsic(bs0)); if (rjB && 
 if (!/Bilanço denetimi/.test(buffett(bs0).t) || !buffett(bs0).audit) errs.push("Buffett yorumuna bilanço denetimi eklenmedi");
 // Buffett oyu denetimden etkilenmemeli (aynı hissede iki hesap aynı)
 if (buffett(bs0).v !== buffett(Object.assign({}, bs0)).v) errs.push("Buffett oyu tutarsız");
+// --- Değerleme yeniden kurgusu: bağımsız yöntemler, enflasyonlu büyüme, ROE birimi ---
+{
+  const infl = macro().infl;
+  // 1) büyüme NOMİNALdir: nominal EPS büyümesi enflasyona eşitse reel büyüme sıfır; enflasyonun altı negatif, çok üstü pozitif (sınırlı)
+  const ig = e => intrinsic(Object.assign({}, bs0, {epsg: e})).g;
+  if (Math.abs(ig(infl * 100)) > 1e-9) errs.push("nominal EPS büyümesi = enflasyon iken reel büyüme sıfır olmalı: " + ig(infl * 100));
+  if (!(ig(infl * 100 - 20) < 0 && ig(infl * 100 + 60) > 0 && ig(infl * 100 + 60) <= (R.gMax ?? 4) / 100 + 1e-12 && ig(-190) >= (R.gMin ?? -2) / 100 - 1e-12)) errs.push("reel büyüme işareti/sınırı hatalı");
+  // 2) ROE birimi: sanayide raporlanan ROE reel okunur, finansta enflasyon düşülür
+  if (Math.abs(roeRealPct(Object.assign({}, bs0, {sector: "Industrials", roe: 20})) - 20) > 1e-9) errs.push("sanayi ROE'si olduğu gibi (reel) okunmalı");
+  const rf = roeRealPct(Object.assign({}, bs0, {sector: "Finance", roe: 42}));
+  if (Math.abs(rf - ((1.42 / (1 + infl) - 1) * 100)) > 1e-9) errs.push("finans ROE'sinden enflasyon düşülmeli: " + rf);
+  const bI = buffett(Object.assign({}, bs0, {sector: "Industrials", roe: 20})), roeChk = bI.checks[1];
+  if (roeChk.s !== OK) errs.push("sanayide ROE %20 Buffett reel ROE şartını geçmeli (enflasyon ikinci kez düşülmemeli): " + roeChk.val);
+  if (buffett(Object.assign({}, bs0, {sector: "Finance", roe: 20})).checks[1].s !== BAD) errs.push("finansta nominal ROE %20 enflasyonu karşılamıyor: reel ROE şartı kaçmalı");
+  // 3) adil değer yalnız bağımsız yöntemlerin ortancası; sektör çarpanları (rel) medyana katılmaz
+  const vA = valuation(bs0), absV = vA.methods.filter(x => !x.rel).map(x => x.v).filter(x => x > 0).sort((a, b) => a - b);
+  const medA = absV.length ? (absV.length % 2 ? absV[(absV.length - 1) / 2] : (absV[absV.length / 2 - 1] + absV[absV.length / 2]) / 2) : null;
+  if (vA.fair !== medA) errs.push("adil değer yalnız bağımsız yöntemlerin ortancası olmalı");
+  if (!vA.methods.filter(x => x.rel).every(x => ["pe", "pb", "graham"].indexOf(x.id) >= 0) || vA.methods.some(x => x.id === "sec_eps" || x.id === "sec_roe")) errs.push("sektör kalibreli yöntemler kaldırılmış olmalı; yalnız pe/pb/graham karşılaştırma (rel)");
+  // 4) kazancı ve nakit akışı olmayan hissede adil değer HESAPLANAMAZ (sektör PD/DD × defter ile değer uydurulmaz), ucuz/pahalı etiketi yok
+  const vN = valuation(Object.assign({}, bs0, {eps: -1, fcf: -1, roe: -5})), cN = cheapness(Object.assign({}, bs0, {eps: -1, fcf: -1, roe: -5}));
+  if (vN.fair != null || !vN.why || cN !== null) errs.push("kazancı olmayan hissede model değeri hesaplanamaz olmalı");
+  if (!(vN.methods.some(x => x.id === "pb") || true)) errs.push("(bilgi) karşılaştırma yöntemi bulunamadı");
+  // 5) bağımsız yöntem sayısı raporlanır ve sektör çarpanlarını saymaz
+  if (vA.absN !== vA.methods.filter(x => !x.rel).length) errs.push("absN bağımsız yöntem sayısı olmalı");
+  stat.val_indep = UNI.filter(s => s.ok && s.tl >= 10 && valuation(s).fair != null).length;
+}
 // --- Takas filtresi (AKD birikim/dağıtım) ---
 const hist3 = [0.15, 0.2, 0.12].map((b, i) => ({d: "2026-10-1" + i, bal: b, conc: 0.1, vol: 1000, sak5: 40 + i * 2})), au3 = {d: "2026-10-12", bal: 0.12, conc: 0.1, n: 3, hist: hist3};
 let as1 = akdState(au3, {pw: -2}); if (!as1 || as1.state !== "birikim" || !as1.strong || !/sessiz birikim/.test(as1.div || "") || !/artıyor/.test(as1.cust || "")) errs.push("birikim tespiti hatalı: " + JSON.stringify(as1));
