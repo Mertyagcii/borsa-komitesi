@@ -157,6 +157,14 @@ setTimeout(async function () {
     var ogn = Object.keys(FORECAST.s).filter(function (k) { return k !== "XU100"; })[0]; ogSym = ogn; renderOngoru(); ok("og_hisse_secimi", $("ogView").innerHTML.indexOf("<b>" + ogn + "</b>") >= 0 || $("ogView").innerHTML.indexOf(ogn + " <span") >= 0);
     ogH = 126; ogSort = "loss"; renderOngoru(); ok("og_ufuk_ve_siralama", $("ogView").innerHTML.indexOf("6 aylık (126 iş günü)") >= 0 && $("ogView").innerHTML.indexOf('data-og="') >= 0);
     var ogk = UNIVERSE.filter(function (s) { return s.ok && FORECAST.s[s.name]; })[0]; ok("og_kokpit_karti", !!ogk && kpOutlook(ogk).indexOf("Olası fiyat aralığı") >= 0 && kpOutlook(ogk).indexOf("fiyat hedefi değil") >= 0);
+    /* ---- Ana sayfa: guclu sirketler (defter degeri / adil deger altinda) ---- */
+    var vsr = valueScreens(UNIVERSE), vsh = kpValue();
+    var vsInfl = macro().infl * 100;
+    ok("deger_taramasi_kriterleri", vsr.book.every(function (r) { return r.pb < 1 && r.s.eps > 0 && r.roe >= (r.fin ? 30 : 15) && r.roe <= 150 && r.s.nipos8 >= 6 && r.revg >= vsInfl && r.audit !== "ZAYIF BİLANÇO" && !/GYO$/.test(r.s.name) && (r.fin || (r.s.fcf > 0 && r.s.de <= 1.5)) && r.miss.length === 0; }) && vsr.fair.every(function (r) { return r.disc >= 15 && r.nM >= 3 && r.absN >= 1 && r.conf !== "düşük" && r.miss.length === 0; }) && vsr.both.every(function (r) { return r.underBook && r.underFair; }));
+    ok("deger_taramasi_yaklasanlar_tek_sart_eksik", vsr.near.every(function (r) { return r.miss.length === 1 && (r.underBook || r.underFair); }) && vsr.book.every(function (r) { return vsr.near.indexOf(r) < 0; }));
+    ok("deger_taramasi_siralama_ve_kume", vsr.book.every(function (r, i, a) { return i === 0 || a[i - 1].ey >= r.ey; }) && vsr.fair.every(function (r, i, a) { return i === 0 || a[i - 1].disc >= r.disc; }) && vsr.both.length <= Math.min(vsr.book.length, vsr.fair.length));
+    ok("deger_taramasi_ana_sayfada", vsh.indexOf("Değer taraması") >= 0 && vsh.indexOf("Defter değerinin altında") >= 0 && vsh.indexOf("Alım sinyali değildir") >= 0 && vsh.indexOf("NaN") < 0 && vsh.indexOf("undefined") < 0);
+    kpSym = null; renderKokpit(); ok("deger_taramasi_kokpit_giris", $("kpBody").innerHTML.indexOf("Değer taraması") >= 0);
     /* ---- Olasilik tahmini + hisse bazli dogruluk: Kokpit, yan panel, Zaman Taramasi, Tarama Senaryolari ---- */
     var okh = kpOutlook(ogk), fa = fcAcc(ogk.name, 21);
     ok("tahmin_gunluk_ufuk_var", !!FORECAST.horizons["1"] && !!FORECAST.s[ogk.name].f["1"] && okh.indexOf("Günlük") >= 0);

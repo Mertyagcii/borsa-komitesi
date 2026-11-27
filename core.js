@@ -1544,6 +1544,49 @@ function qualityDip(s, P) {
 function qualityDipList(uni, P) { return uni.map(s => { try { return qualityDip(s, P); } catch (e) { return null; } }).filter(Boolean).sort((a, b) => b.rank - a.rank); }
 
 /* =====================================================================================
+   DEĞER TARAMASI (ana sayfa): GÜÇLÜ şirketler arasında (1) defter değerinin altında işlem görenler, (2) modelin hesapladığı değerin altında olanlar, (3) ikisi birden.
+   "Güçlü" ve "büyüyen" (hepsi şart; Buffett kalite skoru KULLANILMAZ, çünkü o skorun ROE kontrolü enflasyonu bir kez daha düşer ve ancak nominal ROE ≥ ~%37 olanları geçirir; oysa piyasa sanayide
+   PD/DD = 1 eşiğini ROE ≈ %10-17 civarında koyuyor, yani raporlanan ROE'yi TMS 29 sonrası reel okuyor: bkz. analiz notu):
+   - likit (ort. günlük hacim ≥ 10 mn TL), piyasa değeri ≥ 1 mlr TL, GYO değil, EPS > 0, son 8 çeyreğin ≥ 6'sında kâr
+   - kârlılık: ROE ≥ %15 (finansta ≥ nominal özsermaye maliyeti ≈ %40: bankalarda ROE nominaldir, enflasyonla birlikte şişer; piyasa bankaları ROE %20-45'te bile defter altında fiyatlıyor, sanayiyle kıyaslanamaz); ROE ≥ %150 olanlar anormal sayılıp dışlanır
+   - yaklaşanlar: yukarıdaki şartlardan yalnız BİRİNİ kaçıranlar ayrıca listelenir (hangisini kaçırdığıyla birlikte)
+   - nakit/borç (finans dışı): serbest nakit akışı > 0 ve borç/özsermaye ≤ 1,5
+   - büyüme: satış büyümesi (yıllık, nominal) ≥ enflasyon varsayımı, yani reel büyüme en az sıfır. GÖZLENEN büyümedir; "büyüme potansiyeli"ni ölçen kanıtlı bir sinyalimiz yoktur
+   - bilanço denetimi "zayıf" değil
+   Defter altı = fiyat / defter değeri < 1 (olgu). Sanayide PD/DD, ROE ile birlikte artar (ROE < %10'da medyan PD/DD ≈ 0,6-0,8, ROE 20+ ≈ 2): defter altı hisselerin çoğu düşük getirili olduğu için defter altındadır;
+   bu liste yalnız getirisi yüksek olduğu halde defter altında kalanları seçer (piyasanın kendi fiyatlama kuralına göre "uyumsuz" olanlar).
+   Model altı = valuation() medyanına göre ≥ %15 iskonto VE en az 3 yöntem VE en az biri mutlak (kazanç/nakit akışı/PD-DD/Graham) VE yöntem uyumu düşük değil. Bu değer geçmişte doğrulanmadı;
+   liste ilk süzgeçtir, karar değildir. Sıralama: kazanç getirisi (EPS/fiyat) yüksekten düşüğe (model altında: iskonto). */
+const VS_P = {minTl: 10, minMcap: 1e9, minRoe: 15, minRoeFin: 40, maxRoe: 150, minNp8: 6, maxDe: 1.5, minMethods: 3};
+const VS_ABS = new Set(["eps", "fcf", "roepb", "graham"]);
+function valueRow(s, P) {
+  if (!s.ok || !(avgTl(s) >= P.minTl) || !(s.eps > 0) || !(s.bvps > 0) || !(s.close > 0)) return null;
+  if (/GYO$/.test(s.name) || !(s.mcap >= P.minMcap)) return null; // GYO kazancı çoğunlukla değer artışıdır; çok küçük şirketlerde rakamlar güvenilmez
+  if ((s.p6m != null && s.p6m <= -60) || (s.dist52 != null && s.dist52 <= -70)) return null; // olası bedelsiz/bölünme düzeltmesi görünümü
+  const mc = macro(), fin = isFin(s), infl = mc.infl * 100, thr = fin ? Math.round((mc.rf + mc.erp) * 100) : P.minRoe, miss = []; // finans eşiği = nominal özsermaye maliyeti (tahvil + risk primi ≈ %40): banka ROE'si nominaldir, bu eşiğin altında defter altı olması gerekçeli // miss: sağlanmayan şartlar (0 = güçlü; 1 = "yaklaşan": tek şart eksik; ≥ 2 elenir)
+  if (s.roe != null && s.roe > P.maxRoe) return null; // anormal ROE
+  if (!(s.roe != null && s.roe >= thr)) miss.push(`ROE ${s.roe == null ? "yok" : "%" + fmt(s.roe, 0)} (şart ≥ %${thr})`);
+  if (!(s.nipos8 != null && s.nipos8 >= P.minNp8)) miss.push(`kârlı çeyrek ${s.nipos8 == null ? "?" : s.nipos8}/8 (şart ≥ ${P.minNp8})`);
+  if (!fin && !(s.fcf > 0)) miss.push("serbest nakit akışı pozitif değil");
+  if (!fin && !(s.de != null && s.de <= P.maxDe)) miss.push(`borç/özsermaye ${s.de == null ? "?" : fmt(s.de, 1)} (şart ≤ ${P.maxDe})`);
+  if (!(s.revg != null && s.revg >= infl)) miss.push(`satış büyümesi ${s.revg == null ? "yok" : "%" + fmt(s.revg, 0)} (şart ≥ enflasyon %${fmt(infl, 0)})`);
+  if (miss.length > 1) return null;
+  const pb = s.close / s.bvps, underBook = pb < 1;
+  const v = valuation(s), cheap = cheapness(s), absN = v.methods.filter(m => VS_ABS.has(m.id)).length;
+  const underFair = !!(cheap && cheap.lab === "UCUZ" && cheap.sure && v.methods.length >= P.minMethods && absN >= 1);
+  if (!underBook && !underFair) return null;
+  const b = buffett(s); if (b.audit.verdict === "ZAYIF BİLANÇO") return null;
+  return {s, pb, fin, miss, roe: s.roe, revg: s.revg, ey: s.eps / s.close * 100, audit: b.audit.verdict, underBook, underFair, disc: cheap ? cheap.disc : null, nM: v.methods.length, absN, fair: v.fair, lo: v.lo, hi: v.hi, conf: v.confidence};
+}
+function valueScreens(uni, P) {
+  P = Object.assign({}, VS_P, P || {});
+  const rows = uni.map(s => { try { return valueRow(s, P); } catch (e) { return null; } }).filter(Boolean);
+  const ok = rows.filter(r => !r.miss.length);
+  return {book: ok.filter(r => r.underBook).sort((a, b) => b.ey - a.ey), fair: ok.filter(r => r.underFair).sort((a, b) => b.disc - a.disc), both: ok.filter(r => r.underBook && r.underFair).sort((a, b) => b.ey - a.ey),
+    near: rows.filter(r => r.miss.length === 1).sort((a, b) => b.ey - a.ey), n: ok.length};
+}
+
+/* =====================================================================================
    YORUMCU NOTLARI KARNESİ: kullanıcının kendi girdiği yorumlar (X hesapları, TradingView fikirleri, aracı kurum/birim görüşleri, tanıdıklar...). Otomatik çekilmez:
    X'in ücretsiz API'si yok ve kişi/hesap sınıflaması (ör. "tahtacı") doğrulanamaz bir iddiadır. Bunun yerine her yorumun YÖNÜ (al/sat) ve tarihi kaydedilir,
    sonradan 5/10/20 iş günü içinde BIST 100'e göre fazla getiriyle ölçülür; yorumcu "ünlü" değil "isabetli mi" diye değerlendirilir (%95 Wilson aralığı, n < 30 yetersiz). */

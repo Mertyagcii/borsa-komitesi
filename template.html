@@ -1769,6 +1769,18 @@ function kpBasket() {
   let a = null; try { a = portfolioArchitect(current.slice(0, 8).map(s => s.name)); } catch (e) { return ""; } if (!a) return "";
   return `<div class="kpcard" style="margin-top:12px"><div class="kpl">🧺 Aday sepeti riski (Ray Dalio · Portföy Mimarı · ilk 8 güç lideri)</div><div class="kps">${esc(a.text)}</div><div class="kps" style="margin-top:6px">Sektörler: ${a.secs.slice(0, 4).map(([n, v]) => esc(trSector(n)) + " %" + Math.round(v * 100)).join(" · ")}${a.maxPair ? ` · en yakın çift: ${esc(a.maxPair[0])}–${esc(a.maxPair[1])} (ρ ${fmt(a.maxPair[2], 2)})` : ""}</div></div>`;
 }
+/* Ana sayfa: güçlü şirketler arasında defter değerinin / modelin adil değerinin altındakiler (core.js valueScreens; kriterler kartın altında yazılı) */
+function kpValue() {
+  let v; try { v = valueScreens(UNIVERSE); } catch (e) { return ""; }
+  const au = r => r.audit === "TEMİZ" ? "✓" : "⚠", chipV = (r, tag) => `<span class="kpchip" data-kp="${esc(r.s.name)}" title="${esc(r.s.description || "")} · ${esc(trSector(r.s.sector))}"><b>${esc(r.s.name)}</b> <span class="kps">${tag}</span></span>`;
+  const lst = (arr, f, n) => arr.length ? arr.slice(0, n).map(r => chipV(r, f(r))).join("") + (arr.length > n ? ` <span class="kps">+${arr.length - n} daha</span>` : "") : '<span class="kps">Şu an yok.</span>';
+  const rt = r => `ROE %${fmt(r.roe, 0)}`, bookTag = r => `PD/DD ${fmt(r.pb, 2)} · ${rt(r)} · satış +%${fmt(r.revg, 0)} ${au(r)}`, fairTag = r => `adil değerin %${fmt(r.disc, 0)} altı · ${rt(r)} ${au(r)}`, bothTag = r => `PD/DD ${fmt(r.pb, 2)} · adil değerin %${fmt(r.disc, 0)} altı · ${rt(r)} ${au(r)}`, nearTag = r => `PD/DD ${fmt(r.pb, 2)} · <span class="down">eksik: ${esc(r.miss[0])}</span>`;
+  const blk = (t, arr, f, n) => `<div style="margin:8px 0"><div class="kps"><b>${t}</b> · ${arr.length} şirket</div><div>${lst(arr, f, n)}</div></div>`;
+  return `<div class="kpcard" style="margin-top:12px"><div class="kpl">💎 Değer taraması: güçlü ve büyüyen şirketler</div>
+    <div class="kps">Şartların hepsi: kâr eden (son 8 çeyreğin ≥ 6'sı), ROE ≥ %15 (finansta ≥ %40), serbest nakit akışı pozitif ve borç/özsermaye ≤ 1,5 (finans dışı), satışı enflasyondan fazla büyüyen, bilanço denetimi zayıf değil, likit.</div>
+    ${blk("⭐ Hem defter değerinin hem adil değerin altında", v.both, bothTag, 8)}${blk("📘 Defter değerinin altında (PD/DD &lt; 1)", v.book, bookTag, 12)}${blk("🎯 Modelin adil değerinin altında (en az %15)", v.fair, fairTag, 10)}${blk("👀 Yaklaşanlar: tek şartı eksik (defter ya da adil değer altında)", v.near, nearTag, 12)}
+    <div class="kps" style="margin-top:6px">✓ bilanço denetimi temiz · ⚠ dikkat. <b>Alım sinyali değildir.</b> Defter altı olmak tek başına ucuzluk değildir: sanayide PD/DD, ROE ile birlikte artıyor (ROE %10'un altında medyan ≈ 0,6-0,8; %20 üstünde ≈ 2), yani defter altı hisselerin çoğu düşük getirili olduğu için defter altında; bu liste yalnız getirisi yüksek olduğu halde defter altında kalanları arar. "Büyüme" gözlenen satış büyümesidir; gelecekteki büyümeyi ölçen kanıtlı bir sinyalimiz yok. Adil değer modelin hesabıdır ve geçmişte doğrulanamadı: yalnız en az 3 yöntemle, en az biri mutlak (kazanç/nakit akışı/Graham) ve yöntem uyumu düşük olmayanlar alınır. <a href="#ekranlar" data-go="ekranlar">Tüm ekranlar →</a></div></div>`;
+}
 function kpHome() {
   const cand = current.slice(0, 25).map(s => { try { return [s, committee(s)]; } catch (e) { return null; } }).filter(Boolean);
   const hc = cand.filter(([s, r]) => highConfidence(s, r).ok), risk = cand.filter(([s, r]) => r.veto || r.veto2).slice(0, 6), qd = qualityDipList(UNIVERSE).slice(0, 5);
@@ -1777,7 +1789,7 @@ function kpHome() {
     <div class="kpgrid2"><div class="kpcard"><div class="kpl">✅ Yüksek güvenilirlikli sinyaller</div><div>${hc.length ? hc.map(([s]) => chip(s)).join("") : '<span class="kps">Şu an tüm filtreleri geçen sinyal yok (nadir olması beklenir).</span>'}</div></div>
     <div class="kpcard"><div class="kpl">⚠ Risk / veto altındakiler (aday listesinden)</div><div>${risk.length ? risk.map(([s, r]) => chip(s, r.veto ? "veto" : "uzman itirazı")).join("") : '<span class="kps">Yok.</span>'}</div></div>
     <div class="kpcard"><div class="kpl">🔍 Kaliteli ama düşüşte (izleme)</div><div>${qd.length ? qd.map(x => chip(x.s, "kalite " + fmt(x.qual, 0))).join("") : '<span class="kps">Yok.</span>'}</div></div></div>
-    ${kpBasket()}${kpTrust()}${kpTech()}
+    ${kpValue()}${kpBasket()}${kpTrust()}${kpTech()}
     <p class="note" style="text-align:center;margin-top:14px">Eğitim amaçlıdır, yatırım tavsiyesi değildir. · <a href="#seffaflik" data-go="seffaflik">Şeffaflık Panosu</a> · <a href="#defter" data-go="defter">Tahmin Defterim</a> · <a href="#dashboard" data-go="dashboard">Tüm sayfalar ve ayrıntılı tablolar →</a></p>`;
 }
 function renderKokpit() {
