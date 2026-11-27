@@ -51,6 +51,11 @@ m1 = out["horizons"]["1"]
 chk(f"günlük ufuk (1 gün) üretiliyor, çok bağımsız gözlemle sınanır ve kapsama hedefe yakın -> {m1['cov80Oos']}", m1["n_eff"] > 200 and 0.70 <= m1["cov80Oos"] <= 0.90)
 chk("günlük ufukta bağımsız pencere sayısı kaynak sayısını aşmaz (3 günde bir örnekleme şişirmez)", m1["n_eff"] <= m1["origins"])
 
+# son dönem kapsama ve üç aylık dalgalanma raporlanır (uzun dönem ortalaması dönemsel sapmayı gizlemesin)
+m5 = out["horizons"]["5"]
+chk("son 6 ve 3 ay kapsama raporlanıyor (ISO olmayan sentetik tarihte üç aylık dilim atlanır, kırılmaz)", all(k in m5 for k in ("cov80Recent6m", "cov80Recent3m")) and 0 <= m5["cov80Recent3m"] <= 1 and "covQ" not in m5)
+chk(f"saf sentetik dünyada son dönem kapsama da ≈ %80 civarı ({m5['cov80Recent3m']:.2f}, 3 ay ≈ 7 bağımsız pencere: geniş tolerans)", 0.55 <= m5["cov80Recent3m"] <= 0.97)
+
 # hisse başına geçmiş doğruluk ("c"): biçim ve dürüstlük
 cc = [(n, rec["c"]) for n, rec in out["s"].items() if "c" in rec]
 chk("hisse başına doğruluk kaydı büyük çoğunlukta var", len(cc) >= 0.9 * len(out["s"]))
@@ -129,6 +134,8 @@ infl = np.exp(np.cumsum(np.full(nd, 0.0008)))     # günlük %0,08 enflasyon
 mm = [[full["dates"][i], float(100 * infl[i])] for i in range(0, nd, 21)]
 longx = dict(full); longx["cpi"] = mm; longx["usdtry"] = [float(10 * np.exp(0.0005 * i)) for i in range(nd)]
 o2 = F.run(full, long=longx)
+q5 = o2["horizons"]["5"].get("covQ")
+chk("ISO tarihli veride üç aylık kapsama dağılımı (min/max/sd) raporlanır", q5 is not None and q5["min"] <= q5["max"] and q5["sd"] >= 0 and q5["n"] >= 4)
 chk("endekse göre kip üretildi, endeks satırında yok, hisse satırında var", "x" in o2["modes"] and "x" in o2["s"]["S3"] and "x" not in o2["s"]["XU100"] and "5" in o2["s"]["S3"]["x"])
 mx = o2["horizons_x"]["21"]
 chk(f"endekse göre %80 aralık gerçekte yaklaşık %80 tutuyor -> {mx['cov80Raw']}", 0.70 <= mx["cov80Raw"] <= 0.90)

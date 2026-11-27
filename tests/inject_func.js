@@ -169,6 +169,15 @@ setTimeout(async function () {
     var okh = kpOutlook(ogk), fa = fcAcc(ogk.name, 21);
     ok("tahmin_gunluk_ufuk_var", !!FORECAST.horizons["1"] && !!FORECAST.s[ogk.name].f["1"] && okh.indexOf("Günlük") >= 0);
     ok("tahmin_hisse_dogruluk_hucresi", !!fa && fa.cov >= 0 && fa.cov <= 1 && fa.lo <= fa.cov && fa.cov <= fa.hi && fcAccCell(ogk.name, 21).indexOf("%") >= 0 && fcAccCell(ogk.name, 21).indexOf("NaN") < 0);
+    var m5r = FORECAST.horizons["5"]; ogMode = "n"; ogSym = ogk.name; ogH = 5; renderOngoru(); var ogv = $("ogView").innerHTML;
+    ok("tahmin_son_donem_kapsama_gosterilir", m5r.cov80Recent3m != null && ogv.indexOf("Son dönem:") >= 0 && ogv.indexOf("geçmiş ortalamaya bakarsak 10 vakanın 8'inde") >= 0 && ogv.indexOf("NaN") < 0 && ogv.indexOf("undefined") < 0);
+    ok("tahmin_hisse_ozel_kapsama_cumlesi", ogv.indexOf("Bu hissede geçmişte aralık vakaların") >= 0 || fcAcc(ogk.name, 5) == null || fcAcc(ogk.name, 5).weak);
+    var scn = kpScenarios(ogk);
+    ok("senaryolar_bes_senaryo_ve_basamaklar", ["Güçlü yükseliş", "Yükseliş", "Temel senaryo", "Düşüş", "Sert düşüş"].every(function (x) { return scn.indexOf(x) >= 0; }) && scn.indexOf("Haftalık (5 iş günü)") >= 0 && scn.indexOf("Aylık (21 iş günü)") >= 0 && scn.indexOf("NaN") < 0 && scn.indexOf("undefined") < 0);
+    ok("senaryolar_olasilik_toplami_ve_durustluk", (scn.match(/%10|%15|%50/g) || []).length >= 5 && scn.indexOf("tüm hisselerde aynıdır") >= 0 && scn.indexOf("fiyat hedefi değil") >= 0 && scn.indexOf("Düşüş teyidi") >= 0);
+    openDetail(ogk.name); var dsc = $("detail").innerHTML; closeDetail(); kpSym = null; kpSelect(ogk.name);
+    ok("senaryolar_yan_panel_ve_kokpitte", dsc.indexOf("Senaryolar (fiyat hedefi değil") >= 0 && $("kpBody").innerHTML.indexOf("Senaryolar (fiyat hedefi değil") >= 0); kpSelect("YOKTUR123");
+    ok("senaryolar_veri_yoksa_sessiz", kpScenarios({name: "YOKHISSE", close: 10}) === ""); show("ongoru"); /* kokpit/yan panel çağrıları görünümü değiştirdi: sonraki Gelecek Görünümü testleri 'ongoru' görünümü ister */
     ok("tahmin_yetersiz_ornek_isaretlenir", (function () { var z = FORECAST.s[ogk.name].c; var c0 = z["252"]; return !c0 || c0[1] >= 10 || fcAccCell(ogk.name, 252).indexOf("yetersiz") >= 0; })());
     ok("tahmin_kokpit_olasilik_ve_dogruluk", okh.indexOf("Yukarı olasılığı") >= 0 && okh.indexOf("Bu hissede geçmişte tuttu") >= 0 && okh.indexOf("hisseye özel yön iddiası yoktur") >= 0 && okh.indexOf("NaN") < 0 && okh.indexOf("undefined") < 0);
     openDetail(ogk.name); ok("tahmin_yan_panelde_var", $("detail").innerHTML.indexOf("Olası fiyat aralığı ve olasılıklar") >= 0 && $("detail").innerHTML.indexOf("Bu hissede geçmişte tuttu") >= 0); closeDetail();

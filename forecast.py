@@ -206,6 +206,24 @@ def _engine(C, dates, ncols, label_names, stock_acc=False):
                         upPred=round(float(np.mean([r[2] for r in rows])), 3), upReal=round(float(np.mean([r[3] for r in rows])), 3),
                         first=dates[ts[0]], last=dates[ts[-1]])
             meta["confidence"] = confidence(meta["n_eff"], meta["cov80Oos"])
+            # Zaman içi kararlılık: ortalama %80 olsa da dönemsel dalgalanır (piyasa geneli şoklar tüm hisseleri birlikte vurur). Son 6 ay (~42 kaynak) ve son 3 ay (~21 kaynak) ile
+            # üç aylık dilimlerin dağılımı raporlanır; arayüz "10'da 8" cümlesini bunlarla birlikte gösterir. (Adaptif k denemesi dalgalanmayı azaltmadı: model oynatılmaz, şeffaflık eklenir.)
+            if n_o >= 60:
+                last6, last3 = rows[-42:], rows[-21:]
+                meta["cov80Recent6m"] = round(float(np.mean([r[1][k][0] for r in last6])), 3)
+                meta["cov80Recent3m"] = round(float(np.mean([r[1][k][0] for r in last3])), 3)
+                meta["recentFrom3m"] = dates[last3[0][0]]
+                byq = {}
+                for r in rows:
+                    d = dates[r[0]]
+                    try:
+                        qk = (d[:4], (int(d[5:7]) - 1) // 3)
+                    except ValueError:      # ISO olmayan tarih etiketi (sentetik veri): üç aylık dilim çıkarılamaz
+                        continue
+                    byq.setdefault(qk, []).append(r[1][k][0])
+                qm = [float(np.mean(v)) for v in byq.values() if len(v) >= 10]
+                if len(qm) >= 4:
+                    meta["covQ"] = {"n": len(qm), "min": round(min(qm), 3), "max": round(max(qm), 3), "sd": round(float(np.std(qm)), 3)}
             if stock_acc:
                 sacc[h] = stock_coverage(rows, k, k1, mid, C.shape[1])
         else:
